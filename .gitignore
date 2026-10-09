@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+build/
+_build/
+pkg/
+*.pkg.tar.zst
+*.egg-info/
+.venv/
+build-dev/

@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface domain="keymappforlinux">
+  <requires lib="gtk" version="4.0"/>
+  <requires lib="Adw" version="1.0"/>
+  <template class="KmlPreferencesDialog" parent="AdwPreferencesDialog">
+    <property name="search-enabled">False</property>
+    <child>
+      <object class="AdwPreferencesPage">
+        <property name="title" translatable="yes">General</property>
+        <property name="icon-name">emblem-system-symbolic</property>
+        <child>
+          <object class="AdwPreferencesGroup">
+            <property name="title" translatable="yes">Background</property>
+            <child>
+              <object class="AdwSwitchRow" id="background_row">
+                <property name="title" translatable="yes">Run in _Background</property>
+                <property name="use-underline">True</property>
+                <property name="subtitle" translatable="yes">Keep Smart Layers working after the window is closed</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="AdwPreferencesGroup">
+            <property name="title" translatable="yes">Startup</property>
+            <child>
+              <object class="AdwSwitchRow" id="smart_layers_row">
+                <property name="title" translatable="yes">Enable _Smart Layers on Startup</property>
+                <property name="use-underline">True</property>
+              </object>
+            </child>
+            <child>
+              <object class="AdwSwitchRow" id="auto_connect_row">
+                <property name="title" translatable="yes">_Connect Automatically</property>
+                <property name="use-underline">True</property>
+                <property name="subtitle" translatable="yes">Connect to the keyboard as soon as it is plugged in</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="AdwPreferencesGroup">
+            <property name="title" translatable="yes">Start With Hyprland</property>
+            <property name="description" translatable="yes">To start in the background when you log in, add this line to ~/.config/hypr/hyprland.conf</property>
+            <child>
+              <object class="AdwActionRow" id="exec_row">
+                <property name="title">exec-once = keymappforlinux --background</property>
+                <property name="use-markup">False</property>
+                <property name="title-selectable">True</property>
+                <style>
+                  <class name="monospace"/>
+                </style>
+                <child type="suffix">
+                  <object class="GtkButton">
+                    <property name="icon-name">edit-copy-symbolic</property>
+                    <property name="valign">center</property>
+                    <property name="tooltip-text" translatable="yes">Copy</property>
+                    <signal name="clicked" handler="on_copy_clicked"/>
+                    <accessibility>
+                      <property name="label" translatable="yes">Copy the Hyprland configuration line</property>
+                    </accessibility>
+                    <style>
+                      <class name="flat"/>
+                    </style>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>

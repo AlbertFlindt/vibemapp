@@ -1,0 +1,16 @@
+# udev rules for ZSA keyboards (Voyager, Moonlander, ErgoDox EZ, Planck EZ).
+#
+# Based on ZSA's official Linux rules
+# (https://github.com/zsa/wally/wiki/Linux-install, "Rules for Oryx web
+# flashing and live training"). ZSA grants access through MODE/GROUP="plugdev".
+# We use systemd-logind's uaccess tag instead, so the logged-in seat user gets
+# an ACL on the device. That's why this file has to sort before
+# 73-seat-late.rules. The flashing/bootloader rules are left out on purpose,
+# because KeyMapp for Linux never flashes firmware.
+
+# Oryx raw HID (live training / layer control): all ZSA products.
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3297", TAG+="uaccess"
+
+# Legacy ZSA keyboards that used the generic QMK vendor id.
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="feed", ATTRS{idProduct}=="1307", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="feed", ATTRS{idProduct}=="6060", TAG+="uaccess"
