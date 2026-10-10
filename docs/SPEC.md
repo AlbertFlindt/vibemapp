@@ -111,7 +111,7 @@ ID and payload layout from that source**; do not rely on memory. Things to confi
 - `meson.build` installs the package to `$datadir/vibemapp/`, a launcher
   `$bindir/vibemapp`, desktop file, metainfo, icons, gschema (compiled), udev
   rules to `/usr/lib/udev/rules.d/50-zsa.rules`.
-- PKGBUILD: `depends=(python python-gobject gtk4 libadwaita)`, `makedepends=(meson)`.
+- `packaging/arch/PKGBUILD`: `depends=(python python-gobject gtk4 libadwaita)`, `makedepends=(meson)`.
 
 ## 6. Release 0.2 additions
 

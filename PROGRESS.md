@@ -1,13 +1,14 @@
 # Progress / handoff
 
 **Last updated:** 2026-10-10. **Version:** 0.3.1 (installed by the user with `makepkg -si`, and working).
+The PKGBUILD has since moved to `packaging/arch/`, so install with `cd packaging/arch && makepkg -si`.
 
 ## Current state
 - **Working and verified:**
   - **Device and layout:**
     - Voyager detection and the Oryx handshake.
     - The live layout ("Flindt 1.1", 4 layers) is fetched from Oryx and cached offline.
-    - Live active layer and key-press highlighting.
+    - Live active-layer display (key-press highlighting: see "unverified" below).
   - **Smart Layers:**
     - Rules for an exact app, a window-class regex, or all Steam games.
     - Fallback layer.
@@ -37,11 +38,12 @@
    Strings are already wrapped in `_()`.
 4. **Metainfo screenshots.** Add `<screenshots>` to `data/io.github.albertflindt.Vibemapp.metainfo.xml`
    using images from `tests/ui/screenshot.py` (layout, smart layers, heatmap), stored in `data/screenshots/`.
-5. **Real GitHub repo.** The PKGBUILD `url`, the About dialog and the metainfo point to the placeholder
+5. **Real GitHub repo.** The `packaging/arch/PKGBUILD` `url`, the About dialog and the metainfo point to the placeholder
    `https://github.com/albertflindt/vibemapp`. Create the repo, or change these to the real URL, and
    switch the PKGBUILD to a git `source=`.
 
 ## Decisions
+- **PKGBUILD in `packaging/arch/`:** `makepkg -c/-C` deletes `./src`, which at the repo root was our code. Verified safe after the move.
 - **Python, PyGObject and libadwaita:** all already installed, so nothing from pip and no Rust toolchain needed.
 - **Hyprland only as focus source:** it's the user's desktop. `FocusWatcher` is pluggable for GNOME, KDE or X11 later.
 - **No flashing in v1:** the user chose it, and the command allow-list enforces it.
@@ -58,7 +60,8 @@
 - **Always open on the Layout page:** the user asked for it, so the `last-page` setting was removed.
 
 ## Known issues / dead ends
-- **No failing tests.** `./check.sh` passes: 145 tests on 2026-10-10.
+- **No failing tests.** `./check.sh` passes: 145 tests plus lint and data validation, OK on 2026-10-10.
+  `makepkg -f` and `makepkg -fc` from `packaging/arch/` also succeed (the package wasn't installed).
 - **PyGObject asyncio warning:** the upstream PyGObject 3.58 DeprecationWarning is filtered, not fixed. Drop the `-W` filter once PyGObject is updated.
 - **GSettings dead end:** `Gio.Settings.new_full(schema, None, old_path)` aborts on a fixed-path schema. Migration
   compiles a relocatable copy of the schema into a temp dir instead (`ui/settings.py`).

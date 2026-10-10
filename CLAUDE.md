@@ -11,8 +11,8 @@ Full spec and design history: @docs/SPEC.md. Handoff state: @PROGRESS.md.
 - Optional: `hyprland` (the only focus source), a StatusNotifier tray host
   (e.g. Noctalia, waybar) for the tray icon, Steam for Steam-game rules.
 - Keyboard: ZSA board with Oryx firmware (raw HID). Nothing from pip.
-- `makepkg -si` from the repo root (PKGBUILD builds the local checkout and replaces
-  the old `keymappforlinux` package), then replug the keyboard (udev `uaccess` rules).
+- `cd packaging/arch && makepkg -si` (PKGBUILD builds this checkout and replaces the old
+  `keymappforlinux` package), then replug the keyboard (udev `uaccess` rules).
 - Autostart goes in `~/.config/hypr/autostart.lua`:
   `hl.on("hyprland.start", function () hl.exec_cmd("vibemapp --background") end)`
 
@@ -54,13 +54,15 @@ Full spec and design history: @docs/SPEC.md. Handoff state: @PROGRESS.md.
 - The GSettings schema has a fixed path. `Gio.Settings.new_full(schema, None, other_path)`
   **aborts the process**. `VIBEMAPP_MEMORY_SETTINGS=1` keeps test runs out of dconf.
 - PyGObject 3.58 + Python 3.14 emit an asyncio DeprecationWarning from `gi/events.py`.
-  It's filtered with `-W ignore::DeprecationWarning:gi.events` (check.sh, PKGBUILD).
+  It's filtered with `-W ignore::DeprecationWarning:gi.events` (check.sh, `packaging/arch/PKGBUILD`).
 - During tests, "Skipping rule with unknown match kind" and "Tray registration failed"
   are expected log lines, not failures.
 - System packages only. There's no pip, pytest or blueprint-compiler; use stdlib `unittest`.
 - UI follows the GNOME HIG: libadwaita widgets and colours only, title-case headings,
   user-visible strings in `_()` (gettext domain `vibemapp`).
-- Release bump touches: `meson.build` version, `PKGBUILD` pkgver,
+- The PKGBUILD lives in `packaging/arch/` on purpose. `makepkg -c/-C` runs `rm -rf ./src`,
+  which would wipe our source tree if the PKGBUILD sat at the repo root.
+- Release bump touches: `meson.build` version, `packaging/arch/PKGBUILD` pkgver,
   `ui/resources.py` dev fallback and a metainfo `<release>` entry.
 - No git identity is configured. Commit with
   `git -c user.name="Albert Flindt" -c user.email="Albert.Flindt@proton.me" commit …`

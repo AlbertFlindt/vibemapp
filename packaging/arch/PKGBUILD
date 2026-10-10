@@ -16,7 +16,9 @@ source=()
 sha256sums=()
 
 # Built from the local checkout this PKGBUILD lives in.
-_srcroot="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
+# PKGBUILD lives in packaging/arch/ so makepkg -c/-C (rm -rf $srcdir) never
+# touches the repo's own src/ directory.
+_srcroot="$(realpath "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../..")"
 
 build() {
   arch-meson "$_srcroot" build
