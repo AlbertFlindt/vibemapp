@@ -1,7 +1,7 @@
 """Add/Edit Rule dialog.
 
-Step 1 picks what the rule matches (an app, all Steam games, one Steam game or
-a window class pattern); the details page then sets the layer and optional
+Step 1 picks what the rule matches (an app, all Steam games or a window class
+pattern); the details page then sets the layer and optional
 title pattern. Editing opens straight on the details page.
 """
 
@@ -16,7 +16,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gio, Gtk  # noqa: E402
 
-from ..models import AppRule, Layout, RuleMatch, RunningApp, SteamGame  # noqa: E402
+from ..models import AppRule, Layout, RuleMatch, RunningApp  # noqa: E402
 from .apps import AppEntry, AppIndex  # noqa: E402
 from .i18n import _  # noqa: E402
 from .resources import ui_file  # noqa: E402
@@ -41,11 +41,23 @@ def steam_game_icon(app_id: str | None) -> Gio.Icon:
     return Gio.ThemedIcon.new(GAMING_ICON)
 
 
+def steam_client_icon() -> Gio.Icon:
+    """The installed Steam app icon, for "All Steam Games"; a gamepad if the
+    theme doesn't have it."""
+    display = Gdk.Display.get_default()
+    if display is not None and Gtk.IconTheme.get_for_display(display).has_icon("steam"):
+        return Gio.ThemedIcon.new("steam")
+    steam = AppIndex.get().lookup("steam")
+    if steam is not None and steam.get_icon() is not None:
+        return steam.get_icon()
+    return Gio.ThemedIcon.new(GAMING_ICON)
+
+
 def rule_presentation(rule: AppRule) -> tuple[str, str, Gio.Icon]:
     """``(title, subtitle, icon)`` describing what a rule matches."""
     if rule.match == RuleMatch.STEAM_GAME and not rule.app_class:
         return (rule.display_name or _("All Steam Games"), _("Any Steam game"),
-                Gio.ThemedIcon.new(GAMING_ICON))
+                steam_client_icon())
     if rule.match == RuleMatch.STEAM_GAME:
         return (rule.display_name or _("Steam Game {id}").format(id=rule.app_class),
                 _("Steam game · {id}").format(id=rule.app_class),
@@ -81,25 +93,6 @@ class AppRow(Adw.ActionRow):
                                   accessible_role=Gtk.AccessibleRole.PRESENTATION))
 
 
-class GameRow(Adw.ActionRow):
-    __gtype_name__ = "KmlGameRow"
-
-    def __init__(self, game: SteamGame, *, has_rule: bool) -> None:
-        super().__init__(activatable=True, use_markup=False, title=game.name,
-                         subtitle=_("App ID {id}").format(id=game.app_id))
-        self.game = game
-        self.search_text = f"{game.name} {game.app_id}".casefold()
-        self.add_prefix(Gtk.Image(gicon=steam_game_icon(game.app_id), pixel_size=32,
-                                  accessible_role=Gtk.AccessibleRole.PRESENTATION))
-        if has_rule:
-            badge = Gtk.Label(label=_("Has a rule"), valign=Gtk.Align.CENTER)
-            badge.add_css_class("dim-label")
-            badge.add_css_class("caption")
-            self.add_suffix(badge)
-        self.add_suffix(Gtk.Image(icon_name="go-next-symbolic",
-                                  accessible_role=Gtk.AccessibleRole.PRESENTATION))
-
-
 def _rows(listbox: Gtk.ListBox) -> list[Gtk.Widget]:
     rows = []
     child = listbox.get_first_child()
@@ -117,11 +110,9 @@ class RuleDialog(Adw.Dialog):
     kind_page: Adw.NavigationPage = Gtk.Template.Child()
     kind_app_row: Adw.ActionRow = Gtk.Template.Child()
     kind_steam_any_row: Adw.ActionRow = Gtk.Template.Child()
-    kind_steam_game_row: Adw.ActionRow = Gtk.Template.Child()
-    kind_steam_game_row_icon: Gtk.Image = Gtk.Template.Child()
+    kind_steam_any_row_icon: Gtk.Image = Gtk.Template.Child()
     kind_pattern_row: Adw.ActionRow = Gtk.Template.Child()
     apps_page: Adw.NavigationPage = Gtk.Template.Child()
-    steam_page: Adw.NavigationPage = Gtk.Template.Child()
     details_page: Adw.NavigationPage = Gtk.Template.Child()
     search_entry: Gtk.SearchEntry = Gtk.Template.Child()
     custom_list: Gtk.ListBox = Gtk.Template.Child()
@@ -130,9 +121,6 @@ class RuleDialog(Adw.Dialog):
     running_list: Gtk.ListBox = Gtk.Template.Child()
     installed_box: Gtk.Box = Gtk.Template.Child()
     installed_list: Gtk.ListBox = Gtk.Template.Child()
-    steam_search_entry: Gtk.SearchEntry = Gtk.Template.Child()
-    steam_stack: Gtk.Stack = Gtk.Template.Child()
-    steam_list: Gtk.ListBox = Gtk.Template.Child()
     save_button: Gtk.Button = Gtk.Template.Child()
     app_group: Adw.PreferencesGroup = Gtk.Template.Child()
     app_row: Adw.ActionRow = Gtk.Template.Child()
@@ -147,7 +135,6 @@ class RuleDialog(Adw.Dialog):
 
     def __init__(self, *, layout: Layout, running: list[RunningApp],
                  existing: list[AppRule], on_done: Callable[[AppRule], None],
-                 steam_games: Callable[[], list[SteamGame]] | None = None,
                  rule: AppRule | None = None,
                  on_remove: Callable[[], None] | None = None) -> None:
         super().__init__()
@@ -155,12 +142,8 @@ class RuleDialog(Adw.Dialog):
         self._running = [r for r in running if r.app_class and r.app_class != OWN_APP_CLASS]
         self._existing = list(existing)
         self._existing_classes = {r.app_class for r in existing if r.match == RuleMatch.APP}
-        self._existing_games = {r.app_class for r in existing
-                                if r.match == RuleMatch.STEAM_GAME and r.app_class}
         self._on_done = on_done
         self._on_remove = on_remove
-        self._steam_games = steam_games or (lambda: [])
-        self._games_loaded = False
         self._editing = rule
         self._kind = RuleMatch.APP
         self._entry: AppEntry | None = None     # APP and STEAM_GAME targets
@@ -170,13 +153,9 @@ class RuleDialog(Adw.Dialog):
         self.remove_group.set_visible(rule is not None and on_remove is not None)
         self.layer_row.set_model(Gtk.StringList.new(
             [layer_label(layer, layer.index) for layer in layout.layers]))
-        steam = self._index.lookup("steam")
-        if steam is not None and steam.get_icon() is not None:
-            self.kind_steam_game_row_icon.set_from_gicon(steam.get_icon())
-        for entry, page in ((self.search_entry, self.apps_page),
-                            (self.steam_search_entry, self.steam_page)):
-            # Type-to-search only on the page that owns the entry.
-            entry.set_key_capture_widget(page)
+        self.kind_steam_any_row_icon.set_from_gicon(steam_client_icon())
+        # Type-to-search only on the page that owns the entry.
+        self.search_entry.set_key_capture_widget(self.apps_page)
 
         if rule is None:
             self.layer_row.set_selected(min(1, len(layout.layers) - 1))
@@ -202,13 +181,8 @@ class RuleDialog(Adw.Dialog):
             self.search_entry.grab_focus()
         elif row is self.kind_steam_any_row:
             self._show_details(RuleMatch.STEAM_GAME, "",
-                               AppEntry("", _("All Steam Games"),
-                                        Gio.ThemedIcon.new(GAMING_ICON)),
+                               AppEntry("", _("All Steam Games"), steam_client_icon()),
                                subtitle=_("Any game launched from Steam"))
-        elif row is self.kind_steam_game_row:
-            self._populate_games()
-            self.nav.push(self.steam_page)
-            self.steam_search_entry.grab_focus()
         elif row is self.kind_pattern_row:
             if not self.class_pattern_row.get_text():
                 self.class_pattern_row.set_text(PATTERN_EXAMPLE)
@@ -252,7 +226,7 @@ class RuleDialog(Adw.Dialog):
     @staticmethod
     def _has_visible_rows(listbox: Gtk.ListBox) -> bool:
         return any(row.get_child_visible() for row in _rows(listbox)
-                   if isinstance(row, (AppRow, GameRow)))
+                   if isinstance(row, AppRow))
 
     def _update_app_visibility(self) -> None:
         self.running_box.set_visible(self._has_visible_rows(self.running_list))
@@ -294,52 +268,6 @@ class RuleDialog(Adw.Dialog):
 
     def _pick_app(self, entry: AppEntry) -> None:
         self._show_details(RuleMatch.APP, entry.app_class, entry, subtitle=entry.app_class)
-
-    # --- step 2b: Steam games --------------------------------------------
-
-    def _populate_games(self) -> None:
-        if self._games_loaded:
-            return
-        self._games_loaded = True
-        games = self._steam_games()
-        for game in games:
-            self.steam_list.append(GameRow(game, has_rule=game.app_id in self._existing_games))
-        self.steam_list.set_filter_func(self._filter_games)
-        self._update_game_visibility()
-
-    def _filter_games(self, row: Gtk.ListBoxRow) -> bool:
-        text = self.steam_search_entry.get_text().strip().casefold()
-        return not text or (isinstance(row, GameRow) and text in row.search_text)
-
-    def _update_game_visibility(self) -> None:
-        has_games = bool(_rows(self.steam_list))
-        self.steam_search_entry.get_parent().set_visible(has_games)
-        if not has_games:
-            self.steam_stack.set_visible_child_name("empty")
-        elif self._has_visible_rows(self.steam_list):
-            self.steam_stack.set_visible_child_name("list")
-        else:
-            self.steam_stack.set_visible_child_name("no-results")
-
-    @Gtk.Template.Callback()
-    def on_steam_search_changed(self, _entry: Gtk.SearchEntry) -> None:
-        self.steam_list.invalidate_filter()
-        self._update_game_visibility()
-
-    @Gtk.Template.Callback()
-    def on_steam_search_activate(self, _entry: Gtk.SearchEntry) -> None:
-        for row in _rows(self.steam_list):
-            if isinstance(row, GameRow) and row.get_child_visible():
-                self.on_game_activated(self.steam_list, row)
-                return
-
-    @Gtk.Template.Callback()
-    def on_game_activated(self, _listbox: Gtk.ListBox, row: Gtk.ListBoxRow) -> None:
-        if isinstance(row, GameRow):
-            game = row.game
-            self._show_details(RuleMatch.STEAM_GAME, game.app_id,
-                               AppEntry(game.app_id, game.name, steam_game_icon(game.app_id)),
-                               subtitle=_("Steam game · {id}").format(id=game.app_id))
 
     # --- step 3: details -------------------------------------------------
 
@@ -485,11 +413,9 @@ class RuleDialog(Adw.Dialog):
 def present_rule_dialog(parent: Gtk.Widget, *, layout: Layout,
                         running: list[RunningApp], existing: list[AppRule],
                         on_done: Callable[[AppRule], None],
-                        steam_games: Callable[[], list[SteamGame]] | None = None,
                         rule: AppRule | None = None,
                         on_remove: Callable[[], None] | None = None) -> RuleDialog:
     dialog = RuleDialog(layout=layout, running=running, existing=existing,
-                        on_done=on_done, steam_games=steam_games, rule=rule,
-                        on_remove=on_remove)
+                        on_done=on_done, rule=rule, on_remove=on_remove)
     dialog.present(parent)
     return dialog

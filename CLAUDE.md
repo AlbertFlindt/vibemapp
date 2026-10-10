@@ -10,7 +10,7 @@ Full spec: `docs/SPEC.md`.
 - Python 3.14, PyGObject, GTK 4.24, libadwaita 1.10 (system packages only — no pip deps).
 - Meson build, PKGBUILD for Arch. GtkBuilder `.ui` XML (no blueprint-compiler).
 - Device I/O via stdlib only: `/dev/hidraw*` with `os`/`fcntl`, sysfs for enumeration.
-- Tests: stdlib `unittest` (`python -m unittest discover -s tests -t .` from repo root with `PYTHONPATH=src`).
+- Tests: stdlib `unittest` (`PYTHONPATH=src python -W "ignore::DeprecationWarning:gi.events" -m unittest discover -s tests -t .` from the repo root; the filter hides a PyGObject 3.58 warning under Python 3.14).
 
 ## Ownership
 | Path | Owner |

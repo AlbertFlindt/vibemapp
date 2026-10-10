@@ -27,7 +27,7 @@ import gi  # noqa: E402
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 gi.require_version("Graphene", "1.0")
-from gi.repository import GLib, Graphene, Gtk  # noqa: E402
+from gi.repository import Gio, GLib, Graphene, Gtk  # noqa: E402
 
 from vibemapp.main import Application  # noqa: E402
 from vibemapp.ui.keyboard_view import KeyboardView  # noqa: E402
@@ -44,7 +44,12 @@ def main() -> int:
     pid = os.getpid()
     original_cursor = subprocess.run(["hyprctl", "cursorpos"], capture_output=True,
                                      text=True).stdout.strip()
+    # Never talk to (or become) the user's running instance, and don't add a
+    # second tray icon.
+    import vibemapp.ui.tray_controller as tray_controller
+    tray_controller.TrayIcon = None
     app = Application()
+    app.set_flags(app.get_flags() | Gio.ApplicationFlags.NON_UNIQUE)
     state: dict = {"custom": None, "tip": None}
 
     def on_query(view, x, y, keyboard_mode, tooltip):

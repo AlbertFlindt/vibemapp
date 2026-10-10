@@ -585,8 +585,7 @@ class SmartLayersPage(Adw.Bin):
 
         present_rule_dialog(self, layout=self._layout,
                             running=self.service.list_running_apps(),
-                            existing=self._rules, on_done=done,
-                            steam_games=self.service.list_steam_games)
+                            existing=self._rules, on_done=done)
 
     def edit_rule(self, position: int) -> None:
         if not self.editable or self._layout is None or self.service is None:
@@ -609,4 +608,4 @@ class SmartLayersPage(Adw.Bin):
         present_rule_dialog(self, layout=self._layout,
                             running=self.service.list_running_apps(),
                             existing=self._rules, on_done=done, rule=original,
-                            on_remove=remove, steam_games=self.service.list_steam_games)
+                            on_remove=remove)

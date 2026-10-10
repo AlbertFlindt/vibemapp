@@ -28,7 +28,7 @@ import gi  # noqa: E402
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 gi.require_version("Graphene", "1.0")
-from gi.repository import GLib, Graphene, Gtk  # noqa: E402
+from gi.repository import Gio, GLib, Graphene, Gtk  # noqa: E402
 
 from vibemapp.main import Application  # noqa: E402
 
@@ -45,7 +45,7 @@ def main() -> int:
     parser.add_argument("--press", default="")
     parser.add_argument("--search", default="")
     parser.add_argument("--pick")
-    parser.add_argument("--kind", choices=["app", "steam-any", "steam-game", "pattern"])
+    parser.add_argument("--kind", choices=["app", "steam-any", "pattern"])
     parser.add_argument("--focus", default="firefox|Lo-fi beats — YouTube — Mozilla Firefox",
                         help="class|title of the simulated focused window")
     parser.add_argument("--record", action="store_true", help="turn heatmap recording on")
@@ -55,7 +55,12 @@ def main() -> int:
     args = parser.parse_args()
     width, height = (int(v) for v in args.size.split("x"))
 
+    # Never talk to (or become) the user's running instance, and don't add a
+    # second tray icon.
+    import vibemapp.ui.tray_controller as tray_controller
+    tray_controller.TrayIcon = None
     app = Application()
+    app.set_flags(app.get_flags() | Gio.ApplicationFlags.NON_UNIQUE)
 
     def render() -> bool:
         win = app.window
@@ -90,13 +95,10 @@ def main() -> int:
             dlg = win.get_visible_dialog()
             if args.kind:
                 row = {"app": dlg.kind_app_row, "steam-any": dlg.kind_steam_any_row,
-                       "steam-game": dlg.kind_steam_game_row,
                        "pattern": dlg.kind_pattern_row}[args.kind]
                 dlg.on_kind_activated(row)
             if args.search:
-                entry = (dlg.steam_search_entry if args.kind == "steam-game"
-                         else dlg.search_entry)
-                entry.set_text(args.search)
+                dlg.search_entry.set_text(args.search)
             if args.pick:
                 from vibemapp.ui.apps import AppIndex
                 dlg._pick_app(AppIndex.get().entry_for(args.pick))

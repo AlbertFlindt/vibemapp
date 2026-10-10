@@ -168,8 +168,11 @@ Names come from `appmanifest_<id>.acf` in every library listed in
 Proton, Steam Linux Runtime and Steamworks Common Redistributables are filtered out.
 Rules JSON stays backwards compatible (missing `match` = `APP`).
 
-UI: Add Rule offers **App**, **All Steam Games** (one click), **Steam Game** (pick
-from installed games by name) and **Window Class Pattern** (advanced, live regex
+UI: Add Rule offers **App**, **All Steam Games** (one click, Steam icon) and
+**Window Class Pattern** (advanced, live regex
 validation and a live "matches: …" preview against running windows). New specific rules
 are inserted above catch-all rules; the rules list shows group rules with a distinct
 icon/subtitle ("Any Steam game"). The focus status row shows the Steam game name.
+
+0.3.1: the single **Steam Game** picker was removed from Add Rule (too Steam-focused);
+existing single-game rules still display, edit and match.

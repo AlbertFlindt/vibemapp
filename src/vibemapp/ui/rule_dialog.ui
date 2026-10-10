@@ -66,28 +66,6 @@
                             </child>
                           </object>
                         </child>
-                        <child>
-                          <object class="AdwActionRow" id="kind_steam_game_row">
-                            <property name="title" translatable="yes">Steam _Game</property>
-                            <property name="use-underline">True</property>
-                            <property name="subtitle" translatable="yes">One installed Steam game</property>
-                            <property name="activatable">True</property>
-                            <signal name="activated" handler="on_kind_activated"/>
-                            <child type="prefix">
-                              <object class="GtkImage" id="kind_steam_game_row_icon">
-                                <property name="icon-name">input-gaming-symbolic</property>
-                                <property name="pixel-size">32</property>
-                                <property name="accessible-role">presentation</property>
-                              </object>
-                            </child>
-                            <child type="suffix">
-                              <object class="GtkImage">
-                                <property name="icon-name">go-next-symbolic</property>
-                                <property name="accessible-role">presentation</property>
-                              </object>
-                            </child>
-                          </object>
-                        </child>
                       </object>
                     </child>
                     <child>
@@ -254,95 +232,6 @@
                         </property>
                       </object>
                     </property>
-                  </object>
-                </property>
-              </object>
-            </property>
-          </object>
-        </child>
-        <child>
-          <object class="AdwNavigationPage" id="steam_page">
-            <property name="tag">steam</property>
-            <property name="title" translatable="yes">Choose Game</property>
-            <property name="child">
-              <object class="AdwToolbarView">
-                <child type="top">
-                  <object class="AdwHeaderBar"/>
-                </child>
-                <child type="top">
-                  <object class="AdwClamp" id="steam_search_clamp">
-                    <property name="margin-start">12</property>
-                    <property name="margin-end">12</property>
-                    <property name="margin-bottom">6</property>
-                    <property name="child">
-                      <object class="GtkSearchEntry" id="steam_search_entry">
-                        <property name="placeholder-text" translatable="yes">Search games</property>
-                        <signal name="search-changed" handler="on_steam_search_changed"/>
-                        <signal name="activate" handler="on_steam_search_activate"/>
-                        <accessibility>
-                          <property name="label" translatable="yes">Search games</property>
-                        </accessibility>
-                      </object>
-                    </property>
-                  </object>
-                </child>
-                <property name="content">
-                  <object class="GtkStack" id="steam_stack">
-                    <child>
-                      <object class="GtkStackPage">
-                        <property name="name">list</property>
-                        <property name="child">
-                          <object class="GtkScrolledWindow">
-                            <property name="hscrollbar-policy">never</property>
-                            <property name="child">
-                              <object class="AdwClamp">
-                                <property name="margin-top">12</property>
-                                <property name="margin-bottom">24</property>
-                                <property name="margin-start">12</property>
-                                <property name="margin-end">12</property>
-                                <property name="child">
-                                  <object class="GtkListBox" id="steam_list">
-                                    <property name="selection-mode">none</property>
-                                    <property name="valign">start</property>
-                                    <signal name="row-activated" handler="on_game_activated"/>
-                                    <accessibility>
-                                      <property name="label" translatable="yes">Steam games</property>
-                                    </accessibility>
-                                    <style>
-                                      <class name="boxed-list"/>
-                                    </style>
-                                  </object>
-                                </property>
-                              </object>
-                            </property>
-                          </object>
-                        </property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkStackPage">
-                        <property name="name">empty</property>
-                        <property name="child">
-                          <object class="AdwStatusPage">
-                            <property name="icon-name">input-gaming-symbolic</property>
-                            <property name="title" translatable="yes">No Steam Games Found</property>
-                            <property name="description" translatable="yes">Vibemapp looks for installed games in your Steam libraries. Install Steam and a game, or add a rule for All Steam Games instead.</property>
-                          </object>
-                        </property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkStackPage">
-                        <property name="name">no-results</property>
-                        <property name="child">
-                          <object class="AdwStatusPage">
-                            <property name="icon-name">edit-find-symbolic</property>
-                            <property name="title" translatable="yes">No Results</property>
-                            <property name="description" translatable="yes">No installed game matches your search</property>
-                          </object>
-                        </property>
-                      </object>
-                    </child>
                   </object>
                 </property>
               </object>

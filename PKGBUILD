@@ -1,6 +1,6 @@
 # Maintainer: Albert Flindt <Albert.Flindt@proton.me>
 pkgname=vibemapp
-pkgver=0.3.0
+pkgver=0.3.1
 pkgrel=1
 pkgdesc="GNOME-style companion app for ZSA keyboards with Smart Layers (app-aware layer switching)"
 arch=('any')
@@ -25,7 +25,8 @@ build() {
 
 check() {
   cd "$_srcroot"
-  PYTHONPATH=src python -m unittest discover -s tests -t .
+  # PyGObject 3.58 calls asyncio APIs deprecated in Python 3.14; not our code.
+  PYTHONPATH=src python -W "ignore::DeprecationWarning:gi.events" -m unittest discover -s tests -t .
 }
 
 package() {
