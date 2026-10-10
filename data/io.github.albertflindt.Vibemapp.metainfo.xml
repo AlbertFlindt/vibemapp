@@ -51,6 +51,11 @@
     <keyword>layer</keyword>
   </keywords>
   <releases>
+    <release version="1.0.0" date="2026-10-10">
+      <description>
+        <p>First stable release.</p>
+      </description>
+    </release>
     <release version="0.3.1" date="2026-10-10">
       <description>
         <ul>

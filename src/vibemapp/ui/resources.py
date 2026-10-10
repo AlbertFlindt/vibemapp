@@ -36,7 +36,7 @@ def source_data_dir() -> Path | None:
 
 
 def version() -> str:
-    return os.environ.get("VIBEMAPP_VERSION") or "0.3.1-dev"
+    return os.environ.get("VIBEMAPP_VERSION") or "1.0.0-dev"
 
 
 _css_loaded = False

@@ -176,3 +176,5 @@ icon/subtitle ("Any Steam game"). The focus status row shows the Steam game name
 
 0.3.1: the single **Steam Game** picker was removed from Add Rule (too Steam-focused);
 existing single-game rules still display, edit and match.
+
+1.0.0: first stable release (version bump only; no functional changes since 0.3.1).

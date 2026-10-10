@@ -1,6 +1,6 @@
 # Progress / handoff
 
-**Last updated:** 2026-10-10. **Version:** 0.3.1 (installed by the user with `makepkg -si`, and working).
+**Last updated:** 2026-10-10. **Version:** 1.0.0 (version bump only; 0.3.1 is what the user has installed and running).
 The PKGBUILD has since moved to `packaging/arch/`, so install with `cd packaging/arch && makepkg -si`.
 
 ## Current state
@@ -23,26 +23,32 @@ The PKGBUILD has since moved to `packaging/arch/`, so install with `cd packaging
   - **Live key presses:** highlighting and heatmap counting from real key presses on hardware haven't been checked live.
   - **Other ZSA boards:** Moonlander, ErgoDox EZ and Planck EZ geometry and key order come from QMK data. They haven't been checked on hardware, and the thumb-key angles are estimates.
   - **Single-game Steam rules** (`RuleMatch.STEAM_GAME` with an app ID) still work, display and edit. They can no longer be created from the UI, because the user removed that option.
-- **Where we stopped:** 0.3.1 was committed with the simpler Add Rule chooser
-  (App / All Steam Games / Window Class Pattern) and a quiet `makepkg` build. No work is in progress.
+- **Where we stopped:** bumped to 1.0.0 (meson.build, PKGBUILD, metainfo release entry, dev
+  version string, SPEC changelog). No functional changes since 0.3.1. Not yet rebuilt or installed
+  as 1.0.0, and not yet pushed to GitHub (see Next steps 1). No work is in progress.
 
 ## Next steps
-1. **Live-verify Steam rules.** With the user's help, add an "All Steam Games" rule, launch a
+1. **Publish to GitHub (blocked on the user).** This machine has no `gh` CLI, no SSH keys and no git
+   remote. The user needs to create `albertflindt/vibemapp` (or install `gh` and run `gh auth login`),
+   then: `git remote add origin <url> && git push -u origin main && git tag v1.0.0 && git push --tags`.
+   If the real repo URL differs from the placeholder, update it in the places listed in step 6.
+2. **Live-verify Steam rules.** With the user's help, add an "All Steam Games" rule, launch a
    Proton game (e.g. Path of Exile 2, appid 2694490) and a native one. Run with
    `VIBEMAPP_DEBUG=1 ./run-dev.sh` (quit the installed app first) and confirm the layer switches
    and the status row reads "Focused: <game> (Steam)".
-2. **Live-verify key events.** Turn on heatmap recording, type on the Voyager, and check that
+3. **Live-verify key events.** Turn on heatmap recording, type on the Voyager, and check that
    counts land on the right keys in the Heatmap page. Index mapping is in `backend/oryx.py` and
    `backend/geometries.py`; it's col/row in the event, then Oryx order.
-3. **Translations.** Add a `po/` directory (`POTFILES`, `LINGUAS`) and meson `i18n.gettext('vibemapp')`.
+4. **Translations.** Add a `po/` directory (`POTFILES`, `LINGUAS`) and meson `i18n.gettext('vibemapp')`.
    Strings are already wrapped in `_()`.
-4. **Metainfo screenshots.** Add `<screenshots>` to `data/io.github.albertflindt.Vibemapp.metainfo.xml`
+5. **Metainfo screenshots.** Add `<screenshots>` to `data/io.github.albertflindt.Vibemapp.metainfo.xml`
    using images from `tests/ui/screenshot.py` (layout, smart layers, heatmap), stored in `data/screenshots/`.
-5. **Real GitHub repo.** The `packaging/arch/PKGBUILD` `url`, the About dialog and the metainfo point to the placeholder
-   `https://github.com/albertflindt/vibemapp`. Create the repo, or change these to the real URL, and
-   switch the PKGBUILD to a git `source=`.
+6. **Point packaging at the real repo.** The `packaging/arch/PKGBUILD` `url`, the About dialog and the metainfo point to the placeholder
+   `https://github.com/albertflindt/vibemapp`. Once step 1 is done, confirm that URL (or change it) and
+   switch the PKGBUILD to a git `source=` pinned to tag `v1.0.0`.
 
 ## Decisions
+- **1.0.0 is a version bump only:** the user called it stable; the unverified items above remain open.
 - **PKGBUILD in `packaging/arch/`:** `makepkg -c/-C` deletes `./src`, which at the repo root was our code. Verified safe after the move.
 - **Python, PyGObject and libadwaita:** all already installed, so nothing from pip and no Rust toolchain needed.
 - **Hyprland only as focus source:** it's the user's desktop. `FocusWatcher` is pluggable for GNOME, KDE or X11 later.
@@ -60,7 +66,7 @@ The PKGBUILD has since moved to `packaging/arch/`, so install with `cd packaging
 - **Always open on the Layout page:** the user asked for it, so the `last-page` setting was removed.
 
 ## Known issues / dead ends
-- **No failing tests.** `./check.sh` passes: 145 tests plus lint and data validation, OK on 2026-10-10.
+- **No failing tests.** `./check.sh` passes: 145 tests plus lint and data validation, OK on 2026-10-10 after the 1.0.0 bump.
   `makepkg -f` and `makepkg -fc` from `packaging/arch/` also succeed (the package wasn't installed).
 - **PyGObject asyncio warning:** the upstream PyGObject 3.58 DeprecationWarning is filtered, not fixed. Drop the `-W` filter once PyGObject is updated.
 - **GSettings dead end:** `Gio.Settings.new_full(schema, None, old_path)` aborts on a fixed-path schema. Migration
