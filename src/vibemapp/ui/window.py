@@ -66,8 +66,8 @@ class Window(Adw.ApplicationWindow):
             (service, service.connect("layer-changed", lambda *_a: self._sync_device_status())),
         ]
 
-        page = settings.get_string("last-page")
-        self.show_page(page if page in PAGES else "layout", reveal=False)
+        # Always open on Layout (also when re-shown from the tray).
+        self.show_page("layout", reveal=False)
         self._sync()
 
     # --- actions ---------------------------------------------------------
@@ -137,7 +137,6 @@ class Window(Adw.ApplicationWindow):
         self.content_page.set_title(page_title(name))
         self.sidebar.set_selected(PAGES.index(name))
         self._page_action.set_state(GLib.Variant("s", name))
-        self.settings.set_string("last-page", name)
         if reveal:
             self.split_view.set_show_content(True)
 

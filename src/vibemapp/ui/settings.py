@@ -27,7 +27,6 @@ _DEFAULTS: dict[str, object] = {
     "window-width": 960,
     "window-height": 660,
     "window-maximized": False,
-    "last-page": "layout",
     "show-in-tray": True,
     "heatmap-recording": False,
     "migrated-from-keymappforlinux": True,

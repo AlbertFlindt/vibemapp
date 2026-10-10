@@ -101,7 +101,8 @@ ID and payload layout from that source**; do not rely on memory. Things to confi
   `Adw.Banner` when Hyprland isn't detected.
 - Background: closing the window keeps the app running when "Run in background" is on
   (`Gio.Application.hold`); `--background` starts without a window. Preferences show
-  the `exec-once = vibemapp --background` hint for `hyprland.conf`.
+  the Hyprland Lua autostart hint
+  (`hl.on("hyprland.start", function () hl.exec_cmd("vibemapp --background") end)`).
 - Preferences (`Adw.PreferencesDialog`): run in background, enable Smart Layers on
   startup, auto-connect. Stored in GSettings.
 - Errors as `Adw.Toast`. About via `Adw.AboutDialog`.
@@ -141,7 +142,7 @@ Per-key tooltips must follow the pointer: set `Gtk.Tooltip.set_tip_area()` to th
 hovered key's bounding box so GTK repositions/re-queries when moving between keys.
 
 ### 6.4 Heatmap
-Sidebar entry **Heatmap**. Opt-in (`heatmap-recording`, default off). Stores only
+Sidebar entry **Heatmap**. The window always opens on the **Layout** page. Opt-in (`heatmap-recording`, default off). Stores only
 per-(local day, layer, key index) press counts per layout in
 `$XDG_DATA_HOME/vibemapp/heatmap/<layout_id>.json` (atomic writes, flushed at most
 every ~30 s and on shutdown). Contract: `heatmap_recording` property,

@@ -11,7 +11,9 @@ from gi.repository import Adw, Gio, Gtk  # noqa: E402
 from .i18n import _  # noqa: E402
 from .resources import ui_file  # noqa: E402
 
-EXEC_LINE = "exec-once = vibemapp --background"
+AUTOSTART_SNIPPET = """hl.on("hyprland.start", function ()
+  hl.exec_cmd("vibemapp --background")
+end)"""
 
 
 @Gtk.Template(filename=ui_file("preferences.ui"))
@@ -22,11 +24,11 @@ class PreferencesDialog(Adw.PreferencesDialog):
     background_row: Adw.SwitchRow = Gtk.Template.Child()
     smart_layers_row: Adw.SwitchRow = Gtk.Template.Child()
     auto_connect_row: Adw.SwitchRow = Gtk.Template.Child()
-    exec_row: Adw.ActionRow = Gtk.Template.Child()
+    snippet_label: Gtk.Label = Gtk.Template.Child()
 
     def __init__(self, settings: Gio.Settings, tray: object | None = None) -> None:
         super().__init__()
-        self.exec_row.set_title(EXEC_LINE)
+        self.snippet_label.set_label(AUTOSTART_SNIPPET)
         self._tray = tray
         self._settings = settings
         self._tray_handler = (tray.connect("notify::active", lambda *_a: self._sync_tray())
@@ -58,5 +60,5 @@ class PreferencesDialog(Adw.PreferencesDialog):
 
     @Gtk.Template.Callback()
     def on_copy_clicked(self, button: Gtk.Button) -> None:
-        button.get_clipboard().set(EXEC_LINE)
+        button.get_clipboard().set(AUTOSTART_SNIPPET)
         self.add_toast(Adw.Toast(title=_("Copied to clipboard")))

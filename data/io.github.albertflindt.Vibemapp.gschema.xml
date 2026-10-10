@@ -43,14 +43,5 @@
       <default>false</default>
       <summary>Window maximized</summary>
     </key>
-    <key name="last-page" type="s">
-      <choices>
-        <choice value="layout"/>
-        <choice value="heatmap"/>
-        <choice value="smart-layers"/>
-      </choices>
-      <default>"layout"</default>
-      <summary>Last visible page</summary>
-    </key>
   </schema>
 </schemalist>
