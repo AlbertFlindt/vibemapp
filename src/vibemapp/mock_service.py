@@ -75,14 +75,19 @@ def voyager_geometry() -> tuple[KeyGeometry, ...]:
 
 
 def _layer_keys(rows: list[list[object]], thumbs: list[object],
-                color: str | None = None) -> tuple[KeyBinding, ...]:
+                color: str | None = None,
+                blank_transparent: bool = False) -> tuple[KeyBinding, ...]:
     """``rows`` hold 12 entries each (left 6, right 6); an entry is a tap label,
-    a ``(tap, hold)`` tuple or a ``dict`` of KeyBinding fields."""
+    a ``(tap, hold)`` tuple or a ``dict`` of KeyBinding fields. ``None`` is a
+    transparent key (Oryx ▽); with ``blank_transparent`` so is ``""``, otherwise
+    ``""`` is a blocked key (KC_NO)."""
     out: list[KeyBinding] = []
 
     def add(entry: object) -> None:
         idx = len(out)
-        if isinstance(entry, dict):
+        if entry is None or (blank_transparent and entry == ""):
+            out.append(KeyBinding(idx, transparent=True))
+        elif isinstance(entry, dict):
             out.append(KeyBinding(idx, **entry))
         elif isinstance(entry, tuple):
             out.append(KeyBinding(idx, tap_label=entry[0], hold_label=entry[1],
@@ -113,7 +118,7 @@ def voyager_layout() -> Layout:
          ["", "!", "@", "{", "}", "|", "", "7", "8", "9", "*", "F12"],
          ["", "#", "$", "(", ")", "`", "", "4", "5", "6", "+", ""],
          ["", "%", "^", "[", "]", "~", "&", "1", "2", "3", "\\", ""]],
-        ["", "", "", "0"], color="#c64600")
+        ["", "", "", "0"], color="#c64600", blank_transparent=True)
     media_color = "#2190a4"
     media = _layer_keys(
         [["", "", "", "", "", "", "", "", "", "", "", "Reset"],
@@ -131,13 +136,13 @@ def voyager_layout() -> Layout:
           {"tap_label": "Next", "glyph": "media-skip-forward-symbolic",
            "color": media_color}, "", ""],
          ["", "", "", "", "", "", "", "☀−", "☀+", "", "", ""]],
-        ["", "", "", ""])
+        [None, None, None, None])     # blanks above are blocked (KC_NO)
     nav = _layer_keys(
         [["", "", "", "", "", "", "", "", "", "", "", ""],
          ["", "", "", "", "", "", "PgUp", "Home", "↑", "End", "", ""],
          ["", "Ctrl", "Alt", "Super", "Shift", "", "PgDn", "←", "↓", "→", "", ""],
          ["", "Undo", "Cut", "Copy", "Paste", "", "", "", "", "", "", ""]],
-        ["", "", "", ""], color="#26a269")
+        ["", "", "", ""], color="#26a269", blank_transparent=True)
     layers = (
         Layer(0, "Base", None, base),
         Layer(1, "Symbols", "#c64600", symbols),

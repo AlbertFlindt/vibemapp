@@ -62,6 +62,32 @@ class LabelTests(unittest.TestCase):
         self.assertEqual(b.tap_label, "🙂")
         self.assertEqual(key_binding_from_json(9, None).tap_label, "")
 
+    def test_transparent(self) -> None:
+        all_null = {"customLabel": None, "doubleTap": None, "emoji": None, "glowColor": None,
+                    "hold": None, "icon": None, "tap": None, "tapHold": None}
+        b = key_binding_from_json(3, all_null)
+        self.assertTrue(b.transparent)
+        self.assertEqual((b.index, b.tap_label, b.hold_label, b.glyph), (3, "", "", None))
+        b = key_binding_from_json(0, dict(all_null, glowColor="#ABCDEF"))
+        self.assertEqual((b.transparent, b.color), (True, "#abcdef"))
+        for code in ("KC_TRANSPARENT", "KC_TRNS"):
+            b = key_binding_from_json(0, _key(code))
+            self.assertTrue(b.transparent, code)
+            self.assertEqual((b.tap_label, b.glyph), ("", None))
+        self.assertTrue(key_binding_from_json(9, None).transparent)
+
+    def test_not_transparent(self) -> None:
+        b = key_binding_from_json(0, _key("KC_NO"))
+        self.assertFalse(b.transparent)
+        self.assertEqual(b.tap_label, "")
+        self.assertFalse(key_binding_from_json(0, _key("KC_A")).transparent)
+        self.assertFalse(key_binding_from_json(
+            0, {"tap": None, "hold": {"code": "KC_LEFT_SHIFT"}}).transparent)
+        self.assertFalse(key_binding_from_json(
+            0, {"tap": None, "doubleTap": {"code": "KC_B"}}).transparent)
+        b = key_binding_from_json(0, {"tap": None, "customLabel": "Macro"})
+        self.assertEqual((b.transparent, b.tap_label), (False, "Macro"))
+
 
 class ParseTests(unittest.TestCase):
     def test_parse_layout(self) -> None:
@@ -76,6 +102,8 @@ class ParseTests(unittest.TestCase):
         self.assertEqual((keys[1].tap_label, keys[1].hold_label), ("A", "L1"))
         self.assertEqual(keys[2].hold_label, "Alt")
         self.assertEqual(keys[3].tap_label, "")
+        self.assertTrue(keys[3].transparent)
+        self.assertFalse(keys[1].transparent)
         self.assertEqual((keys[5].tap_label, keys[5].color), ("MoveScreen", "#abcdef"))
 
 

@@ -17,6 +17,7 @@ from .keyboard_view import KeyboardView  # noqa: E402,F401  (registers the type)
 from .resources import ui_file  # noqa: E402
 from .rules_model import layer_label  # noqa: E402
 from .widgets import HeatLegend  # noqa: E402,F401  (registers the type)
+from .transparency import is_transparent  # noqa: E402
 
 TOP_KEYS = 5
 
@@ -173,6 +174,8 @@ class HeatmapPage(Adw.Bin):
     def _key_name(self, index: int, layer: int | None) -> str:
         source = self._label_layer(layer)
         binding = next((k for k in source.keys if k.index == index), None) if source else None
+        if is_transparent(binding):
+            return _("Key {index} (Transparent)").format(index=index)
         name = (binding.tap_label or binding.hold_label) if binding else ""
         return name or _("Key {index}").format(index=index)
 

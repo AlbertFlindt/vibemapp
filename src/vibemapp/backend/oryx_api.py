@@ -231,12 +231,31 @@ def _modifier_prefix(mods: Any) -> str:
     return "".join(out)
 
 
+_TRANSPARENT_CODES = frozenset({"KC_TRANSPARENT", "KC_TRNS", "_______"})
+_ACTION_FIELDS = ("tap", "hold", "doubleTap", "tapHold")
+_LABEL_FIELDS = ("customLabel", "emoji", "icon")
+
+
+def _is_set(value: Any) -> bool:
+    return bool(value.strip()) if isinstance(value, str) else bool(value)
+
+
 def key_binding_from_json(index: int, key: Any) -> KeyBinding:
+    """One Oryx key object. Oryx sends a transparent key as an object whose actions
+    are all null; an explicit null slot inside a layer's key list means the same.
+    ``KC_NO`` is a blocked key, not a transparent one."""
     if not isinstance(key, dict):
-        return KeyBinding(index=index)
+        return KeyBinding(index=index, transparent=True)
     tap = key.get("tap") if isinstance(key.get("tap"), dict) else None
     hold = key.get("hold") if isinstance(key.get("hold"), dict) else None
     code = tap.get("code") if tap else None
+    color = normalize_color(key.get("glowColor")) or (normalize_color(tap.get("color")) if tap else None)
+    no_action = not any(_is_set(key.get(f)) for f in _ACTION_FIELDS)
+    no_label = not any(_is_set(key.get(f)) for f in _LABEL_FIELDS)
+    if (no_action and no_label) or code in _TRANSPARENT_CODES:
+        # Keep a real hold action (e.g. LT(n, KC_TRNS)) so it isn't lost.
+        return KeyBinding(index=index, hold_label=hold_label(hold), color=color,
+                          transparent=True)
     tap_label = keycode_label(code, tap.get("layer") if tap else None)
     glyph = keycode_glyph(code)
     prefix = _modifier_prefix(tap.get("modifiers")) if tap else ""
@@ -249,7 +268,6 @@ def key_binding_from_json(index: int, key: Any) -> KeyBinding:
         tap_label, glyph = custom.strip(), None
     elif isinstance(emoji, str) and emoji.strip():
         tap_label, glyph = emoji.strip(), None
-    color = normalize_color(key.get("glowColor")) or (normalize_color(tap.get("color")) if tap else None)
     return KeyBinding(index=index, tap_label=tap_label, hold_label=hold_label(hold),
                       glyph=glyph, color=color)
 

@@ -8,6 +8,7 @@ accent colour. The only literal colours are Oryx-supplied key/layer tints.
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 
 import gi
 
@@ -19,6 +20,8 @@ from gi.repository import Adw, Gdk, Graphene, Gsk, Gtk, Pango  # noqa: E402
 
 from ..models import KeyBinding, KeyGeometry, Layer  # noqa: E402
 from . import heat  # noqa: E402
+from .transparency import (BASE_ONLY, TRANSPARENT_MARK, FallThrough,  # noqa: E402
+                           binding_label, fallthrough_map, is_transparent, transparent_tooltip)
 from .i18n import _, ngettext  # noqa: E402
 
 KEY_GAP = 0.08          # key units between neighbouring keys
@@ -28,7 +31,14 @@ PRESS_IN_MS = 60
 PRESS_OUT_MS = 280
 FADE_MS = 220
 
-_PROBES = ("fg", "key", "border", "shade", "accent-bg", "accent-fg")
+_PROBES = ("fg", "key", "border", "dash", "shade", "accent-bg", "accent-fg")
+
+# Transparent keys: a faint, flat face with a dashed outline, the ▽ marker and
+# the fall-through binding in dimmed text.
+TRANSPARENT_FACE_ALPHA = 0.3
+TRANSPARENT_LABEL_ALPHA = 0.45
+TRANSPARENT_MARK_ALPHA = 0.7
+BLANK_FACE_ALPHA = 0.55
 
 
 def _rgba(spec: str | None) -> Gdk.RGBA | None:
@@ -84,6 +94,8 @@ class KeyboardView(Gtk.Widget):
         self._bounds = (0.0, 0.0, 1.0, 1.0)
         self._layer: Layer | None = None
         self._prev_layer: Layer | None = None
+        self._fall: dict[int, FallThrough] = {}
+        self._prev_fall: dict[int, FallThrough] = {}
         self._fade = 1.0
         self._press: dict[int, float] = {}
         self._press_anims: dict[int, Adw.TimedAnimation] = {}
@@ -120,12 +132,21 @@ class KeyboardView(Gtk.Widget):
         self._press.clear()
         self.queue_resize()
 
-    def set_layer(self, layer: Layer | None, animate: bool = True) -> None:
+    def set_layer(self, layer: Layer | None, animate: bool = True,
+                  layers: tuple[Layer, ...] | None = None) -> None:
+        """Show ``layer``. Pass the layout's whole layer stack as ``layers`` to
+        show what transparent keys fall through to (the base layer's key)."""
+        fall = fallthrough_map(layers or (), layer, BASE_ONLY)
         if layer is self._layer or (layer is not None and self._layer is not None
                                     and layer == self._layer):
+            if fall != self._fall:
+                self._fall = fall
+                self.queue_draw()
             return
         self._prev_layer = self._layer
+        self._prev_fall = self._fall
         self._layer = layer
+        self._fall = fall
         if animate and self._prev_layer is not None and self.get_mapped():
             self._fade_anim.reset()
             self._fade_anim.play()
@@ -301,11 +322,13 @@ class KeyboardView(Gtk.Widget):
         for geo in self._geometry:
             self._draw_key(snapshot, geo, unit, off_x, off_y,
                            bindings_new.get(geo.index),
-                           bindings_old.get(geo.index) if bindings_old is not None else None)
+                           bindings_old.get(geo.index) if bindings_old is not None else None,
+                           self._fall.get(geo.index), self._prev_fall.get(geo.index))
 
     def _draw_key(self, snapshot: Gtk.Snapshot, geo: KeyGeometry, unit: float,
                   off_x: float, off_y: float, binding: KeyBinding | None,
-                  old: KeyBinding | None) -> None:
+                  old: KeyBinding | None, fall: FallThrough | None = None,
+                  old_fall: FallThrough | None = None) -> None:
         transition = self._prev_layer is not None and self._fade < 1.0
         fade = self._fade if transition else 1.0
         press = self._press.get(geo.index, 0.0)
@@ -328,22 +351,30 @@ class KeyboardView(Gtk.Widget):
         rounded.init_from_rect(rect, radius)
 
         # Base cap: card colour with a soft drop shade for depth. Keys
-        # without any binding are drawn fainter.
+        # without any binding are drawn fainter; transparent keys are flat and
+        # fainter still, with a dashed outline.
         def cap_alpha(b: KeyBinding | None) -> float:
+            if is_transparent(b):
+                return TRANSPARENT_FACE_ALPHA
             blank = b is None or not (b.tap_label or b.hold_label or b.glyph)
-            return 0.55 if blank else 1.0
+            return BLANK_FACE_ALPHA if blank else 1.0
 
-        blank_alpha = cap_alpha(binding)
-        if transition:
-            blank_alpha = cap_alpha(old) * (1 - fade) + blank_alpha * fade
+        def crossfade(value) -> float:  # value: Callable[[KeyBinding | None], float]
+            new = value(binding)
+            return value(old) * (1 - fade) + new * fade if transition else new
 
         if self._heat is not None:
             self._draw_heat_key(snapshot, geo, rect, rounded, unit, w, h, binding)
             snapshot.restore()
             return
 
-        snapshot.append_outset_shadow(rounded, _with_alpha(self._color("shade"), blank_alpha),
-                                      0, max(unit * 0.03, 1.0), 0, max(unit * 0.06, 1.0))
+        blank_alpha = crossfade(cap_alpha)
+        dashed = crossfade(lambda b: 1.0 if is_transparent(b) else 0.0)
+
+        if dashed < 1.0:
+            snapshot.append_outset_shadow(
+                rounded, _with_alpha(self._color("shade"), blank_alpha * (1 - dashed)),
+                0, max(unit * 0.03, 1.0), 0, max(unit * 0.06, 1.0))
         snapshot.push_rounded_clip(rounded)
         snapshot.append_color(_with_alpha(self._color("key"), blank_alpha), rect)
 
@@ -352,21 +383,84 @@ class KeyboardView(Gtk.Widget):
         for b, alpha in ((old if transition else None, 1 - fade), (binding, fade)):
             tint = _rgba(b.color) if b is not None else None
             if tint is not None and alpha > 0:
+                if is_transparent(b):
+                    alpha *= 0.5
                 snapshot.append_color(_with_alpha(tint, tint_alpha * alpha), rect)
         if press > 0:
             snapshot.append_color(_with_alpha(self._color("accent-bg"), press), rect)
         snapshot.pop()
 
-        border = _with_alpha(self._color("border"), blank_alpha)
-        snapshot.append_border(rounded, [1, 1, 1, 1], [border] * 4)
+        if dashed < 1.0:
+            border = _with_alpha(self._color("border"), blank_alpha * (1 - dashed))
+            snapshot.append_border(rounded, [1, 1, 1, 1], [border] * 4)
+        if dashed > 0.0:
+            self._draw_dashed_outline(snapshot, rect, radius, unit, dashed)
 
         fg = _mix(self._color("fg"), self._color("accent-fg"), press)
         if transition:
-            self._draw_labels(snapshot, old, w, h, unit, _with_alpha(fg, 1 - self._fade))
-            self._draw_labels(snapshot, binding, w, h, unit, _with_alpha(fg, self._fade))
+            self._draw_key_face(snapshot, old, old_fall, w, h, unit, fg, 1 - self._fade, press)
+            self._draw_key_face(snapshot, binding, fall, w, h, unit, fg, self._fade, press)
         else:
-            self._draw_labels(snapshot, binding, w, h, unit, fg)
+            self._draw_key_face(snapshot, binding, fall, w, h, unit, fg, 1.0, press)
         snapshot.restore()
+
+    def _draw_dashed_outline(self, snapshot: Gtk.Snapshot, rect: Graphene.Rect,
+                             radius: float, unit: float, alpha: float) -> None:
+        # Inset by half the line width so the stroke stays inside the cap.
+        line = max(unit * 0.022, 1.0)
+        inner = Graphene.Rect().init(rect.get_x() + line / 2, rect.get_y() + line / 2,
+                                     rect.get_width() - line, rect.get_height() - line)
+        rounded = Gsk.RoundedRect()
+        rounded.init_from_rect(inner, max(radius - line / 2, 0.0))
+        builder = Gsk.PathBuilder.new()
+        builder.add_rounded_rect(rounded)
+        stroke = Gsk.Stroke.new(line)
+        dash = max(unit * 0.07, 2.0)
+        stroke.set_dash([dash, dash * 0.8])
+        snapshot.append_stroke(builder.to_path(), stroke,
+                               _with_alpha(self._color("dash"), alpha))
+
+    def _draw_key_face(self, snapshot: Gtk.Snapshot, binding: KeyBinding | None,
+                       fall: FallThrough | None, w: float, h: float, unit: float,
+                       fg: Gdk.RGBA, alpha: float, press: float) -> None:
+        """Labels for one layer's binding; ``alpha`` is the crossfade weight."""
+        if alpha <= 0.01:
+            return
+        if not is_transparent(binding):
+            self._draw_labels(snapshot, binding, w, h, unit, _with_alpha(fg, alpha))
+            return
+        # Pressing a transparent key brings its text up to full strength, like
+        # any other key under the accent highlight.
+        def dimmed(level: float) -> Gdk.RGBA:
+            return _with_alpha(fg, alpha * (level + (1 - level) * press))
+
+        # LT(n, KC_TRNS): only the tap falls through; the key's own hold
+        # action is drawn like any other hold label.
+        own_hold = binding.hold_label
+        hold_fg = _with_alpha(fg, alpha * 0.6) if own_hold else None
+        if fall is not None and (binding_label(fall.binding) or fall.binding.glyph):
+            shown = (replace(fall.binding, hold_label=own_hold) if own_hold
+                     else fall.binding)
+            self._draw_labels(snapshot, shown, w, h, unit,
+                              dimmed(TRANSPARENT_LABEL_ALPHA), hold_fg=hold_fg)
+            # Marker tucked into the top corner so it doesn't fight the label.
+            layout = self._text_layout(TRANSPARENT_MARK, max(int(unit * 0.16), 6), False)
+            lw, lh = layout.get_pixel_size()
+            inset = min(w, h) * 0.07
+            snapshot.save()
+            snapshot.translate(Graphene.Point().init(w / 2 - inset - lw, -h / 2 + inset * 0.6))
+            snapshot.append_layout(layout, dimmed(TRANSPARENT_MARK_ALPHA))
+            snapshot.restore()
+        else:
+            layout = self._fitted_layout(TRANSPARENT_MARK, unit * 0.30, w * 0.84, bold=False)
+            lw, lh = layout.get_pixel_size()
+            centre_y = -h * 0.08 if own_hold else 0.0
+            snapshot.save()
+            snapshot.translate(Graphene.Point().init(-lw / 2, centre_y - lh / 2))
+            snapshot.append_layout(layout, dimmed(TRANSPARENT_MARK_ALPHA))
+            snapshot.restore()
+            if own_hold:
+                self._draw_hold(snapshot, own_hold, w, h, unit, hold_fg)
 
     def _draw_heat_key(self, snapshot: Gtk.Snapshot, geo: KeyGeometry, rect: Graphene.Rect,
                        rounded: Gsk.RoundedRect, unit: float, w: float, h: float,
@@ -389,7 +483,7 @@ class KeyboardView(Gtk.Widget):
         snapshot.append_border(rounded, [1, 1, 1, 1], [self._color("border")] * 4)
 
         max_w = w * 0.84
-        label = (binding.tap_label or binding.hold_label) if binding else ""
+        label = TRANSPARENT_MARK if is_transparent(binding) else binding_label(binding)
         if count > 0:
             text = heat.compact_count(count)
             layout = self._fitted_layout(text, unit * 0.30, max_w, bold=True)
@@ -407,8 +501,18 @@ class KeyboardView(Gtk.Widget):
             snapshot.append_layout(layout, _with_alpha(fg, 0.75 if count > 0 else 0.5))
             snapshot.restore()
 
+    def _draw_hold(self, snapshot: Gtk.Snapshot, text: str, w: float, h: float,
+                   unit: float, fg: Gdk.RGBA) -> None:
+        layout = self._fitted_layout(text, unit * 0.17, w * 0.84, bold=False)
+        lw, lh = layout.get_pixel_size()
+        snapshot.save()
+        snapshot.translate(Graphene.Point().init(-lw / 2, h / 2 - lh - h * 0.06))
+        snapshot.append_layout(layout, fg)
+        snapshot.restore()
+
     def _draw_labels(self, snapshot: Gtk.Snapshot, binding: KeyBinding | None,
-                     w: float, h: float, unit: float, fg: Gdk.RGBA) -> None:
+                     w: float, h: float, unit: float, fg: Gdk.RGBA,
+                     hold_fg: Gdk.RGBA | None = None) -> None:
         if binding is None or fg.alpha <= 0.01:
             return
         has_hold = bool(binding.hold_label)
@@ -428,12 +532,8 @@ class KeyboardView(Gtk.Widget):
             snapshot.append_layout(layout, fg)
             snapshot.restore()
         if has_hold:
-            layout = self._fitted_layout(binding.hold_label, unit * 0.17, max_w, bold=False)
-            lw, lh = layout.get_pixel_size()
-            snapshot.save()
-            snapshot.translate(Graphene.Point().init(-lw / 2, h / 2 - lh - h * 0.06))
-            snapshot.append_layout(layout, _with_alpha(fg, 0.6))
-            snapshot.restore()
+            self._draw_hold(snapshot, binding.hold_label, w, h, unit,
+                            hold_fg if hold_fg is not None else _with_alpha(fg, 0.6))
 
     def _draw_glyph(self, snapshot: Gtk.Snapshot, icon_name: str, size: float,
                     centre_y: float, fg: Gdk.RGBA) -> bool:
@@ -485,10 +585,12 @@ class KeyboardView(Gtk.Widget):
         binding = next((k for k in self._layer.keys if k.index == geo.index), None)
         if self._heat is not None:
             count = self._heat.get(geo.index, 0)
-            name = (binding.tap_label or binding.hold_label) if binding else ""
+            name = _("Transparent") if is_transparent(binding) else binding_label(binding)
             presses = ngettext("{n} press", "{n} presses", count).format(
                 n=heat.format_count(count))
             return f"{name} · {presses}" if name else presses
+        if is_transparent(binding):
+            return transparent_tooltip(self._fall.get(geo.index), binding.hold_label)
         if binding is None or not (binding.tap_label or binding.hold_label):
             return None
         if not binding.hold_label:

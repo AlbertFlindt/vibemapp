@@ -4,6 +4,7 @@
 keyboardview > .probe-fg        { color: var(--window-fg-color); }
 keyboardview > .probe-key       { color: var(--card-bg-color); }
 keyboardview > .probe-border    { color: color-mix(in srgb, var(--window-fg-color) 12%, transparent); }
+keyboardview > .probe-dash      { color: color-mix(in srgb, var(--window-fg-color) 40%, transparent); }
 keyboardview > .probe-shade     { color: var(--card-shade-color); }
 keyboardview > .probe-accent-bg { color: var(--accent-bg-color); }
 keyboardview > .probe-accent-fg { color: var(--accent-fg-color); }

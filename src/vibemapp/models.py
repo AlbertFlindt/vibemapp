@@ -54,6 +54,7 @@ class KeyBinding:
     hold_label: str = ""          # label for hold action ("Ctrl", "L2"), may be empty
     glyph: str | None = None      # optional symbolic icon name instead of tap_label
     color: str | None = None      # optional "#rrggbb" key colour from Oryx
+    transparent: bool = False     # falls through to the layer below (Oryx ▽)
 
 
 @dataclass(frozen=True)

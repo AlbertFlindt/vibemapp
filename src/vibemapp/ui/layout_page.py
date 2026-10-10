@@ -231,7 +231,7 @@ class LayoutPage(Adw.Bin):
         if self._layout is None:
             return
         layer = self._layout.layers[self._view_layer]
-        self.keyboard_view.set_layer(layer, animate=animate)
+        self.keyboard_view.set_layer(layer, animate=animate, layers=self._layout.layers)
         self._update_active_label()
         self.emit("layers-changed")
 
