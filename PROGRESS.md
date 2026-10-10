@@ -73,8 +73,6 @@ The PKGBUILD has since moved to `packaging/arch/`, so install with `cd packaging
 - **Always open on the Layout page:** the user asked for it, so the `last-page` setting was removed.
 
 ## Known issues / dead ends
-- **git identity:** no global user.name/email is set on this machine. Commits so far pass the author
-  via env vars (Albert Flindt <Albert.Flindt@proton.me>). Pushing works over HTTPS with a stored token.
 - **No failing tests.** `./check.sh` passes: 145 tests plus lint and data validation, OK on 2026-10-10 after the 1.0.0 bump.
   `makepkg -f` and `makepkg -fc` from `packaging/arch/` also succeed (the package wasn't installed).
 - **PyGObject asyncio warning:** the upstream PyGObject 3.58 DeprecationWarning is filtered, not fixed. Drop the `-W` filter once PyGObject is updated.

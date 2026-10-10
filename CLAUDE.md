@@ -66,5 +66,3 @@ Full spec and design history: @docs/SPEC.md. Handoff state: @PROGRESS.md.
 - Release bump touches: `meson.build` version, `packaging/arch/PKGBUILD` pkgver,
   `ui/resources.py` dev fallback and a metainfo `<release>` entry. Then commit, `git tag vX.Y.Z`,
   `git push origin main --tags`. Repo: https://github.com/AlbertFlindt/vibemapp
-- No git identity is configured. Commit with
-  `git -c user.name="Albert Flindt" -c user.email="Albert.Flindt@proton.me" commit …`
