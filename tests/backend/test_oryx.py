@@ -3,8 +3,8 @@ from __future__ import annotations
 import queue
 import unittest
 
-from keymappforlinux.backend import oryx
-from keymappforlinux.backend.oryx import Cmd, Evt, OryxConnection
+from vibemapp.backend import oryx
+from vibemapp.backend.oryx import Cmd, Evt, OryxConnection
 
 from ._util import FakeFirmware
 

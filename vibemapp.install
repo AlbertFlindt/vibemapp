@@ -1,0 +1,8 @@
+post_install() {
+  udevadm control --reload-rules 2>/dev/null || true
+  udevadm trigger --subsystem-match=hidraw 2>/dev/null || true
+  echo ">> Replug your ZSA keyboard so the new udev rules apply."
+  echo ">> For Smart Layers in the background, add to hyprland.conf:"
+  echo ">>     exec-once = vibemapp --background"
+}
+post_upgrade() { post_install; }

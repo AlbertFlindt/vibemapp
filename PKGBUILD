@@ -1,15 +1,17 @@
 # Maintainer: Albert Flindt <Albert.Flindt@proton.me>
-pkgname=keymappforlinux
-pkgver=0.1.0
+pkgname=vibemapp
+pkgver=0.2.0
 pkgrel=1
 pkgdesc="GNOME-style companion app for ZSA keyboards with Smart Layers (app-aware layer switching)"
 arch=('any')
-url="https://github.com/albertflindt/keyMappForLinux"
+url="https://github.com/albertflindt/vibemapp"
 license=('GPL-3.0-or-later')
 depends=('python' 'python-gobject' 'gtk4' 'libadwaita' 'glib2')
 makedepends=('meson')
 optdepends=('hyprland: Smart Layers focus tracking')
-install=keymappforlinux.install
+conflicts=('keymappforlinux')
+replaces=('keymappforlinux')
+install=vibemapp.install
 source=()
 sha256sums=()
 

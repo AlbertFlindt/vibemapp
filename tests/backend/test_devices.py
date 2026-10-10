@@ -4,9 +4,9 @@ import os
 import tempfile
 import unittest
 
-from keymappforlinux.backend import devices
-from keymappforlinux.backend.devices import DeviceMonitor
-from keymappforlinux.models import KeyboardModel
+from vibemapp.backend import devices
+from vibemapp.backend.devices import DeviceMonitor
+from vibemapp.models import KeyboardModel
 
 from ._util import spin
 

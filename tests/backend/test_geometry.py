@@ -3,8 +3,8 @@ from __future__ import annotations
 import math
 import unittest
 
-from keymappforlinux.backend import geometries
-from keymappforlinux.models import KeyboardModel
+from vibemapp.backend import geometries
+from vibemapp.models import KeyboardModel
 
 
 class GeometryTests(unittest.TestCase):

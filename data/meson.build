@@ -1,14 +1,14 @@
 fs = import('fs')
 
-install_data('io.github.albertflindt.KeyMappForLinux.desktop',
+install_data('io.github.albertflindt.Vibemapp.desktop',
   install_dir: datadir / 'applications',
 )
 
-install_data('io.github.albertflindt.KeyMappForLinux.metainfo.xml',
+install_data('io.github.albertflindt.Vibemapp.metainfo.xml',
   install_dir: datadir / 'metainfo',
 )
 
-install_data('io.github.albertflindt.KeyMappForLinux.gschema.xml',
+install_data('io.github.albertflindt.Vibemapp.gschema.xml',
   install_dir: datadir / 'glib-2.0' / 'schemas',
 )
 
@@ -19,14 +19,14 @@ install_subdir('icons/hicolor',
 desktop_validate = find_program('desktop-file-validate', required: false)
 if desktop_validate.found()
   test('Validate desktop file', desktop_validate,
-    args: [files('io.github.albertflindt.KeyMappForLinux.desktop')])
+    args: [files('io.github.albertflindt.Vibemapp.desktop')])
 endif
 
 appstreamcli = find_program('appstreamcli', required: false)
 if appstreamcli.found()
   test('Validate metainfo', appstreamcli,
     args: ['validate', '--no-net', '--explain',
-           files('io.github.albertflindt.KeyMappForLinux.metainfo.xml')])
+           files('io.github.albertflindt.Vibemapp.metainfo.xml')])
 endif
 
 compile_schemas = find_program('glib-compile-schemas', required: false)

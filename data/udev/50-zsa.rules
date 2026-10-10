@@ -6,7 +6,7 @@
 # We use systemd-logind's uaccess tag instead, so the logged-in seat user gets
 # an ACL on the device. That's why this file has to sort before
 # 73-seat-late.rules. The flashing/bootloader rules are left out on purpose,
-# because KeyMapp for Linux never flashes firmware.
+# because Vibemapp never flashes firmware.
 
 # Oryx raw HID (live training / layer control): all ZSA products.
 KERNEL=="hidraw*", SUBSYSTEM=="hidraw", ATTRS{idVendor}=="3297", TAG+="uaccess"

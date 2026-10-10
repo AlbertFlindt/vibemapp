@@ -1,0 +1,11 @@
+#!@PYTHON@
+import os
+import sys
+
+sys.path.insert(0, '@PKGDATADIR@')
+os.environ.setdefault('VIBEMAPP_PKGDATADIR', '@PKGDATADIR@')
+os.environ.setdefault('VIBEMAPP_VERSION', '@VERSION@')
+
+from vibemapp.main import main  # noqa: E402
+
+sys.exit(main(sys.argv))

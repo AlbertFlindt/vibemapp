@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from keymappforlinux.models import AppRule, Layer
-from keymappforlinux.ui import rules_model as rm
+from vibemapp.models import AppRule, Layer
+from vibemapp.ui import rules_model as rm
 
 
 def rule(cls: str, layer: int, pattern: str | None = None, enabled: bool = True) -> AppRule:

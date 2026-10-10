@@ -1,4 +1,4 @@
-# KeyMapp for Linux
+# Vibemapp
 
 Native Arch Linux clone of ZSA Keymapp with GNOME (libadwaita) design. Headline
 feature: **Smart Layers** — switch the keyboard's layer automatically when the
@@ -15,9 +15,9 @@ Full spec: `docs/SPEC.md`.
 ## Ownership
 | Path | Owner |
 |---|---|
-| `src/keymappforlinux/models.py`, `service.py` | PM — the contract. Request changes from the PM, don't edit. |
-| `src/keymappforlinux/backend/`, `data/udev/`, `tests/backend/` | Backend agent |
-| `src/keymappforlinux/ui/`, `main.py`, `__main__.py`, `mock_service.py`, `data/` (except udev), `tests/ui/` | Frontend agent |
+| `src/vibemapp/models.py`, `service.py` | PM — the contract. Request changes from the PM, don't edit. |
+| `src/vibemapp/backend/`, `data/udev/`, `tests/backend/` | Backend agent |
+| `src/vibemapp/ui/`, `main.py`, `__main__.py`, `mock_service.py`, `data/` (except udev), `tests/ui/` | Frontend agent |
 | `meson.build` (top level), `PKGBUILD`, `docs/`, `CLAUDE.md` | PM |
 
 ## Hard rules
@@ -30,7 +30,7 @@ Full spec: `docs/SPEC.md`.
   custom theming beyond what libadwaita colours provide.
 
 ## Conventions
-- App ID: `io.github.albertflindt.KeyMappForLinux`. Python package: `keymappforlinux`.
+- App ID: `io.github.albertflindt.Vibemapp`. Python package: `vibemapp`.
 - Type hints everywhere; `from __future__ import annotations`.
-- User-visible strings wrapped in `_()` (gettext domain `keymappforlinux`).
-- Config: `$XDG_CONFIG_HOME/keymappforlinux/`, cache: `$XDG_CACHE_HOME/keymappforlinux/`.
+- User-visible strings wrapped in `_()` (gettext domain `vibemapp`).
+- Config: `$XDG_CONFIG_HOME/vibemapp/`, cache: `$XDG_CACHE_HOME/vibemapp/`.

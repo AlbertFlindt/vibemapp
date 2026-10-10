@@ -1,4 +1,4 @@
-# KeyMapp for Linux — v1 specification
+# Vibemapp — v1 specification
 
 ## 1. Goal
 A native, GNOME-styled Linux replacement for ZSA Keymapp, for ZSA keyboards
@@ -25,7 +25,7 @@ later), Keymapp's gRPC API.
  Oryx GraphQL / cache ──► LayoutRepository ──────────────► ZsaKeyboardService (KeyboardService) ──signals──► UI
 ```
 
-The contract is `src/keymappforlinux/models.py` + `src/keymappforlinux/service.py`.
+The contract is `src/vibemapp/models.py` + `src/vibemapp/service.py`.
 
 ## 3. Backend notes
 
@@ -56,7 +56,7 @@ ID and payload layout from that source**; do not rely on memory. Things to confi
   geometry + revision (verify the query shape; ZSA's open-source `kontroll` and
   community projects are useful references).
 - Map QMK/Oryx keycodes to short labels/glyphs; tap + hold labels; layer titles/colours.
-- Cache JSON at `$XDG_CACHE_HOME/keymappforlinux/layouts/<layout>-<revision>.json`;
+- Cache JSON at `$XDG_CACHE_HOME/vibemapp/layouts/<layout>-<revision>.json`;
   use the cache when offline.
 
 ### 3.4 Focus source (Hyprland)
@@ -72,14 +72,14 @@ ID and payload layout from that source**; do not rely on memory. Things to confi
 - `FocusWatcher` base class so GNOME/KDE/X11 implementations can be added later.
 
 ### 3.5 Smart Layers engine
-- Rules per layout id in `$XDG_CONFIG_HOME/keymappforlinux/smart-layers.json`:
+- Rules per layout id in `$XDG_CONFIG_HOME/vibemapp/smart-layers.json`:
   `{"version":1,"layouts":{"<layout_id>":{"fallback":0,"rules":[...AppRule...]}}}`.
   Atomic write (temp file + rename).
 - First enabled matching rule wins (exact class, optional title regex via `re.search`).
 - No match → fallback layer (`None` = leave alone). Only send set-layer if the target
   differs from the last layer *we* sent or from the keyboard's reported layer.
 - Debounce rapid focus flips (~50 ms) to avoid spamming the keyboard.
-- Ignore focus events for our own window (class `io.github.albertflindt.KeyMappForLinux`),
+- Ignore focus events for our own window (class `io.github.albertflindt.Vibemapp`),
   so opening the app to edit rules doesn't reset the layer.
 - Paused when disabled or disconnected; re-evaluate the current focus on enable/connect.
 
@@ -101,13 +101,53 @@ ID and payload layout from that source**; do not rely on memory. Things to confi
   `Adw.Banner` when Hyprland isn't detected.
 - Background: closing the window keeps the app running when "Run in background" is on
   (`Gio.Application.hold`); `--background` starts without a window. Preferences show
-  the `exec-once = keymappforlinux --background` hint for `hyprland.conf`.
+  the `exec-once = vibemapp --background` hint for `hyprland.conf`.
 - Preferences (`Adw.PreferencesDialog`): run in background, enable Smart Layers on
   startup, auto-connect. Stored in GSettings.
 - Errors as `Adw.Toast`. About via `Adw.AboutDialog`.
 
 ## 5. Packaging
-- `meson.build` installs the package to `$datadir/keymappforlinux/`, a launcher
-  `$bindir/keymappforlinux`, desktop file, metainfo, icons, gschema (compiled), udev
+- `meson.build` installs the package to `$datadir/vibemapp/`, a launcher
+  `$bindir/vibemapp`, desktop file, metainfo, icons, gschema (compiled), udev
   rules to `/usr/lib/udev/rules.d/50-zsa.rules`.
 - PKGBUILD: `depends=(python python-gobject gtk4 libadwaita)`, `makedepends=(meson)`.
+
+## 6. Release 0.2 additions
+
+### 6.1 Rename to Vibemapp
+App ID `io.github.albertflindt.Vibemapp`, command/package/gettext domain `vibemapp`,
+config `$XDG_CONFIG_HOME/vibemapp/`, cache `$XDG_CACHE_HOME/vibemapp/`, data
+`$XDG_DATA_HOME/vibemapp/`, env vars `VIBEMAPP_*`. One-time migration on first start:
+- Backend: move `~/.config/keymappforlinux/` → `~/.config/vibemapp/` and
+  `~/.cache/keymappforlinux/` → `~/.cache/vibemapp/` if the new dirs don't exist.
+- Frontend: copy GSettings values from the old dconf path
+  `/io/github/albertflindt/KeyMappForLinux/` once, guarded by the
+  `migrated-from-keymappforlinux` key. (Opening our fixed-path schema at another path
+  aborts GIO, so the app compiles a relocatable copy of the schema into a temp dir and
+  reads the old path through it.)
+- Backend: if a new dir already exists, only missing entries are moved across.
+
+### 6.2 Tray (StatusNotifierItem)
+Hyprland has no minimise; "minimise to tray" means: when the tray is available and
+"Show in tray" is on, closing the window hides it to a tray icon instead of quitting;
+`--background` starts in the tray. Implemented as a StatusNotifierItem
+(`org.kde.StatusNotifierItem` + `com.canonical.dbusmenu`) over Gio D-Bus — the user's
+shell (Noctalia) runs `org.kde.StatusNotifierWatcher`. Left click toggles the window.
+Menu: Show Vibemapp · Smart Layers (checkbox) · current layer (disabled label) ·
+Quit. Tooltip shows device + active layer. Re-registers if the watcher restarts.
+
+### 6.3 Key layout tooltips
+Per-key tooltips must follow the pointer: set `Gtk.Tooltip.set_tip_area()` to the
+hovered key's bounding box so GTK repositions/re-queries when moving between keys.
+
+### 6.4 Heatmap
+Sidebar entry **Heatmap**. Opt-in (`heatmap-recording`, default off). Stores only
+per-(local day, layer, key index) press counts per layout in
+`$XDG_DATA_HOME/vibemapp/heatmap/<layout_id>.json` (atomic writes, flushed at most
+every ~30 s and on shutdown). Contract: `heatmap_recording` property,
+`get_key_counts(period, layer)`, `reset_key_counts()`, `key-counts-changed` signal,
+`HeatmapPeriod` (Today / 7 days / All time).
+UI: opt-in `Adw.StatusPage` when off; when on, the keyboard drawn as a heatmap
+(sequential colour ramp readable in light and dark, counts on keys, legend), period
+toggle, layer filter (All layers + each layer), total presses and top keys, pause and
+reset (confirmation `Adw.AlertDialog`).

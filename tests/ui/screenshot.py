@@ -16,11 +16,12 @@ import shutil
 import subprocess
 import sys
 
-os.environ.setdefault("KEYMAPP_MOCK", "1")
-os.environ.setdefault("KEYMAPP_MOCK_FOCUS", "0")
-os.environ.setdefault("KEYMAPP_MOCK_KEYS", "0")
-os.environ.setdefault("KEYMAPP_MOCK_HOTPLUG", "0")
-os.environ.setdefault("KEYMAPP_MOCK_SPEED", "4")
+os.environ.setdefault("VIBEMAPP_MOCK", "1")
+os.environ.setdefault("VIBEMAPP_MOCK_FOCUS", "0")
+os.environ.setdefault("VIBEMAPP_MOCK_KEYS", "0")
+os.environ.setdefault("VIBEMAPP_MOCK_HOTPLUG", "0")
+os.environ.setdefault("VIBEMAPP_MOCK_SPEED", "4")
+os.environ.setdefault("VIBEMAPP_MEMORY_SETTINGS", "1")
 
 import gi  # noqa: E402
 
@@ -29,7 +30,7 @@ gi.require_version("Adw", "1")
 gi.require_version("Graphene", "1.0")
 from gi.repository import GLib, Graphene, Gtk  # noqa: E402
 
-from keymappforlinux.main import Application  # noqa: E402
+from vibemapp.main import Application  # noqa: E402
 
 
 def main() -> int:
@@ -44,6 +45,7 @@ def main() -> int:
     parser.add_argument("--press", default="")
     parser.add_argument("--search", default="")
     parser.add_argument("--pick")
+    parser.add_argument("--record", action="store_true", help="turn heatmap recording on")
     parser.add_argument("--no-smart", action="store_true",
                         help="turn Smart Layers off before the keyboard connects")
     parser.add_argument("--pattern")
@@ -68,6 +70,8 @@ def main() -> int:
     def stage() -> bool:
         win = app.window
         svc = app.service
+        if args.record:
+            svc.props.heatmap_recording = True
         win.show_page(args.page)
         mock = hasattr(svc, "simulate_focus")
         if mock:
@@ -84,7 +88,7 @@ def main() -> int:
             if args.search:
                 dlg.search_entry.set_text(args.search)
             if args.pick:
-                from keymappforlinux.ui.apps import AppIndex
+                from vibemapp.ui.apps import AppIndex
                 dlg._show_details(AppIndex.get().entry_for(args.pick))
             if args.pattern is not None:
                 dlg.pattern_row.set_text(args.pattern)

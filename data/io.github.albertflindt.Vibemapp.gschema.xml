@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="vibemapp">
+  <schema id="io.github.albertflindt.Vibemapp" path="/io/github/albertflindt/Vibemapp/">
+    <key name="run-in-background" type="b">
+      <default>false</default>
+      <summary>Run in background</summary>
+      <description>Keep the app and Smart Layers running after the window is closed.</description>
+    </key>
+    <key name="smart-layers-on-startup" type="b">
+      <default>true</default>
+      <summary>Enable Smart Layers on startup</summary>
+      <description>Turn on automatic layer switching when the app starts.</description>
+    </key>
+    <key name="auto-connect" type="b">
+      <default>true</default>
+      <summary>Connect automatically</summary>
+      <description>Connect to a supported keyboard as soon as it is plugged in.</description>
+    </key>
+    <key name="show-in-tray" type="b">
+      <default>true</default>
+      <summary>Show in tray</summary>
+      <description>Show a tray icon and hide the window to the tray when it is closed, if the desktop has a tray.</description>
+    </key>
+    <key name="heatmap-recording" type="b">
+      <default>false</default>
+      <summary>Record key heatmap</summary>
+      <description>Count key presses per key for the heatmap. Only per-key counts are stored, never what is typed.</description>
+    </key>
+    <key name="migrated-from-keymappforlinux" type="b">
+      <default>false</default>
+      <summary>Settings migrated</summary>
+      <description>Whether settings were copied from the old KeyMapp for Linux path.</description>
+    </key>
+    <key name="window-width" type="i">
+      <default>960</default>
+      <summary>Window width</summary>
+    </key>
+    <key name="window-height" type="i">
+      <default>660</default>
+      <summary>Window height</summary>
+    </key>
+    <key name="window-maximized" type="b">
+      <default>false</default>
+      <summary>Window maximized</summary>
+    </key>
+    <key name="last-page" type="s">
+      <choices>
+        <choice value="layout"/>
+        <choice value="heatmap"/>
+        <choice value="smart-layers"/>
+      </choices>
+      <default>"layout"</default>
+      <summary>Last visible page</summary>
+    </key>
+  </schema>
+</schemalist>

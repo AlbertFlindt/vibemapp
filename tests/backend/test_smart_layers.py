@@ -6,9 +6,9 @@ import tempfile
 import unittest
 from typing import Callable
 
-from keymappforlinux.backend.smart_layers import (APP_ID, RulesStore, SmartLayersEngine,
+from vibemapp.backend.smart_layers import (APP_ID, RulesStore, SmartLayersEngine,
                                                   match_rule)
-from keymappforlinux.models import AppRule
+from vibemapp.models import AppRule
 
 
 class ManualScheduler:
@@ -146,7 +146,7 @@ class EngineTests(unittest.TestCase):
         self.engine.focus_changed("kitty", "")
         self.sched.advance(50)
         self.engine.keyboard_layer_changed(1)
-        self.engine.focus_changed(APP_ID, "KeyMapp for Linux")
+        self.engine.focus_changed(APP_ID, "Vibemapp")
         self.sched.advance(50)
         self.assertEqual(self.engine.focus, ("kitty", ""))
         # Editing rules while our window is focused evaluates the *previous* app.

@@ -1,10 +1,10 @@
-project('keymappforlinux',
-  version: '0.1.0',
+project('vibemapp',
+  version: '0.2.0',
   meson_version: '>= 1.0.0',
   license: 'GPL-3.0-or-later',
 )
 
-app_id = 'io.github.albertflindt.KeyMappForLinux'
+app_id = 'io.github.albertflindt.Vibemapp'
 
 python = import('python').find_installation('python3')
 gnome = import('gnome')
@@ -15,20 +15,20 @@ bindir = get_option('bindir')
 datadir = get_option('datadir')
 pkgdatadir = datadir / meson.project_name()
 
-# Python package -> /usr/share/keymappforlinux/keymappforlinux
-install_subdir('src/keymappforlinux',
+# Python package -> /usr/share/vibemapp/vibemapp
+install_subdir('src/vibemapp',
   install_dir: pkgdatadir,
   exclude_directories: ['__pycache__', 'backend/__pycache__', 'ui/__pycache__', 'backend/focus/__pycache__'],
 )
 
-# Launcher -> /usr/bin/keymappforlinux
+# Launcher -> /usr/bin/vibemapp
 conf = configuration_data()
 conf.set('PYTHON', python.full_path())
 conf.set('PKGDATADIR', prefix / pkgdatadir)
 conf.set('VERSION', meson.project_version())
 configure_file(
-  input: 'build-aux/keymappforlinux.in',
-  output: 'keymappforlinux',
+  input: 'build-aux/vibemapp.in',
+  output: 'vibemapp',
   configuration: conf,
   install: true,
   install_dir: bindir,

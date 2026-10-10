@@ -5,10 +5,10 @@ import tempfile
 import time
 import unittest
 
-from keymappforlinux.backend import oryx_api
-from keymappforlinux.backend.oryx_api import (LayoutCache, LayoutFetchError, LayoutRepository,
+from vibemapp.backend import oryx_api
+from vibemapp.backend.oryx_api import (LayoutCache, LayoutFetchError, LayoutRepository,
                                               key_binding_from_json, keycode_label, parse_layout)
-from keymappforlinux.models import KeyboardModel
+from vibemapp.models import KeyboardModel
 
 
 def _key(code, hold=None, **extra):

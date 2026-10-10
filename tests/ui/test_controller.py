@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import unittest
 
-from keymappforlinux.mock_service import MockKeyboardService
-from keymappforlinux.ui.controller import DeviceController
-from keymappforlinux.ui.settings import MemorySettings
+from vibemapp.mock_service import MockKeyboardService
+from vibemapp.ui.controller import DeviceController
+from vibemapp.ui.settings import MemorySettings
 
 from .test_mock_service import spin
 

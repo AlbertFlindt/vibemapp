@@ -7,8 +7,8 @@ import tempfile
 import threading
 import unittest
 
-from keymappforlinux.backend.focus import NullFocusWatcher, create_focus_watcher
-from keymappforlinux.backend.focus.hyprland import (HyprlandFocusWatcher,
+from vibemapp.backend.focus import NullFocusWatcher, create_focus_watcher
+from vibemapp.backend.focus.hyprland import (HyprlandFocusWatcher,
                                                     find_hyprland_instance,
                                                     parse_activewindow,
                                                     parse_activewindow_json,

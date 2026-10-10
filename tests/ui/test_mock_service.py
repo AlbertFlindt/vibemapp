@@ -5,9 +5,9 @@ import unittest
 
 from gi.repository import GLib
 
-from keymappforlinux.mock_service import MockKeyboardService, voyager_geometry
-from keymappforlinux.models import AppRule, KeyboardModel
-from keymappforlinux.service import KeyboardService
+from vibemapp.mock_service import MockKeyboardService, voyager_geometry
+from vibemapp.models import AppRule, HeatmapPeriod, KeyboardModel
+from vibemapp.service import KeyboardService
 
 
 def spin(condition, timeout: float = 2.0) -> bool:
@@ -27,7 +27,8 @@ class Recorder:
         self.events: list[tuple] = []
         for name in ("devices-changed", "connected", "disconnected", "layout-loaded",
                      "layer-changed", "key-event", "focus-changed", "rule-applied",
-                     "rules-changed", "error", "focus-source-changed"):
+                     "rules-changed", "error", "focus-source-changed",
+                     "key-counts-changed"):
             service.connect(name, lambda _s, *args, n=name: self.events.append((n, *args)))
 
     def names(self) -> list[str]:
@@ -130,7 +131,7 @@ class MockServiceTests(unittest.TestCase):
         self.assertEqual(self.rec.last("rule-applied"), ("rule-applied", "", 0))
 
         # Our own window is ignored.
-        self.svc.simulate_focus("io.github.albertflindt.KeyMappForLinux", "KeyMapp")
+        self.svc.simulate_focus("io.github.albertflindt.Vibemapp", "Vibemapp")
         self.assertEqual(self.svc.get_active_layer(), 0)
 
         # "Don't change" fallback.
@@ -153,6 +154,42 @@ class MockServiceTests(unittest.TestCase):
         self.assertIsNone(self.svc.get_connected_device())
         self.svc.props.auto_connect = True
         self.assertTrue(spin(lambda: self.svc.get_connected_device() is not None))
+
+    def test_heatmap(self) -> None:
+        self.assertEqual(self.svc.get_key_counts(HeatmapPeriod.ALL), {})
+        self.connect_and_load()
+        self.svc.simulate_key(3, True)
+        self.assertEqual(self.svc.get_key_counts(HeatmapPeriod.ALL), {}, "opt-in")
+
+        self.svc.props.heatmap_recording = True
+        for _ in range(3):
+            self.svc.simulate_key(3, True)
+            self.svc.simulate_key(3, False)      # releases don't count
+        self.svc.request_layer(2)
+        self.assertTrue(spin(lambda: self.svc.get_active_layer() == 2))
+        self.svc.simulate_key(7, True)
+        for period in HeatmapPeriod:
+            self.assertEqual(self.svc.get_key_counts(period), {3: 3, 7: 1})
+        self.assertEqual(self.svc.get_key_counts(HeatmapPeriod.TODAY, 2), {7: 1})
+        self.assertEqual(self.svc.get_key_counts(HeatmapPeriod.TODAY, 0), {3: 3})
+        self.assertTrue(spin(lambda: "key-counts-changed" in self.rec.names()))
+
+        self.svc.reset_key_counts()
+        self.assertEqual(self.svc.get_key_counts(HeatmapPeriod.ALL), {})
+
+    def test_heatmap_periods(self) -> None:
+        import datetime as dt
+        self.connect_and_load()
+        today = dt.date.today()
+        lid = self.svc.get_layout().id
+        self.svc._counts[lid] = {
+            (today.isoformat(), 0, 1): 1,
+            ((today - dt.timedelta(days=6)).isoformat(), 0, 2): 2,
+            ((today - dt.timedelta(days=7)).isoformat(), 0, 3): 4,
+        }
+        self.assertEqual(self.svc.get_key_counts(HeatmapPeriod.TODAY), {1: 1})
+        self.assertEqual(self.svc.get_key_counts(HeatmapPeriod.WEEK), {1: 1, 2: 2})
+        self.assertEqual(self.svc.get_key_counts(HeatmapPeriod.ALL), {1: 1, 2: 2, 3: 4})
 
     def test_focus_source_changes(self) -> None:
         self.svc.simulate_focus_source(False)

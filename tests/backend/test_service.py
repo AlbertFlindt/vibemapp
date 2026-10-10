@@ -6,12 +6,12 @@ import tempfile
 import threading
 import unittest
 
-from keymappforlinux.backend.focus.base import FocusWatcher
-from keymappforlinux.backend.oryx import OryxConnection, OryxError
-from keymappforlinux.backend.oryx_api import LayoutCache, LayoutRepository
-from keymappforlinux.backend.smart_layers import APP_ID
-from keymappforlinux.backend.zsa_service import ZsaKeyboardService
-from keymappforlinux.models import AppRule, RunningApp
+from vibemapp.backend.focus.base import FocusWatcher
+from vibemapp.backend.oryx import OryxConnection, OryxError
+from vibemapp.backend.oryx_api import LayoutCache, LayoutRepository
+from vibemapp.backend.smart_layers import APP_ID
+from vibemapp.backend.zsa_service import ZsaKeyboardService
+from vibemapp.models import AppRule, RunningApp
 
 from ._util import FakeFirmware, drain, spin
 from .test_devices import KBD_DESC, RAW_DESC, make_node
@@ -67,7 +67,7 @@ class ServiceTests(unittest.TestCase):
             sysfs_root=os.path.join(root, "sys"), dev_root=os.path.join(root, "dev"),
             rules_path=os.path.join(root, "config", "smart-layers.json"),
             focus_watcher=self.watcher, repository=repo, connection_factory=factory,
-            poll_interval_ms=0)
+            poll_interval_ms=0, heatmap_dir=os.path.join(self.tmp.name, "hm"))
         for name in ("devices-changed", "connected", "disconnected", "layout-loaded",
                      "layer-changed", "key-event", "focus-changed", "rule-applied",
                      "rules-changed", "error"):
@@ -127,7 +127,7 @@ class ServiceTests(unittest.TestCase):
         self.assertTrue(spin(lambda: self.svc.get_active_layer() == 1))
         # Our own window: no focus-changed, no layer change
         n = len(self.signals)
-        self.watcher.focus(APP_ID, "KeyMapp for Linux")
+        self.watcher.focus(APP_ID, "Vibemapp")
         drain(0.1)
         self.assertEqual(self.signals[n:], [])
         self.assertEqual(self.svc.get_focused_app(), ("firefox", "page"))
@@ -202,7 +202,8 @@ class FailureTests(unittest.TestCase):
             repository=LayoutRepository(LayoutCache(os.path.join(self.root, "c")),
                                         fetcher=lambda *a: SAMPLE),
             connection_factory=lambda *a: FailingConnection(err_no),
-            poll_interval_ms=0, autostart=False)
+            poll_interval_ms=0, autostart=False,
+            heatmap_dir=os.path.join(self.tmp.name, "hm"))
         for name in ("devices-changed", "error", "focus-source-changed", "connected"):
             self.svc.connect(name, lambda _s, *a, n=name: self.signals.append((n, *a)))
         return self.svc
@@ -268,7 +269,8 @@ class AutoConnectPropertyTests(unittest.TestCase):
             repository=LayoutRepository(LayoutCache(os.path.join(root, "c")),
                                         fetcher=lambda *a: SAMPLE),
             connection_factory=lambda p, e, c: OryxConnection(p, e, c, opener=self.fw.opener),
-            poll_interval_ms=0, auto_connect=False)
+            poll_interval_ms=0, auto_connect=False,
+            heatmap_dir=os.path.join(self.tmp.name, "hm"))
         for name in ("connected", "disconnected"):
             self.svc.connect(name, lambda *_a, n=name: self.signals.append(n))
 

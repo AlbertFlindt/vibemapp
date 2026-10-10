@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Vibemapp
+GenericName=Keyboard Companion
+Comment=View your ZSA keyboard layout and switch layers per app
+Exec=vibemapp
+Icon=io.github.albertflindt.Vibemapp
+Terminal=false
+Categories=GTK;GNOME;Settings;HardwareSettings;
+# Translators: Search terms to find this application. Do NOT translate or localize the semicolons. The list MUST also end with a semicolon.
+Keywords=keyboard;zsa;voyager;moonlander;ergodox;oryx;layer;layout;qmk;
+StartupNotify=true
+StartupWMClass=io.github.albertflindt.Vibemapp
