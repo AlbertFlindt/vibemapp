@@ -29,6 +29,9 @@ The PKGBUILD has since moved to `packaging/arch/`, so install with `cd packaging
   - The PKGBUILD builds the `v$pkgver` tag from GitHub.
   - Tray `__pycache__` is excluded from the install.
 
+  - A short `README.md` (features, required packages, Arch install, running from source),
+    added 2026-10-10. Committed locally, not pushed yet.
+
   `makepkg -f` from the tag succeeds. The user hasn't installed 1.0.0 yet. No work is in progress.
 
 ## Next steps
