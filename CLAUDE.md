@@ -11,7 +11,8 @@ Full spec and design history: @docs/SPEC.md. Handoff state: @PROGRESS.md.
 - Optional: `hyprland` (the only focus source), a StatusNotifier tray host
   (e.g. Noctalia, waybar) for the tray icon, Steam for Steam-game rules.
 - Keyboard: ZSA board with Oryx firmware (raw HID). Nothing from pip.
-- `cd packaging/arch && makepkg -si` (PKGBUILD builds this checkout and replaces the old
+- `cd packaging/arch && makepkg -si` (PKGBUILD builds the `v$pkgver` tag from GitHub, so
+  commit, tag and push first; use `./run-dev.sh` for untagged changes. Replaces the old
   `keymappforlinux` package), then replug the keyboard (udev `uaccess` rules).
 - Autostart goes in `~/.config/hypr/autostart.lua`:
   `hl.on("hyprland.start", function () hl.exec_cmd("vibemapp --background") end)`
@@ -63,6 +64,7 @@ Full spec and design history: @docs/SPEC.md. Handoff state: @PROGRESS.md.
 - The PKGBUILD lives in `packaging/arch/` on purpose. `makepkg -c/-C` runs `rm -rf ./src`,
   which would wipe our source tree if the PKGBUILD sat at the repo root.
 - Release bump touches: `meson.build` version, `packaging/arch/PKGBUILD` pkgver,
-  `ui/resources.py` dev fallback and a metainfo `<release>` entry.
+  `ui/resources.py` dev fallback and a metainfo `<release>` entry. Then commit, `git tag vX.Y.Z`,
+  `git push origin main --tags`. Repo: https://github.com/AlbertFlindt/vibemapp
 - No git identity is configured. Commit with
   `git -c user.name="Albert Flindt" -c user.email="Albert.Flindt@proton.me" commit …`

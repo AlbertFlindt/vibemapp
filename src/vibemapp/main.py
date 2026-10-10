@@ -251,8 +251,8 @@ class Application(Adw.Application):
             application_icon=APP_ID,
             developer_name="Albert Flindt",
             version=version(),
-            website="https://github.com/albertflindt/vibemapp",
-            issue_url="https://github.com/albertflindt/vibemapp/issues",
+            website="https://github.com/AlbertFlindt/vibemapp",
+            issue_url="https://github.com/AlbertFlindt/vibemapp/issues",
             license_type=Gtk.License.GPL_3_0,
             copyright="© 2026 Albert Flindt",
             comments=_("Vibemapp is a companion for ZSA keyboards. Smart Layers switches "

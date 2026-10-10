@@ -18,7 +18,7 @@ pkgdatadir = datadir / meson.project_name()
 # Python package -> /usr/share/vibemapp/vibemapp
 install_subdir('src/vibemapp',
   install_dir: pkgdatadir,
-  exclude_directories: ['__pycache__', 'backend/__pycache__', 'ui/__pycache__', 'backend/focus/__pycache__'],
+  exclude_directories: ['__pycache__', 'backend/__pycache__', 'ui/__pycache__', 'backend/focus/__pycache__', 'tray/__pycache__'],
 )
 
 # Launcher -> /usr/bin/vibemapp

@@ -4,29 +4,27 @@ pkgver=1.0.0
 pkgrel=1
 pkgdesc="GNOME-style companion app for ZSA keyboards with Smart Layers (app-aware layer switching)"
 arch=('any')
-url="https://github.com/albertflindt/vibemapp"
+url="https://github.com/AlbertFlindt/vibemapp"
 license=('GPL-3.0-or-later')
 depends=('python' 'python-gobject' 'gtk4' 'libadwaita' 'glib2')
-makedepends=('meson')
+makedepends=('meson' 'git')
 optdepends=('hyprland: Smart Layers focus tracking')
 conflicts=('keymappforlinux')
 replaces=('keymappforlinux')
 install=vibemapp.install
-source=()
-sha256sums=()
-
-# Built from the local checkout this PKGBUILD lives in.
-# PKGBUILD lives in packaging/arch/ so makepkg -c/-C (rm -rf $srcdir) never
-# touches the repo's own src/ directory.
-_srcroot="$(realpath "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../..")"
+# Builds the tagged release from GitHub, not the local working tree.
+# (PKGBUILD lives in packaging/arch/ so makepkg -c/-C, which runs rm -rf ./src,
+# never touches the repo's own src/ directory.)
+source=("$pkgname::git+$url.git#tag=v$pkgver")
+sha256sums=('SKIP')
 
 build() {
-  arch-meson "$_srcroot" build
+  arch-meson "$pkgname" build
   meson compile -C build
 }
 
 check() {
-  cd "$_srcroot"
+  cd "$pkgname"
   # PyGObject 3.58 calls asyncio APIs deprecated in Python 3.14; not our code.
   PYTHONPATH=src python -W "ignore::DeprecationWarning:gi.events" -m unittest discover -s tests -t .
 }

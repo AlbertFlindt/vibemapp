@@ -45,7 +45,7 @@ LAYOUT_QUERY = (
     " } }"
 )
 
-USER_AGENT = "Vibemapp/1 (+https://github.com/albertflindt)"
+USER_AGENT = "Vibemapp/1 (+https://github.com/AlbertFlindt/vibemapp)"
 
 
 # --- keycode labels -------------------------------------------------------------------

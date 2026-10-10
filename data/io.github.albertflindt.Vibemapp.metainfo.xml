@@ -26,8 +26,8 @@
     </p>
   </description>
   <launchable type="desktop-id">io.github.albertflindt.Vibemapp.desktop</launchable>
-  <url type="homepage">https://github.com/albertflindt/vibemapp</url>
-  <url type="bugtracker">https://github.com/albertflindt/vibemapp/issues</url>
+  <url type="homepage">https://github.com/AlbertFlindt/vibemapp</url>
+  <url type="bugtracker">https://github.com/AlbertFlindt/vibemapp/issues</url>
   <content_rating type="oars-1.1"/>
   <requires>
     <display_length compare="ge">360</display_length>
