@@ -1,36 +1,66 @@
 # Vibemapp
 
-Native Arch Linux clone of ZSA Keymapp with GNOME (libadwaita) design. Headline
-feature: **Smart Layers** — switch the keyboard's layer automatically when the
-focused application changes (Hyprland in v1).
+GNOME/libadwaita clone of ZSA Keymapp for Arch Linux (Python + PyGObject). Headline
+feature: **Smart Layers** — switch the ZSA keyboard's layer when the focused app
+changes (Hyprland only). Also: live layout view, opt-in key heatmap, tray icon.
+Full spec and design history: @docs/SPEC.md. Handoff state: @PROGRESS.md.
 
-Full spec: `docs/SPEC.md`.
+## Install (Arch)
+- Runtime: `python python-gobject gtk4 libadwaita glib2`. Build: `meson`.
+  `./check.sh` also needs `desktop-file-utils appstream`.
+- Optional: `hyprland` (the only focus source), a StatusNotifier tray host
+  (e.g. Noctalia, waybar) for the tray icon, Steam for Steam-game rules.
+- Keyboard: ZSA board with Oryx firmware (raw HID). Nothing from pip.
+- `makepkg -si` from the repo root (PKGBUILD builds the local checkout and replaces
+  the old `keymappforlinux` package), then replug the keyboard (udev `uaccess` rules).
+- Autostart goes in `~/.config/hypr/autostart.lua`:
+  `hl.on("hyprland.start", function () hl.exec_cmd("vibemapp --background") end)`
 
-## Stack
-- Python 3.14, PyGObject, GTK 4.24, libadwaita 1.10 (system packages only — no pip deps).
-- Meson build, PKGBUILD for Arch. GtkBuilder `.ui` XML (no blueprint-compiler).
-- Device I/O via stdlib only: `/dev/hidraw*` with `os`/`fcntl`, sysfs for enumeration.
-- Tests: stdlib `unittest` (`PYTHONPATH=src python -W "ignore::DeprecationWarning:gi.events" -m unittest discover -s tests -t .` from the repo root; the filter hides a PyGObject 3.58 warning under Python 3.14).
+## Commands
+- **Health check (lint + all tests): `./check.sh`**. Run it before every commit.
+- Run from source: `./run-dev.sh`. Simulated keyboard: `VIBEMAPP_MOCK=1 ./run-dev.sh`.
+  Quit the installed Vibemapp first (tray → Quit). Same app ID, so otherwise
+  run-dev just raises the installed window.
+- Single test module: `PYTHONPATH=src python3 -m unittest tests.backend.test_steam`
+- Staged install: `meson setup build --prefix=/usr && meson install -C build --destdir /tmp/stage`
+- Screenshot (no grim on this machine; GTK renders it):
+  `PYTHONPATH=src python3 tests/ui/screenshot.py OUT.png [--page smart-layers|heatmap] [--dialog add-rule|preferences|…]`
+- Lint is byte-compile plus data validation inside `check.sh`. No ruff, flake8 or mypy installed.
 
-## Ownership
-| Path | Owner |
-|---|---|
-| `src/vibemapp/models.py`, `service.py` | PM — the contract. Request changes from the PM, don't edit. |
-| `src/vibemapp/backend/`, `data/udev/`, `tests/backend/` | Backend agent |
-| `src/vibemapp/ui/`, `main.py`, `__main__.py`, `mock_service.py`, `data/` (except udev), `tests/ui/` | Frontend agent |
-| `meson.build` (top level), `PKGBUILD`, `docs/`, `CLAUDE.md` | PM |
+## Architecture
+- `src/vibemapp/models.py` + `service.py`: **the contract**. The UI only talks to a
+  `KeyboardService` (`backend/zsa_service.py` real, `mock_service.py` fake). All its
+  signals are emitted on the GLib main loop.
+- `backend/`: `devices` (sysfs hidraw), `oryx` (raw-HID protocol), `oryx_api`
+  (GraphQL layout + cache), `focus/hyprland` (IPC sockets), `smart_layers` (rules
+  engine + JSON), `steam`, `heatmap`, `migration`, `geometries`.
+- `tray/`: StatusNotifierItem + dbusmenu over Gio D-Bus (no GTK).
+- `ui/`: libadwaita pages and dialogs. `.ui` files are GtkBuilder XML loaded from the
+  package dir. App lifecycle, tray and signals live in `main.py`.
+- `data/`: desktop, metainfo, gschema, icons, `udev/50-zsa.rules`.
 
-## Hard rules
-- **Never flash firmware, never write to keyboard EEPROM/persistent config.** The only
-  write allowed to the keyboard is the Oryx live set-layer command (RAM state) and the
-  Oryx handshake/query commands.
-- No sudo, no system-wide installs, no git commits (the PM commits).
-- All `KeyboardService` signals are emitted on the GLib main loop.
-- Follow GNOME HIG: libadwaita widgets, header-bar actions, sentence-case labels, no
-  custom theming beyond what libadwaita colours provide.
-
-## Conventions
-- App ID: `io.github.albertflindt.Vibemapp`. Python package: `vibemapp`.
-- Type hints everywhere; `from __future__ import annotations`.
-- User-visible strings wrapped in `_()` (gettext domain `vibemapp`).
-- Config: `$XDG_CONFIG_HOME/vibemapp/`, cache: `$XDG_CACHE_HOME/vibemapp/`.
+## Gotchas and constraints
+- **Never flash firmware or write EEPROM.** `oryx.ALLOWED_COMMANDS` allows only fw
+  version, pairing, set-layer and protocol version. Live hardware tests must
+  return the keyboard to layer 0 (try/finally).
+- The Oryx protocol source is `zsa/qmk_modules` (`oryx/oryx.c`), not
+  `keyboards/zsa/common`. Reports are 32 bytes: write with a leading `0x00`, and replies end at `0xFE`.
+- Oryx key index order is the whole left half, then the right half (not QMK's row
+  interleave). Geometry, layouts, key events and heatmap all use it.
+- Contract and rules JSON changes must stay additive and backward compatible (a missing
+  `match` field means `APP`). Update `models.py`/`service.py`, then the backend, mock and UI together.
+- Hyprland config is **Lua** (`hl.on`, `hl.exec_cmd`, `hl.window_rule`), not hyprlang.
+  `HYPRLAND_INSTANCE_SIGNATURE` may be unset; the code globs `$XDG_RUNTIME_DIR/hypr/*/`.
+- The GSettings schema has a fixed path. `Gio.Settings.new_full(schema, None, other_path)`
+  **aborts the process**. `VIBEMAPP_MEMORY_SETTINGS=1` keeps test runs out of dconf.
+- PyGObject 3.58 + Python 3.14 emit an asyncio DeprecationWarning from `gi/events.py`.
+  It's filtered with `-W ignore::DeprecationWarning:gi.events` (check.sh, PKGBUILD).
+- During tests, "Skipping rule with unknown match kind" and "Tray registration failed"
+  are expected log lines, not failures.
+- System packages only. There's no pip, pytest or blueprint-compiler; use stdlib `unittest`.
+- UI follows the GNOME HIG: libadwaita widgets and colours only, title-case headings,
+  user-visible strings in `_()` (gettext domain `vibemapp`).
+- Release bump touches: `meson.build` version, `PKGBUILD` pkgver,
+  `ui/resources.py` dev fallback and a metainfo `<release>` entry.
+- No git identity is configured. Commit with
+  `git -c user.name="Albert Flindt" -c user.email="Albert.Flindt@proton.me" commit …`
