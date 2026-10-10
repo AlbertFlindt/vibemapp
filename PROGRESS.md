@@ -1,6 +1,6 @@
 # Progress / handoff
 
-**Last updated:** 2026-10-10. **Version:** 1.0.0 (version bump only).
+**Last updated:** 2026-10-10. **Version:** 1.0.1 (transparent keys + tray `__pycache__` packaging fix).
 The PKGBUILD has since moved to `packaging/arch/`, so install with `cd packaging/arch && makepkg -si`.
 
 ## Current state
@@ -36,24 +36,19 @@ The PKGBUILD has since moved to `packaging/arch/`, so install with `cd packaging
     - The layout view draws transparent keys as a faint, dashed cap. It shows the dimmed fall-through label from the base layer
       plus a small ▽, and a tooltip names the source key. `KC_NO` blanks keep a solid faint cap.
     - The logic is in `ui/transparency.py`, with tests in `tests/ui/test_transparency.py`. The heatmap shows a dimmed ▽.
-    - Checked against the user's cached layout. Not yet seen in the running app on real hardware.
+    - Checked against the user's cached layout, and the user confirmed it looks right in `./run-dev.sh`.
+  - **1.0.1 released** (tag `v1.0.1`, pushed): transparent keys plus the tray `__pycache__` fix.
 
-  `makepkg -f` from the tag succeeds. The user hasn't installed 1.0.0 yet. No work is in progress.
+  The user is installing 1.0.1 with `cd packaging/arch && makepkg -si`. No work is in progress.
 
 ## Next steps
-1. **Look at transparent keys in the real app** (`./run-dev.sh`, then layers 1–4 of "Flindt 1.1"). Ship them in 1.0.1 (step 5).
-2. **Live-verify key events.** Turn on heatmap recording, type on the Voyager, and check that
+1. **Live-verify key events.** Turn on heatmap recording, type on the Voyager, and check that
    counts land on the right keys in the Heatmap page. Index mapping is in `backend/oryx.py` and
    `backend/geometries.py`; it's col/row in the event, then Oryx order.
-3. **Translations.** Add a `po/` directory (`POTFILES`, `LINGUAS`) and meson `i18n.gettext('vibemapp')`.
+2. **Translations.** Add a `po/` directory (`POTFILES`, `LINGUAS`) and meson `i18n.gettext('vibemapp')`.
    Strings are already wrapped in `_()`.
-4. **Metainfo screenshots.** Add `<screenshots>` to `data/io.github.albertflindt.Vibemapp.metainfo.xml`
+3. **Metainfo screenshots.** Add `<screenshots>` to `data/io.github.albertflindt.Vibemapp.metainfo.xml`
    using images from `tests/ui/screenshot.py` (layout, smart layers, heatmap), stored in `data/screenshots/`.
-5. **Next release (1.0.1):** the tray `__pycache__` fix and transparent keys only reach packages once a new tag
-   exists, because the PKGBUILD builds from the tag. Until then, `makepkg` warns
-   "Package contains reference to $srcdir". The warning is harmless (stale .pyc files). To release:
-   1. Bump the version (CLAUDE.md lists the files).
-   2. Commit, then `git tag v1.0.1 && git push origin main --tags`.
 
 ## Decisions
 - **PKGBUILD builds the GitHub tag, not the working tree:** reproducible packages that match the
