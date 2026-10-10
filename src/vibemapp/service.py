@@ -19,7 +19,8 @@ from typing import Callable
 
 from gi.repository import Gio, GObject
 
-from .models import AppRule, Device, HeatmapPeriod, Layout, RunningApp
+from .models import (AppRule, Device, FocusedWindow, HeatmapPeriod, Layout,
+                     RunningApp, SteamGame)
 
 
 class KeyboardService(GObject.Object):
@@ -129,6 +130,16 @@ class KeyboardService(GObject.Object):
 
     def get_focused_app(self) -> tuple[str, str] | None:
         """Last known (app_class, title), or None."""
+        raise NotImplementedError
+
+    def get_focused_window(self) -> FocusedWindow | None:
+        """Last known focused window with Steam details, or None. Up to date
+        whenever ``focus-changed`` is emitted."""
+        raise NotImplementedError
+
+    def list_steam_games(self) -> list[SteamGame]:
+        """Installed Steam games (all Steam libraries), sorted by name, without
+        Proton/runtime/redistributable tools. [] when Steam isn't installed."""
         raise NotImplementedError
 
     # --- heatmap -------------------------------------------------------

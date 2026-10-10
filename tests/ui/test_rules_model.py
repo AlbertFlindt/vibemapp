@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from vibemapp.models import AppRule, Layer
+from vibemapp.models import AppRule, Layer, RuleMatch
 from vibemapp.ui import rules_model as rm
 
 
@@ -104,3 +104,66 @@ class LabelTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GroupRuleTests(unittest.TestCase):
+    """Steam / class-pattern rules (SPEC 7); mirrors the engine's semantics."""
+
+    def steam(self, app_id: str = "", layer: int = 3, **kw) -> AppRule:
+        return AppRule(app_id, "Steam", layer, match=RuleMatch.STEAM_GAME, **kw)
+
+    def pattern(self, regex: str, layer: int = 2, **kw) -> AppRule:
+        return AppRule(regex, "Pattern", layer, match=RuleMatch.CLASS_PATTERN, **kw)
+
+    def test_steam_matching(self) -> None:
+        any_game = self.steam()
+        elden = self.steam("1245620", 1)
+        self.assertTrue(rm.rule_matches(any_game, "steam_app_1245620", "", "1245620"))
+        self.assertTrue(rm.rule_matches(any_game, "dota2", "Dota 2", "570"))
+        self.assertFalse(rm.rule_matches(any_game, "steam", "Steam", None), "Steam client")
+        self.assertTrue(rm.rule_matches(elden, "steam_app_1245620", "", "1245620"))
+        self.assertFalse(rm.rule_matches(elden, "dota2", "", "570"))
+        self.assertTrue(rm.rule_matches(self.steam(title_pattern="Dota"), "dota2", "Dota 2", "570"))
+        self.assertFalse(rm.rule_matches(self.steam(title_pattern="x"), "dota2", "Dota 2", "570"))
+
+    def test_class_pattern_uses_fullmatch(self) -> None:
+        rule = self.pattern("steam_app_.*")
+        self.assertTrue(rm.rule_matches(rule, "steam_app_570", ""))
+        self.assertFalse(rm.rule_matches(rule, "not_steam_app_570", ""), "fullmatch, not search")
+        self.assertFalse(rm.rule_matches(self.pattern("kit"), "kitty", ""))
+        self.assertTrue(rm.rule_matches(self.pattern("kit.*"), "kitty", ""))
+        self.assertFalse(rm.rule_matches(self.pattern("("), "(", ""))
+
+    def test_first_match_wins_across_kinds(self) -> None:
+        rules = [self.steam("1245620", 1), self.steam(), rule("kitty", 2)]
+        self.assertEqual(rm.target_layer(rules, 0, "steam_app_1245620", "", "1245620")[0], 1)
+        self.assertEqual(rm.target_layer(rules, 0, "dota2", "", "570")[0], 3)
+        self.assertEqual(rm.target_layer(rules, 0, "kitty", "")[0], 2)
+        self.assertEqual(rm.target_layer(rules, 0, "steam", "")[0], 0)
+
+    def test_specific_rules_go_above_catch_alls(self) -> None:
+        rules = [rule("kitty", 1), self.steam(), self.pattern("foo.*")]
+        added = rm.add_rule(rules, self.steam("570", 2))
+        self.assertEqual(added[1].app_class, "570", "single game above All Steam Games")
+        added = rm.add_rule(rules, rule("firefox", 2))
+        self.assertEqual([r.app_class for r in added], ["kitty", "firefox", "", "foo.*"])
+        added = rm.add_rule(rules, self.pattern("bar.*"))
+        self.assertEqual(added[-1].app_class, "bar.*", "catch-alls are appended")
+
+    def test_shadowing_by_catch_alls(self) -> None:
+        rules = [self.steam(), self.steam("570"), self.pattern("kit.*"), rule("kitty", 1),
+                 rule("firefox", 1), self.pattern("kit.*"), self.steam("1", title_pattern="x")]
+        self.assertEqual(rm.shadowed_rules(rules), {1, 3, 5, 6})
+        # A title-pattern catch-all doesn't shadow anything.
+        rules = [self.steam(title_pattern="Dota"), self.steam("570")]
+        self.assertEqual(rm.shadowed_rules(rules), set())
+        # Disabled blockers don't count.
+        rules = [self.steam(enabled=False), self.steam("570")]
+        self.assertEqual(rm.shadowed_rules(rules), set())
+
+    def test_classes_matching(self) -> None:
+        classes = ["kitty", "steam_app_1", "steam_app_2", "steam_app_1", "firefox"]
+        self.assertEqual(rm.classes_matching("steam_app_.*", classes),
+                         ["steam_app_1", "steam_app_2"])
+        self.assertEqual(rm.classes_matching("(", classes), [])
+        self.assertEqual(rm.classes_matching("", classes), [])

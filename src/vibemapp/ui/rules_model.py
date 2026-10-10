@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from dataclasses import replace
 
-from ..models import AppRule, Layer
+from ..models import AppRule, Layer, RuleMatch
 from .i18n import _
 
 OWN_APP_CLASS = "io.github.albertflindt.Vibemapp"
@@ -32,8 +32,31 @@ def validate_pattern(pattern: str | None) -> str | None:
     return None
 
 
-def rule_matches(rule: AppRule, app_class: str, title: str) -> bool:
-    if not rule.enabled or rule.app_class != app_class:
+def _class_pattern_matches(pattern: str, app_class: str) -> bool:
+    try:
+        return re.fullmatch(pattern, app_class) is not None
+    except re.error:
+        return False
+
+
+def rule_matches(rule: AppRule, app_class: str, title: str,
+                 steam_app_id: str | None = None) -> bool:
+    """Mirror of the engine's matching (display only).
+
+    APP: exact class. CLASS_PATTERN: ``re.fullmatch`` on the class.
+    STEAM_GAME: the window is a Steam game (``steam_app_id`` set) and the rule
+    is for any game (``app_class == ""``) or this game's app id. The optional
+    title pattern must then ``re.search`` the title.
+    """
+    if not rule.enabled:
+        return False
+    if rule.match == RuleMatch.CLASS_PATTERN:
+        if not _class_pattern_matches(rule.app_class, app_class):
+            return False
+    elif rule.match == RuleMatch.STEAM_GAME:
+        if not steam_app_id or (rule.app_class and rule.app_class != steam_app_id):
+            return False
+    elif rule.app_class != app_class:
         return False
     if rule.title_pattern:
         try:
@@ -43,22 +66,36 @@ def rule_matches(rule: AppRule, app_class: str, title: str) -> bool:
     return True
 
 
-def find_matching_rule(rules: list[AppRule], app_class: str,
-                       title: str) -> tuple[int, AppRule] | None:
+def find_matching_rule(rules: list[AppRule], app_class: str, title: str,
+                       steam_app_id: str | None = None) -> tuple[int, AppRule] | None:
     """First enabled matching rule wins. Returns ``(position, rule)``."""
     for pos, rule in enumerate(rules):
-        if rule_matches(rule, app_class, title):
+        if rule_matches(rule, app_class, title, steam_app_id):
             return pos, rule
     return None
 
 
-def target_layer(rules: list[AppRule], fallback: int | None,
-                 app_class: str, title: str) -> tuple[int | None, AppRule | None]:
+def target_layer(rules: list[AppRule], fallback: int | None, app_class: str, title: str,
+                 steam_app_id: str | None = None
+                 ) -> tuple[int | None, AppRule | None]:
     """Layer Smart Layers would apply for this focus, and the rule that won."""
-    hit = find_matching_rule(rules, app_class, title)
+    hit = find_matching_rule(rules, app_class, title, steam_app_id)
     if hit is not None:
         return hit[1].layer_index, hit[1]
     return fallback, None
+
+
+def is_catch_all(rule: AppRule) -> bool:
+    """Group rules that can match many apps: All Steam Games and class patterns."""
+    return (rule.match == RuleMatch.CLASS_PATTERN
+            or (rule.match == RuleMatch.STEAM_GAME and not rule.app_class))
+
+
+def classes_matching(pattern: str, classes: list[str]) -> list[str]:
+    """Distinct classes (in order) that ``pattern`` fullmatches; [] if invalid."""
+    if validate_pattern(pattern) is not None or not pattern:
+        return []
+    return list(dict.fromkeys(c for c in classes if _class_pattern_matches(pattern, c)))
 
 
 # --- list editing -----------------------------------------------------------
@@ -92,35 +129,60 @@ def update_rule(rules: list[AppRule], position: int, **changes: object) -> list[
     return out
 
 
-def add_rule(rules: list[AppRule], rule: AppRule) -> list[AppRule]:
-    """Append a rule.
+def _same_target(a: AppRule, b: AppRule) -> bool:
+    return a.match == b.match and a.app_class == b.app_class
 
-    A rule with a title pattern is more specific than one without, so it is
-    inserted before the first pattern-less rule for the same app; otherwise
-    it could never win.
+
+def add_rule(rules: list[AppRule], rule: AppRule) -> list[AppRule]:
+    """Insert a rule where it can actually win (first match wins).
+
+    * Specific rules (an app, a single Steam game) go above the first
+      catch-all rule (All Steam Games, class patterns).
+    * A rule with a title pattern goes above the pattern-less rule for the
+      same target, which would otherwise always match first.
+    * Catch-all rules are appended.
     """
     out = list(rules)
+    candidates: list[int] = []
+    if not is_catch_all(rule):
+        candidates += [i for i, r in enumerate(out) if is_catch_all(r)][:1]
     if rule.title_pattern:
-        for i, existing in enumerate(out):
-            if existing.app_class == rule.app_class and not existing.title_pattern:
-                out.insert(i, rule)
-                return out
-    out.append(rule)
+        candidates += [i for i, r in enumerate(out)
+                       if _same_target(r, rule) and not r.title_pattern][:1]
+    if candidates:
+        out.insert(min(candidates), rule)
+    else:
+        out.append(rule)
     return out
+
+
+def _covers(earlier: AppRule, later: AppRule) -> bool:
+    """True if ``earlier`` (enabled, no title pattern) matches every window
+    ``later`` could match, so ``later`` can never win."""
+    if earlier.match == RuleMatch.APP:
+        return later.match == RuleMatch.APP and later.app_class == earlier.app_class
+    if earlier.match == RuleMatch.STEAM_GAME:
+        if later.match != RuleMatch.STEAM_GAME:
+            return False
+        return not earlier.app_class or earlier.app_class == later.app_class
+    # Class pattern: covers exact-class rules it fullmatches and identical patterns.
+    if later.match == RuleMatch.APP:
+        return _class_pattern_matches(earlier.app_class, later.app_class)
+    return later.match == RuleMatch.CLASS_PATTERN and later.app_class == earlier.app_class
 
 
 def shadowed_rules(rules: list[AppRule]) -> set[int]:
     """Positions of enabled rules that can never match because an earlier
-    enabled rule for the same app has no title pattern."""
-    catch_all: set[str] = set()
+    enabled rule without a title pattern always matches first."""
+    blockers: list[AppRule] = []
     shadowed: set[int] = set()
     for i, rule in enumerate(rules):
         if not rule.enabled:
             continue
-        if rule.app_class in catch_all:
+        if any(_covers(b, rule) for b in blockers):
             shadowed.add(i)
         elif not rule.title_pattern:
-            catch_all.add(rule.app_class)
+            blockers.append(rule)
     return shadowed
 
 

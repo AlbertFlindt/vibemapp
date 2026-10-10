@@ -9,9 +9,124 @@
     <property name="child">
       <object class="AdwNavigationView" id="nav">
         <child>
+          <object class="AdwNavigationPage" id="kind_page">
+            <property name="tag">kind</property>
+            <property name="title" translatable="yes">Add Rule</property>
+            <property name="child">
+              <object class="AdwToolbarView">
+                <child type="top">
+                  <object class="AdwHeaderBar"/>
+                </child>
+                <property name="content">
+                  <object class="AdwPreferencesPage">
+                    <property name="description" translatable="yes">Choose what the rule should match</property>
+                    <child>
+                      <object class="AdwPreferencesGroup">
+                        <child>
+                          <object class="AdwActionRow" id="kind_app_row">
+                            <property name="title" translatable="yes">_App</property>
+                            <property name="use-underline">True</property>
+                            <property name="subtitle" translatable="yes">One app, like Firefox or kitty</property>
+                            <property name="activatable">True</property>
+                            <signal name="activated" handler="on_kind_activated"/>
+                            <child type="prefix">
+                              <object class="GtkImage" id="kind_app_row_icon">
+                                <property name="icon-name">view-app-grid-symbolic</property>
+                                <property name="pixel-size">32</property>
+                                <property name="accessible-role">presentation</property>
+                              </object>
+                            </child>
+                            <child type="suffix">
+                              <object class="GtkImage">
+                                <property name="icon-name">go-next-symbolic</property>
+                                <property name="accessible-role">presentation</property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwActionRow" id="kind_steam_any_row">
+                            <property name="title" translatable="yes">All _Steam Games</property>
+                            <property name="use-underline">True</property>
+                            <property name="subtitle" translatable="yes">Any game launched from Steam</property>
+                            <property name="activatable">True</property>
+                            <signal name="activated" handler="on_kind_activated"/>
+                            <child type="prefix">
+                              <object class="GtkImage" id="kind_steam_any_row_icon">
+                                <property name="icon-name">input-gaming-symbolic</property>
+                                <property name="pixel-size">32</property>
+                                <property name="accessible-role">presentation</property>
+                              </object>
+                            </child>
+                            <child type="suffix">
+                              <object class="GtkImage">
+                                <property name="icon-name">go-next-symbolic</property>
+                                <property name="accessible-role">presentation</property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwActionRow" id="kind_steam_game_row">
+                            <property name="title" translatable="yes">Steam _Game</property>
+                            <property name="use-underline">True</property>
+                            <property name="subtitle" translatable="yes">One installed Steam game</property>
+                            <property name="activatable">True</property>
+                            <signal name="activated" handler="on_kind_activated"/>
+                            <child type="prefix">
+                              <object class="GtkImage" id="kind_steam_game_row_icon">
+                                <property name="icon-name">input-gaming-symbolic</property>
+                                <property name="pixel-size">32</property>
+                                <property name="accessible-role">presentation</property>
+                              </object>
+                            </child>
+                            <child type="suffix">
+                              <object class="GtkImage">
+                                <property name="icon-name">go-next-symbolic</property>
+                                <property name="accessible-role">presentation</property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="AdwPreferencesGroup">
+                        <property name="title" translatable="yes">Advanced</property>
+                        <child>
+                          <object class="AdwActionRow" id="kind_pattern_row">
+                            <property name="title" translatable="yes">Window Class _Pattern</property>
+                            <property name="use-underline">True</property>
+                            <property name="subtitle" translatable="yes">Match window classes with a regular expression</property>
+                            <property name="activatable">True</property>
+                            <signal name="activated" handler="on_kind_activated"/>
+                            <child type="prefix">
+                              <object class="GtkImage" id="kind_pattern_row_icon">
+                                <property name="icon-name">edit-find-symbolic</property>
+                                <property name="pixel-size">32</property>
+                                <property name="accessible-role">presentation</property>
+                              </object>
+                            </child>
+                            <child type="suffix">
+                              <object class="GtkImage">
+                                <property name="icon-name">go-next-symbolic</property>
+                                <property name="accessible-role">presentation</property>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </property>
+              </object>
+            </property>
+          </object>
+        </child>
+        <child>
           <object class="AdwNavigationPage" id="apps_page">
             <property name="tag">apps</property>
-            <property name="title" translatable="yes">Add Rule</property>
+            <property name="title" translatable="yes">Choose App</property>
             <property name="child">
               <object class="AdwToolbarView">
                 <child type="top">
@@ -146,6 +261,95 @@
           </object>
         </child>
         <child>
+          <object class="AdwNavigationPage" id="steam_page">
+            <property name="tag">steam</property>
+            <property name="title" translatable="yes">Choose Game</property>
+            <property name="child">
+              <object class="AdwToolbarView">
+                <child type="top">
+                  <object class="AdwHeaderBar"/>
+                </child>
+                <child type="top">
+                  <object class="AdwClamp" id="steam_search_clamp">
+                    <property name="margin-start">12</property>
+                    <property name="margin-end">12</property>
+                    <property name="margin-bottom">6</property>
+                    <property name="child">
+                      <object class="GtkSearchEntry" id="steam_search_entry">
+                        <property name="placeholder-text" translatable="yes">Search games</property>
+                        <signal name="search-changed" handler="on_steam_search_changed"/>
+                        <signal name="activate" handler="on_steam_search_activate"/>
+                        <accessibility>
+                          <property name="label" translatable="yes">Search games</property>
+                        </accessibility>
+                      </object>
+                    </property>
+                  </object>
+                </child>
+                <property name="content">
+                  <object class="GtkStack" id="steam_stack">
+                    <child>
+                      <object class="GtkStackPage">
+                        <property name="name">list</property>
+                        <property name="child">
+                          <object class="GtkScrolledWindow">
+                            <property name="hscrollbar-policy">never</property>
+                            <property name="child">
+                              <object class="AdwClamp">
+                                <property name="margin-top">12</property>
+                                <property name="margin-bottom">24</property>
+                                <property name="margin-start">12</property>
+                                <property name="margin-end">12</property>
+                                <property name="child">
+                                  <object class="GtkListBox" id="steam_list">
+                                    <property name="selection-mode">none</property>
+                                    <property name="valign">start</property>
+                                    <signal name="row-activated" handler="on_game_activated"/>
+                                    <accessibility>
+                                      <property name="label" translatable="yes">Steam games</property>
+                                    </accessibility>
+                                    <style>
+                                      <class name="boxed-list"/>
+                                    </style>
+                                  </object>
+                                </property>
+                              </object>
+                            </property>
+                          </object>
+                        </property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkStackPage">
+                        <property name="name">empty</property>
+                        <property name="child">
+                          <object class="AdwStatusPage">
+                            <property name="icon-name">input-gaming-symbolic</property>
+                            <property name="title" translatable="yes">No Steam Games Found</property>
+                            <property name="description" translatable="yes">Vibemapp looks for installed games in your Steam libraries. Install Steam and a game, or add a rule for All Steam Games instead.</property>
+                          </object>
+                        </property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkStackPage">
+                        <property name="name">no-results</property>
+                        <property name="child">
+                          <object class="AdwStatusPage">
+                            <property name="icon-name">edit-find-symbolic</property>
+                            <property name="title" translatable="yes">No Results</property>
+                            <property name="description" translatable="yes">No installed game matches your search</property>
+                          </object>
+                        </property>
+                      </object>
+                    </child>
+                  </object>
+                </property>
+              </object>
+            </property>
+          </object>
+        </child>
+        <child>
           <object class="AdwNavigationPage" id="details_page">
             <property name="tag">details</property>
             <property name="title" translatable="yes">Rule Details</property>
@@ -168,7 +372,7 @@
                 <property name="content">
                   <object class="AdwPreferencesPage">
                     <child>
-                      <object class="AdwPreferencesGroup">
+                      <object class="AdwPreferencesGroup" id="app_group">
                         <child>
                           <object class="AdwActionRow" id="app_row">
                             <property name="use-markup">False</property>
@@ -186,11 +390,40 @@
                       </object>
                     </child>
                     <child>
+                      <object class="AdwPreferencesGroup" id="class_pattern_group">
+                        <property name="title" translatable="yes">Window Class</property>
+                        <property name="description" translatable="yes">A regular expression that must match the whole window class. For example, steam_app_.* matches every game Steam runs through Proton.</property>
+                        <property name="visible">False</property>
+                        <child>
+                          <object class="AdwEntryRow" id="class_pattern_row">
+                            <property name="title" translatable="yes">Class Pattern</property>
+                            <property name="input-hints">no-spellcheck</property>
+                            <signal name="changed" handler="on_class_pattern_changed"/>
+                            <signal name="entry-activated" handler="on_save_clicked"/>
+                            <style>
+                              <class name="monospace"/>
+                            </style>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel" id="class_pattern_hint">
+                            <property name="xalign">0</property>
+                            <property name="wrap">True</property>
+                            <property name="wrap-mode">word-char</property>
+                            <property name="margin-top">12</property>
+                            <style>
+                              <class name="caption"/>
+                            </style>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
                       <object class="AdwPreferencesGroup">
                         <child>
                           <object class="AdwComboRow" id="layer_row">
                             <property name="title" translatable="yes">Layer</property>
-                            <property name="subtitle" translatable="yes">Switch to this layer when the app is focused</property>
+                            <property name="subtitle" translatable="yes">Switch to this layer when a matching window is focused</property>
                           </object>
                         </child>
                       </object>
@@ -198,7 +431,7 @@
                     <child>
                       <object class="AdwPreferencesGroup">
                         <property name="title" translatable="yes">Window Title</property>
-                        <property name="description" translatable="yes">Optional. Only match windows whose title contains this regular expression. Leave empty to match every window of the app.</property>
+                        <property name="description" translatable="yes">Optional. A regular expression the window title must contain. Leave empty to ignore the title.</property>
                         <child>
                           <object class="AdwEntryRow" id="pattern_row">
                             <property name="title" translatable="yes">Title Pattern</property>

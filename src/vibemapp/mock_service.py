@@ -12,6 +12,7 @@ like the real backend. Behaviour can be tuned with environment variables:
 ``VIBEMAPP_MOCK_NO_ORYX=1``   firmware without Oryx raw HID
 ``VIBEMAPP_MOCK_NO_HYPRLAND=1`` focus source unavailable
 ``VIBEMAPP_MOCK_NO_RULES=1``  start without the demo rules
+``VIBEMAPP_MOCK_NO_STEAM=1``  Steam not installed (no games)
 ``VIBEMAPP_MOCK_HEATMAP_SEED=1`` pre-fill 30 days of plausible heatmap counts
 
 Tests construct it with ``autostart=False`` and drive it through the
@@ -27,7 +28,7 @@ from typing import Callable
 
 from gi.repository import Gio, GLib
 
-from .models import (AppRule, Device, HeatmapPeriod, KeyBinding, KeyboardModel, KeyGeometry,
+from .models import (AppRule, Device, FocusedWindow, HeatmapPeriod, RuleMatch, SteamGame, KeyBinding, KeyboardModel, KeyGeometry,
                      Layer, Layout, RunningApp)
 from .service import KeyboardService
 from .ui.i18n import _
@@ -153,7 +154,27 @@ def demo_rules() -> list[AppRule]:
                 icon_name="firefox"),
         AppRule("kitty", "kitty", 1, icon_name="kitty"),
         AppRule("blender", "Blender", 3, icon_name="blender"),
+        AppRule("", "All Steam Games", 3, icon_name="input-gaming-symbolic",
+                match=RuleMatch.STEAM_GAME),
     ]
+
+
+MOCK_STEAM_GAMES: tuple[SteamGame, ...] = (
+    SteamGame("1086940", "Baldur's Gate 3"),
+    SteamGame("570", "Dota 2"),
+    SteamGame("1245620", "ELDEN RING"),
+    SteamGame("1145360", "Hades"),
+    SteamGame("413150", "Stardew Valley"),
+)
+# Native Linux games are recognised by SteamAppId in their environment, not
+# by their class; the mock just knows which classes those are.
+_NATIVE_STEAM_CLASSES = {"dota2": "570", "StardewValley": "413150"}
+
+
+def steam_app_id_for(app_class: str) -> str | None:
+    if app_class.startswith("steam_app_"):
+        return app_class[len("steam_app_"):] or None
+    return _NATIVE_STEAM_CLASSES.get(app_class)
 
 
 _FOCUS_SCRIPT: tuple[tuple[str, str], ...] = (
@@ -162,7 +183,10 @@ _FOCUS_SCRIPT: tuple[tuple[str, str], ...] = (
     ("blender", "Blender [~/Models/voyager.blend]"),
     ("org.gnome.Nautilus", "Downloads"),
     ("firefox", "Lo-fi beats — YouTube — Mozilla Firefox"),
+    ("steam_app_1245620", "ELDEN RING™"),
     ("kitty", "nvim service.py"),
+    ("dota2", "Dota 2"),
+    ("steam", "Steam"),
 )
 
 
@@ -418,7 +442,8 @@ class MockKeyboardService(KeyboardService):
         if app_class == OWN_APP_CLASS:
             return
         rules, fallback = self._rule_set()
-        target, rule = target_layer(rules, fallback, app_class, title)
+        target, rule = target_layer(rules, fallback, app_class, title,
+                                    steam_app_id_for(app_class))
         if target is None or not 0 <= target < len(self._layout.layers):
             return
         if target == self._active_layer and target == self._last_sent:
@@ -554,6 +579,20 @@ class MockKeyboardService(KeyboardService):
 
     def focus_source_available(self) -> bool:
         return self._focus_available
+
+    def get_focused_window(self) -> FocusedWindow | None:
+        if self._focused is None:
+            return None
+        app_class, title = self._focused
+        app_id = steam_app_id_for(app_class)
+        name = next((g.name for g in MOCK_STEAM_GAMES if g.app_id == app_id), None)
+        return FocusedWindow(app_class, title, pid=4242, steam_app_id=app_id,
+                             steam_game_name=name)
+
+    def list_steam_games(self) -> list[SteamGame]:
+        if _env_flag("VIBEMAPP_MOCK_NO_STEAM", False):
+            return []
+        return sorted(MOCK_STEAM_GAMES, key=lambda g: g.name.casefold())
 
     def get_focused_app(self) -> tuple[str, str] | None:
         return self._focused

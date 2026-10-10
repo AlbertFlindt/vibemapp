@@ -203,3 +203,38 @@ class WatcherTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PidTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.server = FakeHyprland(self.tmp.name, active={
+            "address": "0x2", "class": "kitty", "title": "nvim", "pid": 1234})
+        self.watcher = HyprlandFocusWatcher(runtime_dir=self.tmp.name)
+        self.seen: list[tuple] = []
+        self.watcher.connect("focus-changed", lambda w, c, t: self.seen.append(
+            (c, t, w.current_pid())))
+        self.watcher.start()
+
+    def tearDown(self) -> None:
+        self.watcher.stop()
+        self.server.shutdown()
+        drain(0.02)
+        self.tmp.cleanup()
+
+    def test_pid_resolved_before_emit(self) -> None:
+        self.assertEqual(self.seen, [("kitty", "nvim", 1234)])
+        self.assertTrue(spin(lambda: len(self.server.event_clients) == 1))
+        self.server.active = {"address": "0x9", "class": "steam_app_1", "title": "Game",
+                              "pid": 777}
+        self.server.emit("activewindow>>steam_app_1,Game", "activewindowv2>>9")
+        self.assertTrue(spin(lambda: self.seen[-1] == ("steam_app_1", "Game", 777)))
+        # Hyprland already moved on (class mismatch): pid unknown rather than wrong.
+        self.server.emit("activewindow>>firefox,Docs")
+        self.assertTrue(spin(lambda: self.seen[-1] == ("firefox", "Docs", None)))
+        # title change on the active window keeps the pid
+        self.server.active = {"address": "0x9", "class": "steam_app_1", "title": "x", "pid": 777}
+        self.server.emit("activewindow>>steam_app_1,Game")
+        self.assertTrue(spin(lambda: self.seen[-1] == ("steam_app_1", "Game", 777)))
+        self.server.emit("windowtitlev2>>9,Menu")
+        self.assertTrue(spin(lambda: self.seen[-1] == ("steam_app_1", "Menu", 777)))

@@ -73,14 +73,27 @@ class Layout:
     revision_id: str | None = None
 
 
+class RuleMatch(str, Enum):
+    """How an ``AppRule`` decides whether the focused window matches."""
+    # ``app_class`` is compared exactly (case-sensitive) with the window class.
+    APP = "app"
+    # ``app_class`` is a Python regex that must ``re.fullmatch`` the window
+    # class, e.g. ``steam_app_.*`` (same idea as Hyprland window-rule regexes).
+    CLASS_PATTERN = "class-pattern"
+    # Steam games. ``app_class`` == "" matches *any* Steam game; otherwise it is
+    # a Steam app id ("1245620") and matches only that game. See FocusedWindow.
+    STEAM_GAME = "steam-game"
+
+
 @dataclass(frozen=True)
 class AppRule:
-    """Smart Layers rule: when ``app_class`` is focused, switch to ``layer_index``.
+    """Smart Layers rule: when a matching window is focused, switch to ``layer_index``.
 
-    ``app_class`` is matched exactly (case-sensitive) against the window class
-    reported by the focus source (Hyprland ``class``). If ``title_pattern`` is
-    set it is a Python regex that must also ``re.search`` the window title.
-    Rules are evaluated in list order; the first enabled match wins.
+    ``match`` decides how ``app_class`` is interpreted (see ``RuleMatch``;
+    defaults to an exact window-class match). If ``title_pattern`` is set it is
+    a Python regex that must also ``re.search`` the window title.
+    Rules are evaluated in list order; the first enabled match wins, so
+    specific rules should come before catch-all ones.
     """
     app_class: str
     display_name: str
@@ -88,6 +101,26 @@ class AppRule:
     title_pattern: str | None = None
     enabled: bool = True
     icon_name: str | None = None
+    match: RuleMatch = RuleMatch.APP
+
+
+@dataclass(frozen=True)
+class FocusedWindow:
+    """Everything known about the focused window."""
+    app_class: str
+    title: str
+    pid: int | None = None
+    # Set when the window belongs to a Steam game: detected from a
+    # ``steam_app_<id>`` class or from SteamAppId/SteamGameId in the process
+    # environment (native Linux games). Never set for the Steam client itself.
+    steam_app_id: str | None = None
+    steam_game_name: str | None = None
+
+
+@dataclass(frozen=True)
+class SteamGame:
+    app_id: str
+    name: str
 
 
 @dataclass(frozen=True)
@@ -110,5 +143,5 @@ FALLBACK_KEEP: None = None
 
 __all__ = [
     "KeyboardModel", "KeyGeometry", "Device", "KeyBinding", "Layer", "Layout",
-    "AppRule", "RunningApp", "HeatmapPeriod", "FALLBACK_KEEP", "field",
+    "AppRule", "RuleMatch", "FocusedWindow", "SteamGame", "RunningApp", "HeatmapPeriod", "FALLBACK_KEEP", "field",
 ]

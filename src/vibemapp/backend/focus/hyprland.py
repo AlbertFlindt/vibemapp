@@ -100,6 +100,10 @@ def normalize_address(addr: str) -> str | None:
     return addr or None
 
 
+def _valid_pid(value: object) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
+
+
 def parse_clients_json(text: str) -> list[RunningApp]:
     try:
         clients = json.loads(text)
@@ -139,6 +143,7 @@ class HyprlandFocusWatcher(FocusWatcher):
         self._backoff_ms = self.MIN_BACKOFF_MS
         self._buffer = b""
         self._current: tuple[str, str] | None = None
+        self._pid: int | None = None
         self._active_address: str | None = None
         self._available = False
         self._started = False
@@ -305,14 +310,18 @@ class HyprlandFocusWatcher(FocusWatcher):
             return
         name, data = parsed
         if name == "activewindow":
-            self._set_focus(*parse_activewindow(data))
+            app_class, title = parse_activewindow(data)
+            # activewindow>> has no pid; one j/activewindow round trip (~0.1 ms)
+            # gives it, accepted only if the class still matches.
+            pid = self._lookup_active_pid(app_class) if app_class else None
+            self._set_focus(app_class, title, pid)
         elif name == "activewindowv2":
             self._active_address = normalize_address(data.strip().strip(","))
         elif name == "windowtitlev2":
             addr, _sep, title = data.partition(",")
             if self._current and self._active_address and \
                     normalize_address(addr) == self._active_address:
-                self._set_focus(self._current[0], title)
+                self._set_focus(self._current[0], title, self._pid)
         elif name == "closewindow":
             if self._active_address and normalize_address(data) == self._active_address:
                 # Hyprland normally follows up with activewindow; re-query to be safe.
@@ -332,17 +341,37 @@ class HyprlandFocusWatcher(FocusWatcher):
         text = self.query("j/activewindow")
         if text is None:
             return
+        pid = None
         try:
             obj = json.loads(text)
             if isinstance(obj, dict):
                 self._active_address = normalize_address(str(obj.get("address") or ""))
+                pid = _valid_pid(obj.get("pid"))
         except ValueError:
             pass
-        self._set_focus(*parse_activewindow_json(text))
+        self._set_focus(*parse_activewindow_json(text), pid)
 
-    def _set_focus(self, app_class: str, title: str) -> None:
+    def current_pid(self) -> int | None:
+        return self._pid
+
+    def _lookup_active_pid(self, app_class: str) -> int | None:
+        text = self.query("j/activewindow", timeout=0.2)
+        if not text:
+            return None
+        try:
+            obj = json.loads(text)
+        except ValueError:
+            return None
+        if not isinstance(obj, dict) or str(obj.get("class") or "") != app_class:
+            return None
+        self._active_address = normalize_address(str(obj.get("address") or "")) \
+            or self._active_address
+        return _valid_pid(obj.get("pid"))
+
+    def _set_focus(self, app_class: str, title: str, pid: int | None = None) -> None:
         value = (app_class, title)
-        if value == self._current:
+        if value == self._current and pid == self._pid:
             return
+        self._pid = pid
         self._current = value
         self.emit("focus-changed", app_class, title)

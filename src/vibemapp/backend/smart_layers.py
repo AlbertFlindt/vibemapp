@@ -22,7 +22,7 @@ import tempfile
 from dataclasses import asdict
 from typing import Any, Callable, Protocol
 
-from ..models import AppRule
+from ..models import AppRule, RuleMatch
 
 log = logging.getLogger(__name__)
 
@@ -40,7 +40,9 @@ def default_rules_path() -> str:
 # --- persistence ------------------------------------------------------------------
 
 def rule_to_json(rule: AppRule) -> dict[str, Any]:
-    return asdict(rule)
+    data = asdict(rule)
+    data["match"] = RuleMatch(rule.match).value
+    return data
 
 
 def rule_from_json(obj: Any) -> AppRule | None:
@@ -48,19 +50,27 @@ def rule_from_json(obj: Any) -> AppRule | None:
         return None
     app_class = obj.get("app_class")
     layer = obj.get("layer_index")
-    if not isinstance(app_class, str) or not app_class or isinstance(layer, bool) \
+    try:
+        match = RuleMatch(obj.get("match") or RuleMatch.APP.value)   # missing -> APP (v0.1/0.2 files)
+    except ValueError:
+        log.warning("Skipping rule with unknown match kind %r", obj.get("match"))
+        return None
+    if not isinstance(app_class, str) or isinstance(layer, bool) \
             or not isinstance(layer, int) or layer < 0:
+        return None
+    if not app_class and match != RuleMatch.STEAM_GAME:   # "" = any Steam game
         return None
     pattern = obj.get("title_pattern")
     icon = obj.get("icon_name")
     name = obj.get("display_name")
     return AppRule(
         app_class=app_class,
-        display_name=name if isinstance(name, str) and name else app_class,
+        display_name=name if isinstance(name, str) and name else (app_class or "Steam"),
         layer_index=layer,
         title_pattern=pattern if isinstance(pattern, str) and pattern else None,
         enabled=bool(obj.get("enabled", True)),
         icon_name=icon if isinstance(icon, str) and icon else None,
+        match=match,
     )
 
 
@@ -153,17 +163,37 @@ _regex_cache: dict[str, re.Pattern[str] | None] = {}
 
 
 def _compile(pattern: str) -> re.Pattern[str] | None:
+    """Compiled + cached; invalid patterns are logged once and never match."""
     if pattern not in _regex_cache:
         try:
             _regex_cache[pattern] = re.compile(pattern)
         except re.error as exc:
-            log.warning("Invalid title pattern %r: %s", pattern, exc)
+            log.warning("Invalid regex %r: %s", pattern, exc)
             _regex_cache[pattern] = None
     return _regex_cache[pattern]
 
 
-def rule_matches(rule: AppRule, app_class: str, title: str) -> bool:
-    if not rule.enabled or rule.app_class != app_class:
+def valid_pattern(pattern: str) -> bool:
+    return _compile(pattern) is not None
+
+
+def _class_matches(rule: AppRule, app_class: str, steam_app_id: str | None) -> bool:
+    kind = RuleMatch(rule.match)
+    if kind == RuleMatch.APP:
+        return rule.app_class == app_class
+    if kind == RuleMatch.CLASS_PATTERN:
+        rx = _compile(rule.app_class)
+        return rx is not None and rx.fullmatch(app_class) is not None
+    if kind == RuleMatch.STEAM_GAME:
+        if steam_app_id is None:
+            return False
+        return rule.app_class == "" or rule.app_class == steam_app_id
+    return False
+
+
+def rule_matches(rule: AppRule, app_class: str, title: str,
+                 steam_app_id: str | None = None) -> bool:
+    if not rule.enabled or not _class_matches(rule, app_class, steam_app_id):
         return False
     if rule.title_pattern:
         rx = _compile(rule.title_pattern)
@@ -172,10 +202,11 @@ def rule_matches(rule: AppRule, app_class: str, title: str) -> bool:
     return True
 
 
-def match_rule(rules: list[AppRule], app_class: str, title: str) -> AppRule | None:
-    """First enabled rule matching ``app_class`` (exact) and optional title regex."""
+def match_rule(rules: list[AppRule], app_class: str, title: str,
+               steam_app_id: str | None = None) -> AppRule | None:
+    """First enabled matching rule (see ``RuleMatch``) whose title regex also matches."""
     for rule in rules:
-        if rule_matches(rule, app_class, title):
+        if rule_matches(rule, app_class, title, steam_app_id):
             return rule
     return None
 
@@ -237,6 +268,7 @@ class SmartLayersEngine:
         self.layer_count: int | None = None   # known number of layers, for validation
 
         self._focus: tuple[str, str] | None = None
+        self._focus_steam_app_id: str | None = None
         self._last_sent: int | None = None
         self._reported: int | None = None
         self._pending: object | None = None
@@ -319,10 +351,12 @@ class SmartLayersEngine:
     def keyboard_layer_changed(self, layer: int) -> None:
         self._reported = layer
 
-    def focus_changed(self, app_class: str, title: str) -> None:
+    def focus_changed(self, app_class: str, title: str,
+                      steam_app_id: str | None = None) -> None:
         if app_class == self._own_app_class:
             return     # don't reset the layer when our own window takes focus
         self._focus = (app_class, title)
+        self._focus_steam_app_id = steam_app_id
         if self._active:
             self._schedule(self._debounce_ms)
 
@@ -356,8 +390,9 @@ class SmartLayersEngine:
                 self._evaluate()
         self._pending = self._scheduler.schedule(delay_ms, fire)
 
-    def target_for(self, app_class: str, title: str) -> tuple[AppRule | None, int | None]:
-        rule = match_rule(self._rules, app_class, title)
+    def target_for(self, app_class: str, title: str,
+                   steam_app_id: str | None = None) -> tuple[AppRule | None, int | None]:
+        rule = match_rule(self._rules, app_class, title, steam_app_id)
         if rule is not None:
             return rule, rule.layer_index
         return None, self._fallback
@@ -366,7 +401,7 @@ class SmartLayersEngine:
         if self._focus is None:
             return
         app_class, title = self._focus
-        rule, target = self.target_for(app_class, title)
+        rule, target = self.target_for(app_class, title, self._focus_steam_app_id)
         if target is None:
             return
         if self.layer_count is not None and not 0 <= target < self.layer_count:

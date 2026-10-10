@@ -10,14 +10,14 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk, Pango  # noqa: E402
 
-from ..models import AppRule, Layout  # noqa: E402
+from ..models import AppRule, FocusedWindow, Layout  # noqa: E402
 from ..service import KeyboardService  # noqa: E402
 from . import rules_model as rm  # noqa: E402
 from .apps import AppIndex  # noqa: E402
 from .controller import DeviceController  # noqa: E402
 from .i18n import _  # noqa: E402
 from .resources import ui_file  # noqa: E402
-from .rule_dialog import present_rule_dialog  # noqa: E402
+from .rule_dialog import present_rule_dialog, rule_presentation, steam_game_icon  # noqa: E402
 from .widgets import LayerDot  # noqa: E402
 
 DRAG_PREFIX = "kml-rule:"
@@ -72,13 +72,14 @@ class RuleRow(Adw.ActionRow):
         self._shadowed = shadowed
         self._matching = False
 
-        entry = AppIndex.get().entry_for(rule.app_class, icon_name=rule.icon_name,
-                                         fallback_name=rule.display_name)
-        self.set_title(rule.display_name or entry.name)
+        title, self._target_text, gicon = rule_presentation(rule)
+        self.set_title(title)
         self.set_tooltip_text(_("Edit rule"))
+        if rm.is_catch_all(rule):
+            self.add_css_class("group-rule")
 
         # add_prefix() prepends, so the drag handle (added last) ends up first.
-        icon = Gtk.Image(gicon=entry.icon, pixel_size=32,
+        icon = Gtk.Image(gicon=gicon, pixel_size=32,
                          accessible_role=Gtk.AccessibleRole.PRESENTATION)
         icon.add_css_class("icon-dropshadow")
         self.add_prefix(icon)
@@ -131,12 +132,12 @@ class RuleRow(Adw.ActionRow):
             self._update_subtitle()
 
     def _update_subtitle(self) -> None:
-        parts = [self.rule.app_class]
+        parts = [self._target_text]
         if self.rule.title_pattern:
             parts.append(_("title matches “{pattern}”").format(pattern=self.rule.title_pattern))
         line = " · ".join(parts)
         if self._shadowed:
-            line += "\n" + _("Never used: an earlier rule matches every window of this app")
+            line += "\n" + _("Never used: an earlier rule always matches first")
         elif self._matching and self.rule.enabled:
             line += "\n" + _("Matches the focused window")
         self.set_subtitle(line)
@@ -293,7 +294,7 @@ class SmartLayersPage(Adw.Bin):
         self._toast: Callable[[Adw.Toast], None] = lambda _t: None
         self._rules: list[AppRule] = []
         self._layout: Layout | None = None
-        self._focus: tuple[str, str] | None = None
+        self._focus: FocusedWindow | None = None
         self._fallback_handler = self.fallback_row.connect(
             "notify::selected", self._on_fallback_selected)
         self._placeholder_title = Gtk.Label(wrap=True, justify=Gtk.Justification.CENTER)
@@ -333,8 +334,8 @@ class SmartLayersPage(Adw.Bin):
             (controller, controller.connect("notify::state",
                                             lambda *_a: self._reload(force=True))),
         ]
-        focused = service.get_focused_app()
-        if focused and focused[0] != rm.OWN_APP_CLASS:
+        focused = service.get_focused_window()
+        if focused and focused.app_class and focused.app_class != rm.OWN_APP_CLASS:
             self._focus = focused
         self._reload(force=True)
 
@@ -455,7 +456,11 @@ class SmartLayersPage(Adw.Bin):
         # Our own window is ignored by the engine; keep showing the last app.
         if app_class == rm.OWN_APP_CLASS:
             return
-        self._focus = (app_class, title) if app_class else None
+        window = self.service.get_focused_window() if self.service is not None else None
+        if window is None or window.app_class != app_class:
+            # Shouldn't happen (the contract keeps them in sync); degrade gracefully.
+            window = FocusedWindow(app_class, title)
+        self._focus = window if app_class else None
         if self.service is not None:
             self.banner.set_revealed(not self.service.focus_source_available())
         self._update_status()
@@ -478,11 +483,16 @@ class SmartLayersPage(Adw.Bin):
                 rule_row.set_matching(False)
             return
 
-        app_class, title = focus
-        entry = AppIndex.get().entry_for(app_class)
-        row.set_title(_("Focused: {app}").format(app=entry.name))
+        app_class, title, steam_id = focus.app_class, focus.title, focus.steam_app_id
+        if steam_id:
+            name = focus.steam_game_name or _("Steam Game {id}").format(id=steam_id)
+            row.set_title(_("Focused: {game} (Steam)").format(game=name))
+            self.status_icon.set_from_gicon(steam_game_icon(steam_id))
+        else:
+            entry = AppIndex.get().entry_for(app_class)
+            row.set_title(_("Focused: {app}").format(app=entry.name))
+            self.status_icon.set_from_gicon(entry.icon)
         row.set_subtitle(title or app_class)
-        self.status_icon.set_from_gicon(entry.icon)
 
         match_pos = None
         if self._layout is None:
@@ -490,7 +500,7 @@ class SmartLayersPage(Adw.Bin):
             target_label.add_css_class("dim-label")
         else:
             fallback = self.service.get_fallback_layer()
-            target, rule = rm.target_layer(self._rules, fallback, app_class, title)
+            target, rule = rm.target_layer(self._rules, fallback, app_class, title, steam_id)
             layers = self._layout.layers
             layer = layers[target] if target is not None and 0 <= target < len(layers) else None
             if rule is not None:
@@ -575,7 +585,8 @@ class SmartLayersPage(Adw.Bin):
 
         present_rule_dialog(self, layout=self._layout,
                             running=self.service.list_running_apps(),
-                            existing=self._rules, on_done=done)
+                            existing=self._rules, on_done=done,
+                            steam_games=self.service.list_steam_games)
 
     def edit_rule(self, position: int) -> None:
         if not self.editable or self._layout is None or self.service is None:
@@ -587,9 +598,9 @@ class SmartLayersPage(Adw.Bin):
         def done(rule: AppRule) -> None:
             if self.editable and position < len(self._rules) and \
                     self._rules[position] == original:
-                self._commit(rm.update_rule(self._rules, position,
-                                            layer_index=rule.layer_index,
-                                            title_pattern=rule.title_pattern))
+                rules = list(self._rules)
+                rules[position] = rule
+                self._commit(rules)
 
         def remove() -> None:
             if position < len(self._rules) and self._rules[position] == original:
@@ -598,4 +609,4 @@ class SmartLayersPage(Adw.Bin):
         present_rule_dialog(self, layout=self._layout,
                             running=self.service.list_running_apps(),
                             existing=self._rules, on_done=done, rule=original,
-                            on_remove=remove)
+                            on_remove=remove, steam_games=self.service.list_steam_games)

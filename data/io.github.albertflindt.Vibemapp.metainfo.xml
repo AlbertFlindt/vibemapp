@@ -51,6 +51,17 @@
     <keyword>layer</keyword>
   </keywords>
   <releases>
+    <release version="0.3.0" date="2026-10-10">
+      <description>
+        <ul>
+          <li>Smart Layers rules for all Steam games at once, or a single installed Steam game picked by name</li>
+          <li>Advanced rules that match window classes with a regular expression, with a live preview</li>
+          <li>Steam games are recognised by their Proton window class or by the game ID Steam gives native games</li>
+          <li>Hyprland autostart hint uses the Lua configuration syntax</li>
+          <li>The window always opens on the Layout page</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.2.0" date="2026-10-10">
       <description>
         <p>KeyMapp for Linux is now called Vibemapp. Your settings and Smart Layers rules are carried over automatically.</p>

@@ -152,3 +152,24 @@ UI: opt-in `Adw.StatusPage` when off; when on, the keyboard drawn as a heatmap
 (sequential colour ramp readable in light and dark, counts on keys, legend), period
 toggle, layer filter (All layers + each layer), total presses and top keys, pause and
 reset (confirmation `Adw.AlertDialog`).
+
+## 7. Release 0.3 — group rules (Steam games)
+Modelled on the user's Hyprland rule `match = { class = ".*steam_app_.*" }`.
+`AppRule.match` (`RuleMatch`):
+- `APP` (default, existing behaviour): exact window class.
+- `CLASS_PATTERN`: `app_class` is a regex that must `re.fullmatch` the window class.
+- `STEAM_GAME`: `app_class == ""` → any Steam game; otherwise a Steam app id → that game.
+
+Steam detection (backend): a window is a Steam game when its class is `steam_app_<id>`
+(Proton) or its process (Hyprland client `pid`) has `SteamAppId`/`SteamGameId` in
+`/proc/<pid>/environ` (native games). The Steam client (class `steam`) is never a game.
+Names come from `appmanifest_<id>.acf` in every library listed in
+`~/.local/share/Steam/steamapps/libraryfolders.vdf` (also `~/.steam/steam`); tools such as
+Proton, Steam Linux Runtime and Steamworks Common Redistributables are filtered out.
+Rules JSON stays backwards compatible (missing `match` = `APP`).
+
+UI: Add Rule offers **App**, **All Steam Games** (one click), **Steam Game** (pick
+from installed games by name) and **Window Class Pattern** (advanced, live regex
+validation and a live "matches: …" preview against running windows). New specific rules
+are inserted above catch-all rules; the rules list shows group rules with a distinct
+icon/subtitle ("Any Steam game"). The focus status row shows the Steam game name.

@@ -31,13 +31,15 @@ from typing import Any, Callable
 
 from gi.repository import Gio, GLib
 
-from ..models import AppRule, Device, HeatmapPeriod, Layout, RunningApp
+from ..models import (AppRule, Device, FocusedWindow, HeatmapPeriod, Layout, RunningApp,
+                      SteamGame)
 from ..service import KeyboardService
 from . import devices as devmod
 from . import geometries
 from ._i18n import _
 from .focus import FocusWatcher, create_focus_watcher
 from .heatmap import HeatmapStore
+from .steam import SteamLibrary
 from .migration import migrate_legacy_dirs
 from .oryx import Evt, HandshakeResult, OryxConnection, OryxError, OryxEvent
 from .oryx_api import LayoutCache, LayoutRepository
@@ -75,7 +77,9 @@ class ZsaKeyboardService(KeyboardService):
                  poll_interval_ms: int = 3000,
                  heatmap_dir: str | None = None,
                  clock: Callable[[], dt.date] | None = None,
-                 migrate: bool | None = None) -> None:
+                 migrate: bool | None = None,
+                 steam_roots: list[str] | None = None,
+                 proc_root: str = "/proc") -> None:
         super().__init__()
         # Legacy keymappforlinux -> vibemapp dirs. By default this only runs
         # when using the real default paths (not in tests with injected dirs).
@@ -110,6 +114,8 @@ class ZsaKeyboardService(KeyboardService):
         self._retry_id = 0
         self._stable_id = 0
         self._heatmap = HeatmapStore(heatmap_dir, clock or dt.date.today)
+        self._steam = SteamLibrary(steam_roots, proc_root)
+        self._focused_window: FocusedWindow | None = None
         self._counts_timer = 0
         self._counts_last_emit = 0.0
         self._flush_id = 0
@@ -136,8 +142,9 @@ class ZsaKeyboardService(KeyboardService):
         self._watcher.start()
         current = self._watcher.current()
         if current and current[0] != APP_ID:
-            self._focused = current
-            self._engine.focus_changed(*current)
+            self._update_focus(*current)
+        # Warm the Steam manifest cache off the focus path.
+        GLib.idle_add(lambda: (self._steam.games(), GLib.SOURCE_REMOVE)[1])
         # Let the UI connect its handlers before the first auto-connect.
         GLib.idle_add(self._maybe_auto_connect)
 
@@ -571,12 +578,28 @@ class ZsaKeyboardService(KeyboardService):
     def get_focused_app(self) -> tuple[str, str] | None:
         return self._focused
 
+    def get_focused_window(self) -> FocusedWindow | None:
+        return self._focused_window
+
+    def list_steam_games(self) -> list[SteamGame]:
+        return self._steam.games()
+
+    def _update_focus(self, app_class: str, title: str) -> FocusedWindow:
+        try:
+            window = self._steam.describe(app_class, title, self._watcher.current_pid())
+        except Exception:   # noqa: BLE001 - Steam detection must never break focus
+            log.exception("Steam detection failed")
+            window = FocusedWindow(app_class, title, self._watcher.current_pid())
+        self._focused = (app_class, title)
+        self._focused_window = window
+        self._engine.focus_changed(app_class, title, window.steam_app_id)
+        return window
+
     def _on_focus_changed(self, _watcher: FocusWatcher, app_class: str, title: str) -> None:
         if app_class == APP_ID:
             return
-        self._focused = (app_class, title)
-        self.emit("focus-changed", app_class, title)
-        self._engine.focus_changed(app_class, title)
+        self._update_focus(app_class, title)       # get_focused_window() is current...
+        self.emit("focus-changed", app_class, title)   # ...before listeners run
 
     # --- heatmap ------------------------------------------------------------------
 

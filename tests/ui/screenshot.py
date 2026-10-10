@@ -45,6 +45,9 @@ def main() -> int:
     parser.add_argument("--press", default="")
     parser.add_argument("--search", default="")
     parser.add_argument("--pick")
+    parser.add_argument("--kind", choices=["app", "steam-any", "steam-game", "pattern"])
+    parser.add_argument("--focus", default="firefox|Lo-fi beats — YouTube — Mozilla Firefox",
+                        help="class|title of the simulated focused window")
     parser.add_argument("--record", action="store_true", help="turn heatmap recording on")
     parser.add_argument("--no-smart", action="store_true",
                         help="turn Smart Layers off before the keyboard connects")
@@ -75,7 +78,7 @@ def main() -> int:
         win.show_page(args.page)
         mock = hasattr(svc, "simulate_focus")
         if mock:
-            svc.simulate_focus("firefox", "Lo-fi beats — YouTube — Mozilla Firefox")
+            svc.simulate_focus(*args.focus.split("|", 1))
         if args.layer is not None and mock:
             svc.simulate_layer(args.layer)
         if args.view_layer is not None:
@@ -85,11 +88,18 @@ def main() -> int:
         if args.dialog == "add-rule":
             win.smart_layers_page.add_rule()
             dlg = win.get_visible_dialog()
+            if args.kind:
+                row = {"app": dlg.kind_app_row, "steam-any": dlg.kind_steam_any_row,
+                       "steam-game": dlg.kind_steam_game_row,
+                       "pattern": dlg.kind_pattern_row}[args.kind]
+                dlg.on_kind_activated(row)
             if args.search:
-                dlg.search_entry.set_text(args.search)
+                entry = (dlg.steam_search_entry if args.kind == "steam-game"
+                         else dlg.search_entry)
+                entry.set_text(args.search)
             if args.pick:
                 from vibemapp.ui.apps import AppIndex
-                dlg._show_details(AppIndex.get().entry_for(args.pick))
+                dlg._pick_app(AppIndex.get().entry_for(args.pick))
             if args.pattern is not None:
                 dlg.pattern_row.set_text(args.pattern)
         elif args.dialog == "edit-rule":

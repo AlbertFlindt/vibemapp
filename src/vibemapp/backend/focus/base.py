@@ -32,6 +32,11 @@ class FocusWatcher(GObject.Object):
         """Last known (app_class, title), or None if unknown."""
         return None
 
+    def current_pid(self) -> int | None:
+        """Process id of the focused window, if known. Up to date whenever
+        ``focus-changed`` is emitted."""
+        return None
+
     def start(self) -> None:
         raise NotImplementedError
 

@@ -296,3 +296,69 @@ class AutoConnectPropertyTests(unittest.TestCase):
         # A manual connect still works with auto-connect off.
         self.svc.connect_device(self.svc.list_devices()[0].id)
         self.assertTrue(spin(lambda: self.signals[-1] == "connected"))
+
+
+class SteamFocusTests(unittest.TestCase):
+    def setUp(self) -> None:
+        from vibemapp.backend.steam import SteamLibrary  # noqa: F401
+        self.tmp = tempfile.TemporaryDirectory()
+        root = self.tmp.name
+        make_node(root, 10, "5-2.2", 1, 0x3297, 0x1977, RAW_DESC)
+        steam = os.path.join(root, "Steam", "steamapps")
+        os.makedirs(steam)
+        with open(os.path.join(steam, "appmanifest_2694490.acf"), "w") as f:
+            f.write('"AppState" { "appid" "2694490" "name" "Path of Exile 2" }')
+        proc = os.path.join(root, "proc", "4242")
+        os.makedirs(proc)
+        with open(os.path.join(proc, "environ"), "wb") as f:
+            f.write(b"SteamAppId=2694490\0")
+        self.fw = FakeFirmware()
+        self.watcher = PidWatcher()
+        self.svc = ZsaKeyboardService(
+            sysfs_root=os.path.join(root, "sys"), dev_root=os.path.join(root, "dev"),
+            rules_path=os.path.join(root, "rules.json"), focus_watcher=self.watcher,
+            repository=LayoutRepository(LayoutCache(os.path.join(root, "c")),
+                                        fetcher=lambda *a: SAMPLE),
+            connection_factory=lambda p, e, c: OryxConnection(p, e, c, opener=self.fw.opener),
+            poll_interval_ms=0, heatmap_dir=os.path.join(root, "hm"),
+            steam_roots=[os.path.join(root, "Steam")], proc_root=os.path.join(root, "proc"))
+        self.seen: list = []
+        self.svc.connect("focus-changed", lambda s, c, t: self.seen.append(s.get_focused_window()))
+        self.applied: list = []
+        self.svc.connect("rule-applied", lambda _s, c, l: self.applied.append((c, l)))
+
+    def tearDown(self) -> None:
+        self.svc.shutdown()
+        drain(0.05)
+        self.fw.unplug()
+        self.tmp.cleanup()
+
+    def test_focused_window_and_steam_rule(self) -> None:
+        from vibemapp.models import FocusedWindow, RuleMatch, SteamGame
+        self.assertEqual(self.svc.list_steam_games(), [SteamGame("2694490", "Path of Exile 2")])
+        self.assertTrue(spin(lambda: self.svc.get_connected_device() is not None))
+        self.svc.set_rules([AppRule("", "Any Steam game", 1, match=RuleMatch.STEAM_GAME)])
+        self.svc.set_fallback_layer(0)
+        self.svc.props.smart_layers_enabled = True
+        self.watcher.focus_pid("PathOfExile", "PoE2", 4242)       # native game via environ
+        self.assertEqual(self.seen[-1], FocusedWindow("PathOfExile", "PoE2", 4242,
+                                                      "2694490", "Path of Exile 2"))
+        self.assertTrue(spin(lambda: ("", 1) in self.applied))
+        self.watcher.focus_pid("steam", "Steam", 4242)            # client is never a game
+        self.assertIsNone(self.seen[-1].steam_app_id)
+        self.assertTrue(spin(lambda: self.applied[-1] == ("", 0)))
+
+
+class PidWatcher(FakeWatcher):
+    __gtype_name__ = "VmTestPidWatcher"
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._pid: int | None = None
+
+    def current_pid(self):
+        return self._pid
+
+    def focus_pid(self, cls: str, title: str, pid: int | None) -> None:
+        self._pid = pid
+        self.focus(cls, title)

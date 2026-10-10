@@ -6,7 +6,7 @@ import unittest
 from gi.repository import GLib
 
 from vibemapp.mock_service import MockKeyboardService, voyager_geometry
-from vibemapp.models import AppRule, HeatmapPeriod, KeyboardModel
+from vibemapp.models import AppRule, HeatmapPeriod, KeyboardModel, RuleMatch
 from vibemapp.service import KeyboardService
 
 
@@ -190,6 +190,28 @@ class MockServiceTests(unittest.TestCase):
         self.assertEqual(self.svc.get_key_counts(HeatmapPeriod.TODAY), {1: 1})
         self.assertEqual(self.svc.get_key_counts(HeatmapPeriod.WEEK), {1: 1, 2: 2})
         self.assertEqual(self.svc.get_key_counts(HeatmapPeriod.ALL), {1: 1, 2: 2, 3: 4})
+
+    def test_steam(self) -> None:
+        games = self.svc.list_steam_games()
+        self.assertEqual([g.name for g in games], sorted((g.name for g in games), key=str.casefold))
+        self.connect_and_load()
+        self.svc.set_rules([AppRule("1245620", "ELDEN RING", 1, match=RuleMatch.STEAM_GAME),
+                            AppRule("", "All Steam Games", 3, match=RuleMatch.STEAM_GAME)])
+        self.svc.set_fallback_layer(0)
+        self.svc.props.smart_layers_enabled = True
+
+        self.svc.simulate_focus("steam_app_1245620", "ELDEN RING™")
+        window = self.svc.get_focused_window()
+        self.assertEqual((window.steam_app_id, window.steam_game_name), ("1245620", "ELDEN RING"))
+        self.assertEqual(self.svc.get_active_layer(), 1)
+
+        self.svc.simulate_focus("dota2", "Dota 2")          # native game, via environment
+        self.assertEqual(self.svc.get_focused_window().steam_app_id, "570")
+        self.assertEqual(self.svc.get_active_layer(), 3)
+
+        self.svc.simulate_focus("steam", "Steam")           # the client is not a game
+        self.assertIsNone(self.svc.get_focused_window().steam_app_id)
+        self.assertEqual(self.svc.get_active_layer(), 0)
 
     def test_focus_source_changes(self) -> None:
         self.svc.simulate_focus_source(False)
