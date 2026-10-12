@@ -1,6 +1,6 @@
 # Progress / handoff
 
-**Last updated:** 2026-10-12. **Version:** 1.0.1 (transparent keys + tray `__pycache__` packaging fix).
+**Last updated:** 2026-10-12. **Version:** 1.0.2 (tray menu rework, dev app ID, obsolete dconf key cleanup).
 The PKGBUILD has since moved to `packaging/arch/`, so install with `cd packaging/arch && makepkg -si`.
 
 ## Current state
@@ -39,7 +39,7 @@ The PKGBUILD has since moved to `packaging/arch/`, so install with `cd packaging
     - Checked against the user's cached layout, and the user confirmed it looks right in `./run-dev.sh`.
   - **1.0.1 released** (tag `v1.0.1`, pushed): transparent keys plus the tray `__pycache__` fix.
 
-  - **Known-issues pass** (2026-10-12, uncommitted, unreleased):
+  - **Known-issues pass** (2026-10-12), released as **1.0.2** with the first GitHub release:
     - Dev runs use app ID `io.github.albertflindt.Vibemapp.Devel` (`appid.py`, `VIBEMAPP_DEVEL=1` from run-dev.sh),
       striped `devel` header and "Vibemapp (Development)" title. Both IDs count as "own window" for Smart Layers.
       Config, cache and GSettings stay shared with the installed app.
@@ -58,10 +58,12 @@ The PKGBUILD has since moved to `packaging/arch/`, so install with `cd packaging
    `backend/geometries.py`; it's col/row in the event, then Oryx order.
 2. **Translations.** Add a `po/` directory (`POTFILES`, `LINGUAS`) and meson `i18n.gettext('vibemapp')`.
    Strings are already wrapped in `_()`.
-3. **Metainfo screenshots.** Add `<screenshots>` to `data/io.github.albertflindt.Vibemapp.metainfo.xml`
-   using images from `tests/ui/screenshot.py` (layout, smart layers, heatmap), stored in `data/screenshots/`.
 
 ## Decisions
+- **GitHub releases with `CHANGELOG.md`:** the user wants releases with changelogs, not bare tags. Each release
+  gets a CHANGELOG section, a metainfo `<release>`, and `gh release create` with those notes.
+- **Screenshots come from the mock service** (`data/screenshots/`, rendered with `tests/ui/screenshot.py` and
+  `tray_menu_shot.py`, heatmap with `VIBEMAPP_MOCK_HEATMAP_SEED=1 --record --size 1000x1000`): no personal data in them.
 - **PKGBUILD builds the GitHub tag, not the working tree:** reproducible packages that match the
   release. The cost is that you must tag and push before `makepkg`; use `./run-dev.sh` for untagged work.
 - **1.0.0 is a version bump only:** the unverified items above remain open.

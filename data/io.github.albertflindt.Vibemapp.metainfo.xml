@@ -37,6 +37,20 @@
     <control>pointing</control>
     <control>touch</control>
   </supports>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Your Oryx layout with the active layer</caption>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.0.2/data/screenshots/layout.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Smart Layers switches layers per app</caption>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.0.2/data/screenshots/smart-layers.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>An opt-in heatmap of your key presses</caption>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.0.2/data/screenshots/heatmap.png</image>
+    </screenshot>
+  </screenshots>
   <branding>
     <color type="primary" scheme_preference="light">#99c1f1</color>
     <color type="primary" scheme_preference="dark">#1a5fb4</color>
@@ -51,6 +65,15 @@
     <keyword>layer</keyword>
   </keywords>
   <releases>
+    <release version="1.0.2" date="2026-10-12">
+      <description>
+        <ul>
+          <li>The tray menu shows the keyboard and layer at the top, offers Show or Hide depending on the window, and has a Preferences entry</li>
+          <li>A stale setting left over from older versions is cleaned up automatically</li>
+          <li>Development builds run next to the installed app and warn when both control the keyboard</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.1" date="2026-10-10">
       <description>
         <ul>

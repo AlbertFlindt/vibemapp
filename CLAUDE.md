@@ -70,5 +70,8 @@ Full spec and design history: @docs/SPEC.md. Handoff state: @PROGRESS.md.
 - The PKGBUILD lives in `packaging/arch/` on purpose. `makepkg -c/-C` runs `rm -rf ./src`,
   which would wipe our source tree if the PKGBUILD sat at the repo root.
 - Release bump touches: `meson.build` version, `packaging/arch/PKGBUILD` pkgver,
-  `ui/resources.py` dev fallback and a metainfo `<release>` entry. Then commit, `git tag vX.Y.Z`,
-  `git push origin main --tags`. Repo: https://github.com/AlbertFlindt/vibemapp
+  `ui/resources.py` dev fallback, a metainfo `<release>` entry and a `CHANGELOG.md` section.
+  Metainfo screenshot URLs point at the tag (`.../vibemapp/vX.Y.Z/data/screenshots/`), so bump them too.
+  Then commit, `git tag vX.Y.Z`, `git push origin main --tags`, and publish a GitHub release
+  with that version's changelog section: `gh release create vX.Y.Z --title "Vibemapp X.Y.Z" --notes-file NOTES.md`.
+  Repo: https://github.com/AlbertFlindt/vibemapp

@@ -2,6 +2,8 @@
 
 A GNOME/libadwaita take on ZSA Keymapp for Linux, written in Python with PyGObject.
 
+![Vibemapp's layout view, showing a Voyager layout with layer tabs](data/screenshots/layout.png)
+
 - **Smart Layers:** switches your ZSA keyboard's layer when the focused app changes.
   Rules can match one app, a window-class regex or all Steam games. Needs Hyprland.
 - **Live layout:** shows your Oryx layout and the active layer.
@@ -9,6 +11,14 @@ A GNOME/libadwaita take on ZSA Keymapp for Linux, written in Python with PyGObje
 - **Tray icon:** closing the window keeps Vibemapp running in the tray.
 
 Vibemapp never flashes firmware or writes to the keyboard's EEPROM.
+
+| Smart Layers | Heatmap |
+| --- | --- |
+| ![Smart Layers rules for Firefox, kitty, Blender and all Steam games](data/screenshots/smart-layers.png) | ![Heatmap of key presses over the last 7 days, with the top keys](data/screenshots/heatmap.png) |
+
+<p align="center">
+  <img src="data/screenshots/tray.png" alt="Tray menu with the current layer, Hide Vibemapp, Smart Layers, Preferences and Quit" width="260">
+</p>
 
 ## Requirements
 
@@ -52,6 +62,10 @@ VIBEMAPP_MOCK=1 ./run-dev.sh    # simulated keyboard
 `run-dev.sh` runs as a separate development app ("Vibemapp (Development)"), so it can run next
 to an installed Vibemapp and uses the same rules and settings. With a real keyboard, quit the
 installed one first (tray → Quit) so the two don't both switch layers, or use `VIBEMAPP_MOCK=1`.
+
+## Changes
+
+See [CHANGELOG.md](CHANGELOG.md) and the [releases](https://github.com/AlbertFlindt/vibemapp/releases).
 
 ## License
 
