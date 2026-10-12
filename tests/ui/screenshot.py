@@ -6,6 +6,8 @@
 
 Use ADW_DEBUG_COLOR_SCHEME=prefer-dark / prefer-light to pick the style.
 Renders through GTK itself, so it works without a screenshot tool.
+Sibling tools: ``tooltip_shot.py`` (Layout-view key tooltips) and
+``tray_menu_shot.py`` (the tray's dbusmenu, fetched over a private D-Bus).
 """
 
 from __future__ import annotations

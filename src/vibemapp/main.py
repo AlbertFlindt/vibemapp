@@ -13,9 +13,17 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
 
+try:   # GLib >= 2.80 moved the Unix helpers; GLib.unix_signal_add warns.
+    gi.require_version("GLibUnix", "2.0")
+    from gi.repository import GLibUnix  # noqa: E402
+    _signal_add = GLibUnix.signal_add
+except (ImportError, ValueError, AttributeError):   # pragma: no cover - older GLib
+    _signal_add = GLib.unix_signal_add
+
+from .appid import application_id  # noqa: E402
 from .service import KeyboardService  # noqa: E402
 from .ui.i18n import _  # noqa: E402
-from .ui.resources import APP_ID, load_css, ui_file, version  # noqa: E402
+from .ui.resources import APP_ID, app_title, load_css, ui_file, version  # noqa: E402
 
 log = logging.getLogger("vibemapp")
 
@@ -36,7 +44,7 @@ def create_service() -> tuple[KeyboardService, bool]:
 
 class Application(Adw.Application):
     def __init__(self) -> None:
-        super().__init__(application_id=APP_ID,
+        super().__init__(application_id=application_id(),
                          flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE)
         self.service: KeyboardService | None = None
         self.controller = None
@@ -67,7 +75,7 @@ class Application(Adw.Application):
 
     def do_startup(self) -> None:
         Adw.Application.do_startup(self)
-        GLib.set_application_name(_("Vibemapp"))
+        GLib.set_application_name(app_title())
         Gtk.Window.set_default_icon_name(APP_ID)
         load_css()
 
@@ -109,6 +117,7 @@ class Application(Adw.Application):
         if self.window is None:
             assert self.service is not None and self.settings is not None
             self.window = Window(self, self.service, self.controller, self.settings)
+            self.window.connect("notify::visible", self._sync_tray_window)
             if self._using_fallback_mock:
                 self.window.add_toast(Adw.Toast(
                     title=_("Keyboard backend unavailable — showing a simulated keyboard"),
@@ -137,7 +146,10 @@ class Application(Adw.Application):
         self.tray = TrayController(
             self.service, self.controller, self.settings,
             on_toggle_window=self._toggle_window, on_show_window=self.activate,
+            on_hide_window=self._hide_window,
+            on_preferences=lambda: self.activate_action("preferences", None),
             on_quit=self._quit)
+        self._sync_tray_window()
         self.tray.connect("notify::active", self._on_tray_active_changed)
 
     @property
@@ -154,6 +166,16 @@ class Application(Adw.Application):
             # silently quitting or becoming unreachable.
             self.activate()
         self._sync_hold()
+
+    def _hide_window(self) -> None:
+        # Same as closing the window: it goes to the tray (or quits without one).
+        if self.window is not None:
+            self.window.close()
+
+    def _sync_tray_window(self, *_args: object) -> None:
+        if self.tray is not None:
+            self.tray.window_visible = (self.window is not None
+                                        and self.window.get_visible())
 
     def _toggle_window(self) -> None:
         if self.window is not None and self.window.is_active():
@@ -181,6 +203,7 @@ class Application(Adw.Application):
         if window is not self.window:
             return
         self.window = None
+        self._sync_tray_window()
         # With a tray icon the app is visibly still running; only notify when
         # it lives on invisibly.
         if (not self._held or self._quitting or self._notified_background
@@ -284,7 +307,7 @@ def main(argv: list[str] | None = None) -> int:
     # Quit cleanly on SIGINT/SIGTERM (e.g. session logout) so do_shutdown runs
     # and the service can restore the keyboard's base layer.
     for signum in (signal.SIGINT, signal.SIGTERM):
-        GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signum, _quit_on_signal, app)
+        _signal_add(GLib.PRIORITY_DEFAULT, signum, _quit_on_signal, app)
     return app.run(argv if argv is not None else sys.argv)
 
 

@@ -10,10 +10,11 @@ from __future__ import annotations
 import re
 from dataclasses import replace
 
+from ..appid import BASE_APP_ID, is_own_app_class
 from ..models import AppRule, Layer, RuleMatch
 from .i18n import _
 
-OWN_APP_CLASS = "io.github.albertflindt.Vibemapp"
+OWN_APP_CLASS = BASE_APP_ID   # the installed window class; see is_own_app_class()
 
 
 # --- matching ---------------------------------------------------------------

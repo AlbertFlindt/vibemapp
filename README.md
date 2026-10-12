@@ -49,7 +49,9 @@ VIBEMAPP_MOCK=1 ./run-dev.sh    # simulated keyboard
 ./check.sh                      # lint and tests (also needs desktop-file-utils and appstream)
 ```
 
-Quit any installed Vibemapp first (tray → Quit), because both share the same app ID.
+`run-dev.sh` runs as a separate development app ("Vibemapp (Development)"), so it can run next
+to an installed Vibemapp and uses the same rules and settings. With a real keyboard, quit the
+installed one first (tray → Quit) so the two don't both switch layers, or use `VIBEMAPP_MOCK=1`.
 
 ## License
 

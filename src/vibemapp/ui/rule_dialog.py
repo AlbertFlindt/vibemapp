@@ -20,7 +20,7 @@ from ..models import AppRule, Layout, RuleMatch, RunningApp  # noqa: E402
 from .apps import AppEntry, AppIndex  # noqa: E402
 from .i18n import _  # noqa: E402
 from .resources import ui_file  # noqa: E402
-from .rules_model import (OWN_APP_CLASS, classes_matching, layer_label,  # noqa: E402
+from .rules_model import (classes_matching, is_own_app_class, layer_label,  # noqa: E402
                           validate_pattern)
 
 GAMING_ICON = "input-gaming-symbolic"
@@ -139,7 +139,7 @@ class RuleDialog(Adw.Dialog):
                  on_remove: Callable[[], None] | None = None) -> None:
         super().__init__()
         self._layout = layout
-        self._running = [r for r in running if r.app_class and r.app_class != OWN_APP_CLASS]
+        self._running = [r for r in running if r.app_class and not is_own_app_class(r.app_class)]
         self._existing = list(existing)
         self._existing_classes = {r.app_class for r in existing if r.match == RuleMatch.APP}
         self._on_done = on_done

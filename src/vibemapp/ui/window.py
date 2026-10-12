@@ -11,9 +11,11 @@ from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
 from ..service import KeyboardService  # noqa: E402
 from .controller import DeviceController  # noqa: E402
 from .device_dialog import DeviceDialog  # noqa: E402
+from . import instance_check  # noqa: E402
 from .i18n import _  # noqa: E402
 from .layout_page import LayoutPage  # noqa: E402
-from .resources import ui_file  # noqa: E402
+from ..appid import is_devel  # noqa: E402
+from .resources import app_title, ui_file  # noqa: E402
 from .rules_model import layer_label  # noqa: E402
 from .heatmap_page import HeatmapPage  # noqa: E402
 from .smart_layers_page import SmartLayersPage  # noqa: E402
@@ -48,6 +50,12 @@ class Window(Adw.ApplicationWindow):
         self.service = service
         self.controller = controller
         self.settings = settings
+        if is_devel():
+            # GNOME convention for development builds: striped header bars.
+            # The window title (task bars, Hyprland) says so too; the sidebar
+            # heading stays "Vibemapp" because the longer one is truncated.
+            self.add_css_class("devel")
+            self.set_title(app_title())
 
         self.set_default_size(settings.get_int("window-width"),
                               settings.get_int("window-height"))
@@ -66,9 +74,59 @@ class Window(Adw.ApplicationWindow):
             (service, service.connect("layer-changed", lambda *_a: self._sync_device_status())),
         ]
 
+        self._setup_instance_check()
+
         # Always open on Layout (also when re-shown from the tray).
         self.show_page("layout", reveal=False)
         self._sync()
+
+    # --- installed app also running (dev runs) ---------------------------
+
+    def _setup_instance_check(self) -> None:
+        from ..mock_service import MockKeyboardService
+
+        self._instance_watcher: instance_check.InstalledAppWatcher | None = None
+        self._instance_banners: list[Adw.Banner] = []
+        if not instance_check.should_watch(is_devel(),
+                                           isinstance(self.service, MockKeyboardService)):
+            return
+        # One banner under each page's header bar (HIG placement); each page
+        # has its own toolbar view.
+        for page in (self.layout_page, self.smart_layers_page, self.heatmap_page):
+            toolbar = page.get_child()
+            if not isinstance(toolbar, Adw.ToolbarView):
+                continue
+            banner = Adw.Banner(
+                title=_("The installed Vibemapp is also running. Both will switch "
+                        "keyboard layers."))
+            banner.connect("button-clicked", lambda _b: self._quit_installed_app())
+            toolbar.add_top_bar(banner)
+            self._instance_banners.append(banner)
+        watcher = instance_check.InstalledAppWatcher()
+        self._handlers += [
+            (watcher, watcher.connect("notify::running", lambda *_a: self._sync_instance_banner())),
+            (watcher, watcher.connect("notify::can-quit",
+                                      lambda *_a: self._sync_instance_banner())),
+        ]
+        self._instance_watcher = watcher
+        watcher.start()
+
+    def _sync_instance_banner(self) -> None:
+        watcher = self._instance_watcher
+        running = watcher is not None and watcher.props.running
+        label = _("Quit Installed App") if running and watcher.props.can_quit else None
+        for banner in self._instance_banners:
+            banner.set_button_label(label)
+            banner.set_revealed(running)
+
+    def _quit_installed_app(self) -> None:
+        def done(error: GLib.Error | None) -> None:
+            if error is not None:
+                self.add_toast(Adw.Toast(title=_("Couldn't quit the installed Vibemapp"),
+                                         timeout=6))
+
+        if self._instance_watcher is not None:
+            self._instance_watcher.request_quit(done)
 
     # --- actions ---------------------------------------------------------
 
@@ -211,6 +269,9 @@ class Window(Adw.ApplicationWindow):
         for obj, handler in self._handlers:
             obj.disconnect(handler)
         self._handlers = []
+        if self._instance_watcher is not None:
+            self._instance_watcher.stop()
+            self._instance_watcher = None
         self.layout_page.teardown()
         self.smart_layers_page.teardown()
         self.heatmap_page.teardown()

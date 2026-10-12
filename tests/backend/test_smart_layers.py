@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from typing import Callable
 
+from vibemapp.appid import DEVEL_APP_ID
 from vibemapp.backend.smart_layers import (APP_ID, RulesStore, SmartLayersEngine,
                                                   match_rule)
 from vibemapp.models import AppRule
@@ -147,6 +148,10 @@ class EngineTests(unittest.TestCase):
         self.sched.advance(50)
         self.engine.keyboard_layer_changed(1)
         self.engine.focus_changed(APP_ID, "Vibemapp")
+        self.sched.advance(50)
+        self.assertEqual(self.engine.focus, ("kitty", ""))
+        # A dev run's window (run-dev.sh) is ours too.
+        self.engine.focus_changed(DEVEL_APP_ID, "Vibemapp (Development)")
         self.sched.advance(50)
         self.assertEqual(self.engine.focus, ("kitty", ""))
         # Editing rules while our window is focused evaluates the *previous* app.

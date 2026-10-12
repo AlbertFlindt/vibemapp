@@ -6,6 +6,7 @@ import tempfile
 import threading
 import unittest
 
+from vibemapp.appid import DEVEL_APP_ID
 from vibemapp.backend.focus.base import FocusWatcher
 from vibemapp.backend.oryx import OryxConnection, OryxError
 from vibemapp.backend.oryx_api import LayoutCache, LayoutRepository
@@ -128,6 +129,8 @@ class ServiceTests(unittest.TestCase):
         # Our own window: no focus-changed, no layer change
         n = len(self.signals)
         self.watcher.focus(APP_ID, "Vibemapp")
+        drain(0.1)
+        self.watcher.focus(DEVEL_APP_ID, "Vibemapp (Development)")
         drain(0.1)
         self.assertEqual(self.signals[n:], [])
         self.assertEqual(self.svc.get_focused_app(), ("firefox", "page"))

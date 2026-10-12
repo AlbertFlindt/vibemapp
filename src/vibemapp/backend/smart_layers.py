@@ -22,11 +22,12 @@ import tempfile
 from dataclasses import asdict
 from typing import Any, Callable, Protocol
 
+from ..appid import BASE_APP_ID, is_own_app_class
 from ..models import AppRule, RuleMatch
 
 log = logging.getLogger(__name__)
 
-APP_ID = "io.github.albertflindt.Vibemapp"
+APP_ID = BASE_APP_ID
 FILE_VERSION = 1
 DEFAULT_LAYOUT_KEY = "_default"   # rules for firmware that reports no layout id
 DEFAULT_DEBOUNCE_MS = 50
@@ -353,7 +354,7 @@ class SmartLayersEngine:
 
     def focus_changed(self, app_class: str, title: str,
                       steam_app_id: str | None = None) -> None:
-        if app_class == self._own_app_class:
+        if app_class == self._own_app_class or is_own_app_class(app_class):
             return     # don't reset the layer when our own window takes focus
         self._focus = (app_class, title)
         self._focus_steam_app_id = steam_app_id

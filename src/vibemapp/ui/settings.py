@@ -30,6 +30,7 @@ _DEFAULTS: dict[str, object] = {
     "show-in-tray": True,
     "heatmap-recording": False,
     "migrated-from-keymappforlinux": True,
+    "obsolete-keys-version": 0,
 }
 
 OLD_PATH = "/io/github/albertflindt/KeyMappForLinux/"
@@ -122,11 +123,25 @@ def create_settings() -> Gio.Settings | MemorySettings:
         log.warning("GSettings schema %s not found; preferences will not be saved", APP_ID)
         return MemorySettings()
     settings = Gio.Settings.new_full(schema, None, None)
-    migrate_from_keymappforlinux(settings, schema)
+    for step in (migrate_from_keymappforlinux, reset_obsolete_keys):
+        try:
+            step(settings, schema)
+        except Exception:  # noqa: BLE001 — best effort, never block startup
+            log.exception("Settings cleanup step %s failed", getattr(step, "__name__", step))
     return settings
 
 
 LEGACY_SCHEMA_ID = "io.github.albertflindt.Vibemapp.LegacyMigration"
+
+
+# Keys removed from the schema whose stale values may still sit in the user's
+# dconf: name -> (GVariant type, default). Bump OBSOLETE_KEYS_VERSION when
+# adding one so the cleanup runs again.
+OBSOLETE_KEYS: dict[str, tuple[str, str]] = {
+    "last-page": ("s", "''"),        # removed in 0.2.x; the window always opens on Layout
+}
+OBSOLETE_KEYS_VERSION = 1
+OBSOLETE_VERSION_KEY = "obsolete-keys-version"
 
 
 def _relocatable_copy(schema: Gio.SettingsSchema) -> tuple[Gio.SettingsSchema, str] | None:
@@ -135,16 +150,26 @@ def _relocatable_copy(schema: Gio.SettingsSchema) -> tuple[Gio.SettingsSchema, s
     GSettings aborts the process if a schema with a fixed path is opened at
     another path, so the old dconf path is read through this relocatable copy.
     Returns ``(schema, tmpdir)``; the caller removes ``tmpdir``."""
+    keys = []
+    for name in schema.list_keys():
+        key = schema.get_key(name)
+        keys.append((name, key.get_value_type().dup_string(),
+                     key.get_default_value().print_(False)))
+    return _relocatable_schema(keys)
+
+
+def _relocatable_schema(keys: list[tuple[str, str, str]]
+                        ) -> tuple[Gio.SettingsSchema, str] | None:
+    """Compile a relocatable schema with ``(name, type, default)`` keys into a
+    temp dir. Returns ``(schema, tmpdir)``; the caller removes ``tmpdir``."""
     compiler = shutil.which("glib-compile-schemas")
     if compiler is None:
         return None
     lines = ['<?xml version="1.0" encoding="UTF-8"?>', "<schemalist>",
              f'<schema id="{LEGACY_SCHEMA_ID}">']
-    for name in schema.list_keys():
-        key = schema.get_key(name)
-        vtype = escape(key.get_value_type().dup_string())
-        default = escape(key.get_default_value().print_(False))
-        lines.append(f'<key name="{escape(name)}" type="{vtype}"><default>{default}</default></key>')
+    for name, vtype, default in keys:
+        lines.append(f'<key name="{escape(name)}" type="{escape(vtype)}">'
+                     f'<default>{escape(default)}</default></key>')
     lines += ["</schema>", "</schemalist>"]
     tmp = tempfile.mkdtemp(prefix="vibemapp-migrate-")
     try:
@@ -190,3 +215,38 @@ def migrate_from_keymappforlinux(settings: Gio.Settings, schema: Gio.SettingsSch
     if copied:
         log.info("Migrated %d settings from KeyMapp for Linux", copied)
     return copied
+
+
+def reset_obsolete_keys(settings: Gio.Settings, schema: Gio.SettingsSchema,
+                        backend: Gio.SettingsBackend | None = None) -> list[str]:
+    """Reset values of keys removed from the schema (``OBSOLETE_KEYS``), once.
+
+    GSettings can't address keys outside a schema, so a relocatable schema
+    holding just the obsolete keys is opened at our own path and each key is
+    reset (which deletes it from dconf). Keys still in ``schema`` are never
+    touched. Needs no ``dconf`` CLI. Returns the keys that had a value."""
+    if settings.get_int(OBSOLETE_VERSION_KEY) >= OBSOLETE_KEYS_VERSION:
+        return []
+    current = set(schema.list_keys())
+    keys = [(name, vtype, default) for name, (vtype, default) in OBSOLETE_KEYS.items()
+            if name not in current]
+    cleared: list[str] = []
+    if keys:
+        prepared = _relocatable_schema(keys)
+        if prepared is None:
+            return []          # no compiler: try again next start
+        obsolete, tmp = prepared
+        try:
+            stale = Gio.Settings.new_full(obsolete, backend, schema.get_path())
+            for name, _vtype, _default in keys:
+                if stale.get_user_value(name) is not None:
+                    cleared.append(name)
+                # Reset even if the stored type differs (get_user_value is None then).
+                stale.reset(name)
+            Gio.Settings.sync()
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+    settings.set_int(OBSOLETE_VERSION_KEY, OBSOLETE_KEYS_VERSION)
+    if cleared:
+        log.info("Removed obsolete settings: %s", ", ".join(cleared))
+    return cleared

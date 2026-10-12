@@ -1,6 +1,6 @@
 # Progress / handoff
 
-**Last updated:** 2026-10-10. **Version:** 1.0.1 (transparent keys + tray `__pycache__` packaging fix).
+**Last updated:** 2026-10-12. **Version:** 1.0.1 (transparent keys + tray `__pycache__` packaging fix).
 The PKGBUILD has since moved to `packaging/arch/`, so install with `cd packaging/arch && makepkg -si`.
 
 ## Current state
@@ -39,7 +39,18 @@ The PKGBUILD has since moved to `packaging/arch/`, so install with `cd packaging
     - Checked against the user's cached layout, and the user confirmed it looks right in `./run-dev.sh`.
   - **1.0.1 released** (tag `v1.0.1`, pushed): transparent keys plus the tray `__pycache__` fix.
 
-  The user is installing 1.0.1 with `cd packaging/arch && makepkg -si`. No work is in progress.
+  - **Known-issues pass** (2026-10-12, uncommitted, unreleased):
+    - Dev runs use app ID `io.github.albertflindt.Vibemapp.Devel` (`appid.py`, `VIBEMAPP_DEVEL=1` from run-dev.sh),
+      striped `devel` header and "Vibemapp (Development)" title. Both IDs count as "own window" for Smart Layers.
+      Config, cache and GSettings stay shared with the installed app.
+    - One-time Gio-native reset of obsolete dconf keys (`ui/settings.py` `OBSOLETE_KEYS`, guarded by the new
+      `obsolete-keys-version` schema key). Clears the stale `last-page` key on the next start.
+    - `GLibUnix.fd_add_full` / `GLibUnix.signal_add` replace deprecated GLib calls (with fallback).
+    - New `tests/ui/tray_menu_shot.py` (renders the real tray menu) and a pointer-free `tests/ui/tooltip_shot.py`.
+    - Dev-run warning: a non-mock dev run watches for the installed app on D-Bus (`ui/instance_check.py`) and shows
+      an `Adw.Banner` with "Quit Installed App" (`org.gtk.Actions` `quit`). The user approved a warning, not a block.
+    - Tray menu (user-approved): status header on top / — / Show|Hide Vibemapp (follows window visibility) /
+      Smart Layers / — / Preferences / Quit. No mnemonics (user's choice).
 
 ## Next steps
 1. **Live-verify key events.** Turn on heatmap recording, type on the Voyager, and check that
@@ -74,13 +85,17 @@ The PKGBUILD has since moved to `packaging/arch/`, so install with `cd packaging
 - **Always open on the Layout page:** the user asked for it, so the `last-page` setting was removed.
 
 ## Known issues / dead ends
-- **No failing tests.** `./check.sh` passes: 156 tests plus lint and data validation, OK on 2026-10-10 after the transparent-keys change.
-  `makepkg -f` and `makepkg -fc` from `packaging/arch/` also succeed (the package wasn't installed).
-- **PyGObject asyncio warning:** the upstream PyGObject 3.58 DeprecationWarning is filtered, not fixed. Drop the `-W` filter once PyGObject is updated.
-- **GSettings dead end:** `Gio.Settings.new_full(schema, None, old_path)` aborts on a fixed-path schema. Migration
-  compiles a relocatable copy of the schema into a temp dir instead (`ui/settings.py`).
-- **Test-teardown dead end:** `Gio.TestDBus` stalled the suite for 30 s on teardown. Tray tests use a private `dbus-daemon`.
-- **Can't screenshot the tray:** there's no grim or screenshot portal, so tray menus can't be screenshotted and are verified over D-Bus instead.
-- **Synthetic cursor stalls:** synthetic cursor warps stall once they pass over an open tooltip (`tests/ui/tooltip_shot.py`). This is a quirk of the test method, not an app bug.
-- **Stale dconf key:** the user's dconf still holds an unused `/io/github/albertflindt/Vibemapp/last-page`. It's harmless; `dconf reset` clears it.
-- **Dev runs can hit the installed app:** `run-dev.sh` shares the installed app's ID, so quit the installed Vibemapp first.
+- **No failing tests.** `./check.sh` passes: 181 tests plus lint and data validation, OK on 2026-10-12.
+- **PyGObject asyncio warning:** still emitted by PyGObject 3.58.0 on Python 3.14.7 (checked 2026-10-12). It's filtered
+  only where unittest runs (check.sh, PKGBUILD `check()`); app runs hide DeprecationWarnings by default. Drop the filter once PyGObject is updated.
+- **GSettings dead end:** `Gio.Settings.new_full(schema, None, old_path)` aborts on a fixed-path schema. Migration and the
+  obsolete-key cleanup compile a relocatable copy of the schema into a temp dir instead (`ui/settings.py` `_relocatable_schema()`).
+- **Test-teardown dead end:** `Gio.TestDBus` stalled the suite for 30 s on teardown. Tray tests use a private `dbus-daemon` (about 1 s).
+- **Tray screenshots (mitigated):** there's still no grim or screenshot portal. `tests/ui/tray_menu_shot.py` fetches the real
+  dbusmenu layout on a private bus and draws it with GTK. It's a faithful rendering, not a capture of Noctalia's own popup.
+- **Tooltip stalls (fixed by changing method):** on Hyprland the tooltip surface takes pointer focus, so GTK destroys it and stops
+  sending motion events, which made synthetic cursor warps unreliable. `tooltip_shot.py` now calls the view's real
+  `do_query_tooltip` and draws a tooltip-styled bubble where GTK would place it. The position isn't pixel-matched against a real tooltip.
+- **Dev and installed side by side:** with the real keyboard, both drive Smart Layers. The dev window shows a warning banner, but
+  the watcher lives in the window, so a dev run sitting in the tray with no window doesn't warn. Accepted for a developer tool.
+- **No `.Devel` desktop file or icon:** the dev ID reuses the base icon. That's fine on Hyprland and Noctalia, but GNOME Shell wouldn't match it.

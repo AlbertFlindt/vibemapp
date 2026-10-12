@@ -20,12 +20,17 @@ Full spec and design history: @docs/SPEC.md. Handoff state: @PROGRESS.md.
 ## Commands
 - **Health check (lint + all tests): `./check.sh`**. Run it before every commit.
 - Run from source: `./run-dev.sh`. Simulated keyboard: `VIBEMAPP_MOCK=1 ./run-dev.sh`.
-  Quit the installed Vibemapp first (tray → Quit). Same app ID, so otherwise
-  run-dev just raises the installed window.
+  run-dev sets `VIBEMAPP_DEVEL=1` → app ID `io.github.albertflindt.Vibemapp.Devel`
+  (striped `devel` header, "Vibemapp (Development)"), so it runs beside the installed
+  app. It shares the real config, cache and GSettings. With the real keyboard both
+  instances drive Smart Layers, so use `VIBEMAPP_MOCK=1` or quit the installed one. The dev
+  window shows a banner with a "Quit Installed App" button while it runs (`ui/instance_check.py`).
 - Single test module: `PYTHONPATH=src python3 -m unittest tests.backend.test_steam`
 - Staged install: `meson setup build --prefix=/usr && meson install -C build --destdir /tmp/stage`
 - Screenshot (no grim on this machine; GTK renders it):
   `PYTHONPATH=src python3 tests/ui/screenshot.py OUT.png [--page smart-layers|heatmap] [--dialog add-rule|preferences|…]`
+  Tray menu (private dbus-daemon, real dbusmenu layout): `PYTHONPATH=src python3 tests/ui/tray_menu_shot.py OUT.png [--state ready|no-keyboard|smart-off] [--window-visible]`.
+  Key tooltips (no pointer moves): `PYTHONPATH=src python3 tests/ui/tooltip_shot.py PREFIX [--layer N] KEY…`
 - Lint is byte-compile plus data validation inside `check.sh`. No ruff, flake8 or mypy installed.
 
 ## Architecture
@@ -54,8 +59,9 @@ Full spec and design history: @docs/SPEC.md. Handoff state: @PROGRESS.md.
   `HYPRLAND_INSTANCE_SIGNATURE` may be unset; the code globs `$XDG_RUNTIME_DIR/hypr/*/`.
 - The GSettings schema has a fixed path. `Gio.Settings.new_full(schema, None, other_path)`
   **aborts the process**. `VIBEMAPP_MEMORY_SETTINGS=1` keeps test runs out of dconf.
-- PyGObject 3.58 + Python 3.14 emit an asyncio DeprecationWarning from `gi/events.py`.
-  It's filtered with `-W ignore::DeprecationWarning:gi.events` (check.sh, `packaging/arch/PKGBUILD`).
+- PyGObject 3.58.0 + Python 3.14.7 emit an asyncio DeprecationWarning from `gi/events.py`
+  (still true 2026-10-12). It's filtered with `-W ignore::DeprecationWarning:gi.events` where
+  unittest runs (check.sh, `packaging/arch/PKGBUILD`); app runs hide it by default.
 - During tests, "Skipping rule with unknown match kind" and "Tray registration failed"
   are expected log lines, not failures.
 - System packages only. There's no pip, pytest or blueprint-compiler; use stdlib `unittest`.

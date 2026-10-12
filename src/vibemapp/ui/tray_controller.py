@@ -15,7 +15,8 @@ from gi.repository import Gio, GObject
 from ..service import KeyboardService
 from .controller import DeviceController
 from .i18n import _
-from .resources import APP_ID
+from ..appid import is_devel
+from .resources import APP_ID, app_title
 from .rules_model import layer_label
 
 log = logging.getLogger(__name__)
@@ -33,10 +34,15 @@ class TrayController(GObject.Object):
 
     # True while the tray icon is shown by a tray host (and enabled).
     active = GObject.Property(type=bool, default=False)
+    # Set by the app: whether the main window is shown. Flips the menu's
+    # Show/Hide item.
+    window_visible = GObject.Property(type=bool, default=False)
 
     def __init__(self, service: KeyboardService, controller: DeviceController,
                  settings: Gio.Settings, *, on_toggle_window: Callable[[], None],
-                 on_show_window: Callable[[], None], on_quit: Callable[[], None]) -> None:
+                 on_show_window: Callable[[], None], on_quit: Callable[[], None],
+                 on_hide_window: Callable[[], None] | None = None,
+                 on_preferences: Callable[[], None] | None = None) -> None:
         super().__init__()
         self.service = service
         self.controller = controller
@@ -44,6 +50,8 @@ class TrayController(GObject.Object):
         self._on_toggle_window = on_toggle_window
         self._on_show_window = on_show_window
         self._on_quit = on_quit
+        self._on_hide_window = on_hide_window
+        self._on_preferences = on_preferences
         self._tray = None
         self._tray_handlers: list[int] = []
         self._handlers = [
@@ -53,6 +61,7 @@ class TrayController(GObject.Object):
             (controller, controller.connect("notify::state", lambda *_a: self._sync())),
             (settings, settings.connect("changed::show-in-tray",
                                         lambda *_a: self._apply_setting())),
+            (self, self.connect("notify::window-visible", lambda *_a: self._sync())),
         ]
         self._apply_setting()
 
@@ -66,7 +75,8 @@ class TrayController(GObject.Object):
         want = self.settings.get_boolean("show-in-tray") and TrayIcon is not None
         if want and self._tray is None:
             try:
-                self._tray = TrayIcon(item_id="vibemapp", title=_("Vibemapp"),
+                self._tray = TrayIcon(item_id="vibemapp-devel" if is_devel() else "vibemapp",
+                                      title=app_title(),
                                       icon_name=APP_ID)
             except Exception:  # noqa: BLE001 — no session bus etc.: no tray
                 log.exception("Could not create the tray icon")
@@ -115,26 +125,42 @@ class TrayController(GObject.Object):
         layer = layout.layers[index] if 0 <= index < len(layout.layers) else None
         return layer_label(layer, index)
 
+    def _status_text(self) -> str:
+        """Menu header: the keyboard and its layer, or why there's none."""
+        device = self.controller.device
+        if device is None:
+            return self._layer_text()
+        # Translators: tray menu header, e.g. "Voyager · Layer 2 · Media".
+        return _("{device} · {layer}").format(device=device.name, layer=self._layer_text())
+
     def _sync(self) -> None:
         if self._tray is None:
             return
         device = self.controller.device
-        layer_text = self._layer_text()
-        self._tray.set_tooltip(device.name if device else _("Vibemapp"), layer_text)
+        self._tray.set_tooltip(device.name if device else _("Vibemapp"), self._layer_text())
+        # Status first (informational, so insensitive), then the window and
+        # feature toggles, then app-level items with Quit last.
         self._tray.set_menu([
-            TrayMenuItem("show", _("Show Vibemapp")),
+            TrayMenuItem("status", self._status_text(), enabled=False),
             TrayMenuItem("sep1", "", separator=True),
+            TrayMenuItem("show", _("Hide Vibemapp") if self.window_visible
+                         else _("Show Vibemapp")),
             TrayMenuItem("smart-layers", _("Smart Layers"),
                          toggle=bool(self.service.props.smart_layers_enabled)),
-            TrayMenuItem("layer", layer_text, enabled=False),
             TrayMenuItem("sep2", "", separator=True),
+            TrayMenuItem("preferences", _("Preferences")),
             TrayMenuItem("quit", _("Quit")),
         ])
 
     def _on_menu_item(self, _tray: object, item_id: str) -> None:
         if item_id == "show":
-            self._on_show_window()
+            if self.window_visible:
+                (self._on_hide_window or self._on_toggle_window)()
+            else:
+                self._on_show_window()
         elif item_id == "smart-layers":
             self.service.props.smart_layers_enabled = not self.service.props.smart_layers_enabled
+        elif item_id == "preferences" and self._on_preferences is not None:
+            self._on_preferences()
         elif item_id == "quit":
             self._on_quit()

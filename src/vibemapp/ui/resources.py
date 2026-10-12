@@ -18,7 +18,11 @@ gi.require_version("Gdk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Gdk, Gtk  # noqa: E402
 
-APP_ID = "io.github.albertflindt.Vibemapp"
+from ..appid import BASE_APP_ID, is_devel  # noqa: E402
+
+# Schema ID, icon name and data-file prefix. The *application* ID may differ
+# in dev runs (``appid.application_id()``); these never do.
+APP_ID = BASE_APP_ID
 PACKAGE_DIR = Path(__file__).resolve().parent.parent
 UI_DIR = Path(os.environ.get("VIBEMAPP_UI_DIR") or Path(__file__).resolve().parent)
 
@@ -33,6 +37,12 @@ def source_data_dir() -> Path | None:
     if (candidate / f"{APP_ID}.gschema.xml").is_file():
         return candidate
     return None
+
+
+def app_title() -> str:
+    """Window and tray title; dev runs are marked so they're easy to tell apart."""
+    from .i18n import _
+    return _("Vibemapp (Development)") if is_devel() else _("Vibemapp")
 
 
 def version() -> str:

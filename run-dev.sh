@@ -14,6 +14,7 @@ glib-compile-schemas --strict "$schemas"
 
 export GSETTINGS_SCHEMA_DIR="$schemas${GSETTINGS_SCHEMA_DIR:+:$GSETTINGS_SCHEMA_DIR}"
 export XDG_DATA_DIRS="$root/data:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+export VIBEMAPP_DEVEL=1   # separate app ID (…Vibemapp.Devel), so the installed app can keep running
 export PYTHONPATH="$root/src${PYTHONPATH:+:$PYTHONPATH}"
 
 exec python3 -m vibemapp "$@"

@@ -335,7 +335,7 @@ class SmartLayersPage(Adw.Bin):
                                             lambda *_a: self._reload(force=True))),
         ]
         focused = service.get_focused_window()
-        if focused and focused.app_class and focused.app_class != rm.OWN_APP_CLASS:
+        if focused and focused.app_class and not rm.is_own_app_class(focused.app_class):
             self._focus = focused
         self._reload(force=True)
 
@@ -454,7 +454,7 @@ class SmartLayersPage(Adw.Bin):
 
     def _on_focus_changed(self, _service: KeyboardService, app_class: str, title: str) -> None:
         # Our own window is ignored by the engine; keep showing the last app.
-        if app_class == rm.OWN_APP_CLASS:
+        if rm.is_own_app_class(app_class):
             return
         window = self.service.get_focused_window() if self.service is not None else None
         if window is None or window.app_class != app_class:

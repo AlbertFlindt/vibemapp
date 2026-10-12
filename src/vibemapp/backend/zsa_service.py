@@ -43,7 +43,8 @@ from .steam import SteamLibrary
 from .migration import migrate_legacy_dirs
 from .oryx import Evt, HandshakeResult, OryxConnection, OryxError, OryxEvent
 from .oryx_api import LayoutCache, LayoutRepository
-from .smart_layers import APP_ID, DEFAULT_LAYOUT_KEY, RulesStore, SmartLayersEngine
+from ..appid import is_own_app_class
+from .smart_layers import DEFAULT_LAYOUT_KEY, RulesStore, SmartLayersEngine
 
 log = logging.getLogger(__name__)
 
@@ -141,7 +142,7 @@ class ZsaKeyboardService(KeyboardService):
             self._flush_id = GLib.timeout_add(self.HEATMAP_FLUSH_MS, self._on_flush_timer)
         self._watcher.start()
         current = self._watcher.current()
-        if current and current[0] != APP_ID:
+        if current and not is_own_app_class(current[0]):
             self._update_focus(*current)
         # Warm the Steam manifest cache off the focus path.
         GLib.idle_add(lambda: (self._steam.games(), GLib.SOURCE_REMOVE)[1])
@@ -596,7 +597,7 @@ class ZsaKeyboardService(KeyboardService):
         return window
 
     def _on_focus_changed(self, _watcher: FocusWatcher, app_class: str, title: str) -> None:
-        if app_class == APP_ID:
+        if is_own_app_class(app_class):
             return
         self._update_focus(app_class, title)       # get_focused_window() is current...
         self.emit("focus-changed", app_class, title)   # ...before listeners run

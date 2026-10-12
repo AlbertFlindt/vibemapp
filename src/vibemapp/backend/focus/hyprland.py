@@ -22,6 +22,14 @@ import socket
 
 from gi.repository import GLib
 
+try:   # GLib >= 2.80 moved the Unix helpers; the GLib.unix_* aliases warn.
+    import gi
+    gi.require_version("GLibUnix", "2.0")
+    from gi.repository import GLibUnix
+    _fd_add_full = GLibUnix.fd_add_full
+except (ImportError, ValueError, AttributeError):   # pragma: no cover - older GLib
+    _fd_add_full = GLib.unix_fd_add_full
+
 from ...models import RunningApp
 from .base import FocusWatcher
 
@@ -231,7 +239,7 @@ class HyprlandFocusWatcher(FocusWatcher):
         self._sock = s
         self._buffer = b""
         self._backoff_ms = self.MIN_BACKOFF_MS
-        self._watch_id = GLib.unix_fd_add_full(
+        self._watch_id = _fd_add_full(
             GLib.PRIORITY_DEFAULT, s.fileno(),
             GLib.IOCondition.IN | GLib.IOCondition.HUP | GLib.IOCondition.ERR,
             self._on_io)

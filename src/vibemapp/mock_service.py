@@ -32,7 +32,7 @@ from .models import (AppRule, Device, FocusedWindow, HeatmapPeriod, RuleMatch, S
                      Layer, Layout, RunningApp)
 from .service import KeyboardService
 from .ui.i18n import _
-from .ui.rules_model import OWN_APP_CLASS, target_layer
+from .ui.rules_model import OWN_APP_CLASS, is_own_app_class, target_layer
 
 MOCK_DEVICE_ID = "mock:/sys/devices/usb3/3-2"
 MOCK_LAYOUT_ID = "pXEbA"
@@ -444,7 +444,7 @@ class MockKeyboardService(KeyboardService):
                 or self._layout is None or self._focused is None):
             return
         app_class, title = self._focused
-        if app_class == OWN_APP_CLASS:
+        if is_own_app_class(app_class):
             return
         rules, fallback = self._rule_set()
         target, rule = target_layer(rules, fallback, app_class, title,

@@ -54,7 +54,9 @@ class TrayControllerTests(unittest.TestCase):
             self.svc, self.ctl, self.settings,
             on_toggle_window=lambda: self.calls.append("toggle"),
             on_show_window=lambda: self.calls.append("show"),
-            on_quit=lambda: self.calls.append("quit"))
+            on_quit=lambda: self.calls.append("quit"),
+            on_hide_window=lambda: self.calls.append("hide"),
+            on_preferences=lambda: self.calls.append("preferences"))
 
     def tearDown(self) -> None:
         tc.TrayIcon = self._orig
@@ -68,13 +70,16 @@ class TrayControllerTests(unittest.TestCase):
         fake = FakeTray.instances[-1]
         self.assertTrue(self.tray.active)
         self.assertEqual([i.id for i in fake.menu],
-                         ["show", "sep1", "smart-layers", "layer", "sep2", "quit"])
-        self.assertFalse(self.item("layer").enabled)
+                         ["status", "sep1", "show", "smart-layers", "sep2", "preferences",
+                          "quit"])
+        self.assertFalse(self.item("status").enabled)
+        self.assertEqual(self.item("status").label, "No keyboard connected")
         self.assertEqual(fake.tooltip[1], "No keyboard connected")
 
         self.svc.simulate_plug()
         self.assertTrue(spin(lambda: self.ctl.state == "ready"))
         self.assertEqual(fake.tooltip, ("Voyager", "Layer 0 · Base"))
+        self.assertEqual(self.item("status").label, "Voyager · Layer 0 · Base")
 
         # Toggles aren't flipped by the tray: we flip state and resend the menu.
         self.svc.props.smart_layers_enabled = False
@@ -84,8 +89,37 @@ class TrayControllerTests(unittest.TestCase):
 
         fake.emit("activate")
         fake.emit("menu-item-activated", "show")
+        fake.emit("menu-item-activated", "preferences")
+        fake.emit("menu-item-activated", "status")      # insensitive header: no-op
         fake.emit("menu-item-activated", "quit")
-        self.assertEqual(self.calls, ["toggle", "show", "quit"])
+        self.assertEqual(self.calls, ["toggle", "show", "preferences", "quit"])
+
+    def test_show_item_follows_window_visibility(self) -> None:
+        fake = FakeTray.instances[-1]
+        self.assertEqual(self.item("show").label, "Show Vibemapp")
+        before = fake.menu
+        self.tray.window_visible = True
+        self.assertIsNot(fake.menu, before)               # menu re-sent
+        self.assertEqual(self.item("show").label, "Hide Vibemapp")
+        fake.emit("menu-item-activated", "show")
+        self.tray.window_visible = False
+        self.assertEqual(self.item("show").label, "Show Vibemapp")
+        fake.emit("menu-item-activated", "show")
+        self.assertEqual(self.calls, ["hide", "show"])
+
+    def test_hide_falls_back_to_toggle(self) -> None:
+        self.tray.shutdown()
+        tray = tc.TrayController(self.svc, self.ctl, self.settings,
+                                 on_toggle_window=lambda: self.calls.append("toggle"),
+                                 on_show_window=lambda: self.calls.append("show"),
+                                 on_quit=lambda: self.calls.append("quit"))
+        try:
+            tray.window_visible = True
+            FakeTray.instances[-1].emit("menu-item-activated", "show")
+            FakeTray.instances[-1].emit("menu-item-activated", "preferences")
+            self.assertEqual(self.calls, ["toggle"])
+        finally:
+            tray.shutdown()
 
     def test_setting_off_closes_tray(self) -> None:
         fake = FakeTray.instances[-1]

@@ -1,4 +1,4 @@
-"""TrayIcon against a fake StatusNotifierWatcher on a private D-Bus (Gio.TestDBus)."""
+"""TrayIcon against a fake StatusNotifierWatcher on a private D-Bus (own dbus-daemon)."""
 
 from __future__ import annotations
 
