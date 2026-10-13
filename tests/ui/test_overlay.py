@@ -139,6 +139,45 @@ class OverlayControllerTests(unittest.TestCase):
         self.assertTrue(surface.view.is_overlay)
 
 
+    def test_hiding_parks_the_surface_instead_of_unmapping(self) -> None:
+        # Unmapping a layer surface makes Hyprland move keyboard focus away from
+        # another app's panel, so hiding only fades out and drops to BACKGROUND.
+        self.connect_keyboard()
+        self.settings.set_string("overlay-mode", "always")
+        surface = self.ctl.surfaces[0]
+        real_in, real_out = self._orig
+        hidden: list[bool] = []
+        surface.set_visible = lambda visible: hidden.append(not visible)  # type: ignore[method-assign]
+        surface.present = lambda: None                                   # type: ignore[method-assign]
+        surface._showing = True
+        real_out(surface)
+        self.assertEqual(self.ls.state(surface)["layer"], FakeLayerShell.Layer.BACKGROUND)
+        self.assertEqual(surface.box.get_opacity(), 0.0)
+        real_in(surface)
+        self.assertEqual(self.ls.state(surface)["layer"], FakeLayerShell.Layer.OVERLAY)
+        self.assertNotIn(True, hidden)            # never set_visible(False)
+
+    def test_hidden_surface_switches_layer_without_crossfade(self) -> None:
+        # Hidden surfaces stay mapped; crossfading on show would flash the old layer.
+        self.settings.set_value("overlay-layers", GLib.Variant("ai", [1, 2]))
+        self.connect_keyboard()
+        self.svc.simulate_layer(1)
+        self.svc.simulate_layer(0)                # hidden, still holds layer 1
+        surface = self.ctl.surfaces[0]
+        calls: list[bool] = []
+        real = surface.view.set_layer
+
+        def spy(layer, animate=True, layers=None):
+            calls.append(animate)
+            real(layer, animate=animate, layers=layers)
+        surface.view.set_layer = spy              # type: ignore[method-assign]
+        self.svc.simulate_layer(2)
+        self.assertEqual(surface.view.get_layer().title, self.svc.get_layout().layers[2].title)
+        self.assertEqual(calls, [False])
+        self.svc.simulate_layer(1)                # visible: layer 2 → 1 may crossfade
+        self.assertEqual(calls[-1], True)
+
+
 @unittest.skipUnless(HAVE_DISPLAY, "needs a display")
 class UnavailableTests(unittest.TestCase):
     def test_no_layer_shell_means_no_surfaces(self) -> None:

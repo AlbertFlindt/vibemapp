@@ -137,6 +137,12 @@ docstring for sizing and half-spacing rules), `ui/overlay_page.py`/`.ui`.
 - Surfaces: plain `Gtk.Window`s not attached to the application, layer OVERLAY (above
   fullscreen windows), keyboard mode NONE, namespace `vibemapp-overlay`, exclusive zone -1,
   empty input region. One surface for a joined board, two when the halves are spaced apart.
+- **Hiding never unmaps.** On Hyprland, unmapping a layer surface recomputes keyboard focus and
+  takes it from another app's focused panel (e.g. Noctalia's session menu opened on a held
+  layer). A hidden surface fades to transparent and parks on the BACKGROUND layer (below all
+  windows, so not over fullscreen ones); showing moves it back to OVERLAY. A hidden surface
+  switches layers without the crossfade, so the old layer never flashes. Surfaces are still
+  rebuilt when placement changes (monitor, size, anchor, spacing).
 - **Visibility** (`overlay-mode`): Off, On Selected Layers (default; `overlay-layers`, none
   ticked by default), Always. Optional hide after N idle seconds. Fades in 80 ms, out 120 ms.
 - **Appearance:** anchor (bottom, top and the four corners, 24 px margin); monitor (focused

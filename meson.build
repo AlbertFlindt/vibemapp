@@ -1,5 +1,5 @@
 project('vibemapp',
-  version: '1.1.2',
+  version: '1.1.3',
   meson_version: '>= 1.0.0',
   license: 'GPL-3.0-or-later',
 )

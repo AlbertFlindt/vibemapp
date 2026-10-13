@@ -1,6 +1,6 @@
 # Progress / handoff
 
-**Last updated:** 2026-10-13. **Released:** 1.1.2 (title changes keep a hand-picked layer; 1.1.1 waits for held keys; 1.1.0 added the overlay).
+**Last updated:** 2026-10-13. **Released:** 1.1.3 (overlay hides without stealing focus or flashing the old layer; 1.1.2 title changes keep a hand-picked layer; 1.1.1 waits for held keys; 1.1.0 added the overlay).
 How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
 
 ## Current state
@@ -68,11 +68,13 @@ How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
 - **Dev-run conflict is a warning, not a block:** banner with "Quit Installed App".
 
 ## Known issues / dead ends
-- **Tests:** `./check.sh` passes, 255 tests plus lint and data validation (2026-10-13).
+- **Tests:** `./check.sh` passes, 257 tests plus lint and data validation (2026-10-13).
 - **PyGObject asyncio warning:** PyGObject 3.58.0 on Python 3.14.7 still emits it (2026-10-12).
   Filtered only where unittest runs (check.sh, PKGBUILD `check()`). Drop the filter once fixed upstream.
 - **GSettings dead end:** `Gio.Settings.new_full(schema, None, old_path)` aborts on a fixed-path
   schema. Migration and obsolete-key cleanup use a relocatable copy (`ui/settings.py` `_relocatable_schema()`).
+- **Overlay must never unmap to hide:** Hyprland then moves keyboard focus off other layer-shell
+  panels (found with Noctalia's session menu). It parks on BACKGROUND instead (`ui/overlay.py`).
 - **gtk4-layer-shell load order:** must load before libwayland, so `_preload.py` comes first in every
   entry point. Imported later, `is_supported()` is quietly False.
 - **Test-teardown dead end:** `Gio.TestDBus` stalled 30 s on teardown. Tray tests use a private `dbus-daemon`.

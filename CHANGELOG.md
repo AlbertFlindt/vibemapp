@@ -2,6 +2,15 @@
 
 All notable changes to Vibemapp. Each version is a tag and a GitHub release.
 
+## 1.1.3 (2026-10-13)
+
+### Fixed
+- Hiding the overlay no longer takes keyboard focus away from another app's panel. Opening a
+  shell's session menu (e.g. Noctalia) on a held layer and releasing the layer key used to
+  leave the menu unresponsive. The overlay now stays in place, invisible and below all
+  windows, instead of closing.
+- The overlay no longer flashes the previous layer for a moment when it appears.
+
 ## 1.1.2 (2026-10-13)
 
 ### Fixed

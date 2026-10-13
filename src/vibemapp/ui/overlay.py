@@ -110,7 +110,15 @@ def monitor_info(monitor: Gdk.Monitor) -> MonitorInfo:
 
 
 class OverlaySurface(Gtk.Window):
-    """One layer-shell surface: an optional layer pill and a KeyboardView."""
+    """One layer-shell surface: an optional layer pill and a KeyboardView.
+
+    Hiding never unmaps the surface. On Hyprland, unmapping a layer surface makes
+    the compositor recompute keyboard focus, which takes it away from another
+    app's focused layer-shell panel (e.g. a shell's session menu opened while a
+    layer key was held). A hidden surface is fully transparent and parked on the
+    BACKGROUND layer instead, below every window, so it doesn't sit over
+    fullscreen windows. Changing the layer keeps it mapped.
+    """
 
     __gtype_name__ = "KmlOverlaySurface"
 
@@ -192,6 +200,7 @@ class OverlaySurface(Gtk.Window):
             return
         self._showing = True
         self._stop_fade()
+        self._ls.set_layer(self, self._ls.Layer.OVERLAY)
         if self.get_mapped():
             self._animate(1.0, FADE_IN_MS)
         else:
@@ -204,9 +213,14 @@ class OverlaySurface(Gtk.Window):
         self._showing = False
         self._stop_fade()
         if not self.get_mapped():
-            self.set_visible(False)
+            self.box.set_opacity(0.0)
+            self._park()
             return
         self._animate(0.0, FADE_OUT_MS)
+
+    def _park(self) -> None:
+        """Hidden: stay mapped (see the class docstring), below all windows."""
+        self._ls.set_layer(self, self._ls.Layer.BACKGROUND)
 
     def _on_map(self, *_args: object) -> None:
         self._click_through()
@@ -226,7 +240,7 @@ class OverlaySurface(Gtk.Window):
             return
         self._fade = None
         if not self._showing:
-            self.set_visible(False)
+            self._park()
 
     def _stop_fade(self) -> None:
         if self._fade is not None:
@@ -457,7 +471,11 @@ class OverlayController(GObject.Object):
             layer = layout.layers[index]
         text = _("No Keyboard Connected") if layout is None else layer_label(layer, index)
         for n, surface in enumerate(self._surfaces):
-            surface.view.set_layer(layer, layers=layout.layers if layout else None)
+            # Crossfade only while it's on screen. A hidden surface stays mapped
+            # (see OverlaySurface), so animating would briefly show the old layer
+            # as it fades in.
+            surface.view.set_layer(layer, animate=surface.showing,
+                                   layers=layout.layers if layout else None)
             surface.set_pill(text if n == 0 else None)
 
 
