@@ -2,7 +2,7 @@
 
 All notable changes to Vibemapp. Each version is a tag and a GitHub release.
 
-## Unreleased
+## 1.1.2 (2026-10-13)
 
 ### Fixed
 - Smart Layers no longer undoes a layer you switched to by hand when the window title
