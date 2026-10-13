@@ -144,11 +144,13 @@ docstring for sizing and half-spacing rules), `ui/overlay_page.py`/`.ui`.
   switches layers without the crossfade, so the old layer never flashes. Surfaces are still
   rebuilt when placement changes (monitor, size, anchor, spacing).
 - **Visibility** (`overlay-mode`): Off, On Selected Layers (default; `overlay-layers`, none
-  ticked by default), Always. Optional hide after N idle seconds. Fades in 80 ms, out 120 ms.
+  ticked by default), Always. Optional hide after N idle seconds. Fades in over `overlay-fade-ms` (default 200 ms, 0 = instant)
+  and out in three quarters of that. Vibemapp animates the fade itself; the compositor's layer
+  animations never apply, since the surface is never unmapped.
 - **Appearance:** anchor (bottom, top and the four corners, 24 px margin); monitor (focused
   via Hyprland, or a fixed connector); size as % of the real keyboard (19.05 mm per key unit,
   default 80 %, 96 DPI fallback); half spacing 0–100 %; at-rest opacity (pressed keys are
-  full strength). Drawing: outlines and tap labels only, white with a dark halo, no hold labels
+  full strength); fade duration. Drawing: outlines and tap labels only, white with a dark halo, no hold labels
   or tooltips; a layer-name pill.
 - **Control:** a Preview switch on the page (`app.overlay-preview`), a tray checkbox,
   `app.toggle-overlay` / `vibemapp --toggle-overlay` for a Hyprland bind (the page shows the

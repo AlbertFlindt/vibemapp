@@ -76,6 +76,12 @@
       <summary>Overlay opacity</summary>
       <description>Overlay opacity in percent while no key is pressed.</description>
     </key>
+    <key name="overlay-fade-ms" type="i">
+      <range min="0" max="1000"/>
+      <default>200</default>
+      <summary>Overlay fade duration</summary>
+      <description>How long the overlay takes to fade in, in milliseconds. Fading out takes three quarters of this. 0 shows and hides it at once.</description>
+    </key>
     <key name="overlay-half-spacing" type="i">
       <range min="0" max="100"/>
       <default>0</default>

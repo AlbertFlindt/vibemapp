@@ -154,6 +154,21 @@
                             </property>
                           </object>
                         </child>
+                        <child>
+                          <object class="AdwSpinRow" id="fade_row">
+                            <property name="title" translatable="yes">_Fade Duration</property>
+                            <property name="use-underline">True</property>
+                            <property name="subtitle" translatable="yes">Milliseconds to fade in, or 0 to show it at once</property>
+                            <property name="adjustment">
+                              <object class="GtkAdjustment">
+                                <property name="lower">0</property>
+                                <property name="upper">1000</property>
+                                <property name="step-increment">50</property>
+                                <property name="page-increment">100</property>
+                              </object>
+                            </property>
+                          </object>
+                        </child>
                       </object>
                     </child>
                     <child>

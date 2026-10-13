@@ -163,6 +163,12 @@ class PageTests(unittest.TestCase):
         self.assertEqual(self.settings.get_int("overlay-size"), 120)
         self.page.opacity_row.set_value(85)
         self.assertEqual(self.settings.get_int("overlay-opacity"), 85)
+        self.assertEqual(int(self.page.fade_row.get_value()),
+                         self.settings.get_int("overlay-fade-ms"))
+        self.page.fade_row.set_value(0)
+        self.assertEqual(self.settings.get_int("overlay-fade-ms"), 0)
+        self.settings.set_int("overlay-fade-ms", 450)
+        self.assertEqual(int(self.page.fade_row.get_value()), 450)
         self.settings.set_int("overlay-idle-seconds", 4)
         self.assertEqual(int(self.page.idle_row.get_value()), 4)
         self.page.half_spacing_row.set_value(100)

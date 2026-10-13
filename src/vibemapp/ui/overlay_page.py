@@ -159,6 +159,7 @@ class OverlayPage(Adw.Bin):
     size_row: Adw.SpinRow = Gtk.Template.Child()
     half_spacing_row: Adw.SpinRow = Gtk.Template.Child()
     opacity_row: Adw.SpinRow = Gtk.Template.Child()
+    fade_row: Adw.SpinRow = Gtk.Template.Child()
     snippet_label: Gtk.Label = Gtk.Template.Child()
 
     def __init__(self) -> None:
@@ -200,7 +201,8 @@ class OverlayPage(Adw.Bin):
                              ("overlay-idle-seconds", self._sync_spins),
                              ("overlay-size", self._sync_spins),
                              ("overlay-half-spacing", self._sync_spins),
-                             ("overlay-opacity", self._sync_spins)):
+                             ("overlay-opacity", self._sync_spins),
+                             ("overlay-fade-ms", self._sync_spins)):
             connect((settings, settings.connect(f"changed::{key}",
                                                 lambda *_a, cb=refresh: cb())))
         connect((service, service.connect("layout-loaded", lambda *_a: self._sync_layers())))
@@ -216,10 +218,7 @@ class OverlayPage(Adw.Bin):
         self.mode_row.connect("notify::selected", self._on_mode_selected)
         self.anchor_row.connect("notify::selected", self._on_anchor_selected)
         self.monitor_row.connect("notify::selected", self._on_monitor_selected)
-        for row, key in ((self.idle_row, "overlay-idle-seconds"),
-                         (self.size_row, "overlay-size"),
-                         (self.half_spacing_row, "overlay-half-spacing"),
-                         (self.opacity_row, "overlay-opacity")):
+        for row, key in self._spin_rows():
             row.connect("notify::value", self._on_spin_value, key)
         self.preview_row.connect("notify::active", self._on_preview_active)
 
@@ -330,12 +329,16 @@ class OverlayPage(Adw.Bin):
 
         self._guarded(apply)
 
+    def _spin_rows(self) -> tuple[tuple[Adw.SpinRow, str], ...]:
+        return ((self.idle_row, "overlay-idle-seconds"),
+                (self.size_row, "overlay-size"),
+                (self.half_spacing_row, "overlay-half-spacing"),
+                (self.opacity_row, "overlay-opacity"),
+                (self.fade_row, "overlay-fade-ms"))
+
     def _sync_spins(self) -> None:
         def apply() -> None:
-            for row, key in ((self.idle_row, "overlay-idle-seconds"),
-                             (self.size_row, "overlay-size"),
-                             (self.half_spacing_row, "overlay-half-spacing"),
-                             (self.opacity_row, "overlay-opacity")):
+            for row, key in self._spin_rows():
                 value = self.settings.get_int(key)
                 if int(row.get_value()) != value:
                     row.set_value(value)

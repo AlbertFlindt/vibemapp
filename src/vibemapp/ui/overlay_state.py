@@ -51,6 +51,25 @@ MIN_PX_PER_MM = 1.5           # ~38 DPI (TVs, projectors)
 MAX_PX_PER_MM = 24.0          # ~610 DPI
 
 
+DEFAULT_FADE_MS = 200          # the overlay-fade-ms schema default
+MAX_FADE_MS = 1000
+
+
+def _get_int(settings, key: str, default: int) -> int:
+    """For keys newer than a settings stand-in (MemorySettings in tests)."""
+    try:
+        return int(settings.get_int(key))
+    except KeyError:
+        return default
+
+
+def fade_durations(config: "OverlayConfig") -> tuple[int, int]:
+    """(fade-in, fade-out) in ms: ``fade_ms`` in, three quarters of it out
+    (hiding should feel quicker than showing). (0, 0) shows and hides at once."""
+    fade_in = max(0, min(MAX_FADE_MS, int(config.fade_ms)))
+    return fade_in, (fade_in * 3 + 2) // 4
+
+
 @dataclass(frozen=True)
 class OverlayConfig:
     """The overlay-* settings, read in one go."""
@@ -62,6 +81,7 @@ class OverlayConfig:
     half_spacing: int = 0      # 0 joined … 100 halves in the corners
     monitor: str = ""          # connector name; "" follows the focused monitor
     idle_seconds: int = 0      # 0 never hides
+    fade_ms: int = DEFAULT_FADE_MS   # fade-in duration; 0 shows/hides at once
 
     @classmethod
     def from_settings(cls, settings) -> "OverlayConfig":
@@ -75,7 +95,8 @@ class OverlayConfig:
                    opacity=int(settings.get_int("overlay-opacity")),
                    half_spacing=int(settings.get_int("overlay-half-spacing")),
                    monitor=settings.get_string("overlay-monitor"),
-                   idle_seconds=int(settings.get_int("overlay-idle-seconds")))
+                   idle_seconds=int(settings.get_int("overlay-idle-seconds")),
+                   fade_ms=_get_int(settings, "overlay-fade-ms", DEFAULT_FADE_MS))
 
 
 def should_show(config: OverlayConfig, active_layer: int, *, has_layout: bool,
@@ -244,7 +265,7 @@ def place_parts(monitor: MonitorInfo, anchor: str, unit: float, board: Bounds,
     return out
 
 
-__all__ = ["ANCHORS", "DEFAULT_MODE", "KEY_PITCH_MM", "MARGIN_PX", "MODES", "MonitorInfo",
+__all__ = ["ANCHORS", "DEFAULT_FADE_MS", "DEFAULT_MODE", "fade_durations", "KEY_PITCH_MM", "MARGIN_PX", "MODES", "MonitorInfo",
            "OverlayConfig", "PartPlacement", "anchor_edges", "geometry_bounds",
            "place_parts", "px_per_mm", "should_show", "split_geometry", "toggled_mode",
            "unit_px"]

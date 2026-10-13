@@ -40,22 +40,20 @@ from ..service import KeyboardService  # noqa: E402
 from .i18n import _  # noqa: E402
 from .keyboard_view import KeyboardView  # noqa: E402
 from .overlay_state import (MonitorInfo, OverlayConfig, PartPlacement,  # noqa: E402
-                            anchor_edges, geometry_bounds, place_parts, should_show,
-                            split_geometry, unit_px)
+                            anchor_edges, fade_durations, geometry_bounds,
+                            place_parts, should_show, split_geometry, unit_px)
 from .rules_model import layer_label  # noqa: E402
 from .view_binder import KeyboardViewBinder  # noqa: E402
 
 log = logging.getLogger(__name__)
 
 NAMESPACE = "vibemapp-overlay"
-FADE_IN_MS = 80
-FADE_OUT_MS = 120
 PILL_GAP_PX = 6
 NO_LAYER_SHELL_ENV = "VIBEMAPP_NO_LAYER_SHELL"
 
 _SETTING_KEYS = ("overlay-mode", "overlay-layers", "overlay-anchor", "overlay-size",
                  "overlay-opacity", "overlay-half-spacing", "overlay-monitor",
-                 "overlay-idle-seconds")
+                 "overlay-idle-seconds", "overlay-fade-ms")
 
 _layer_shell = None
 _layer_shell_checked = False
@@ -130,6 +128,7 @@ class OverlaySurface(Gtk.Window):
         self._ls = layer_shell
         self._showing = False
         self._fade: Adw.TimedAnimation | None = None
+        self._fade_in_ms, self._fade_out_ms = fade_durations(OverlayConfig())
 
         self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=PILL_GAP_PX,
                            can_target=False)
@@ -195,28 +194,34 @@ class OverlaySurface(Gtk.Window):
 
     # --- showing ---------------------------------------------------------
 
+    def set_fade_durations(self, fade_in_ms: int, fade_out_ms: int) -> None:
+        """Takes effect from the next fade; 0 shows or hides at once."""
+        self._fade_in_ms, self._fade_out_ms = max(0, fade_in_ms), max(0, fade_out_ms)
+
     def fade_in(self) -> None:
         if self._showing:
             return
         self._showing = True
         self._stop_fade()
         self._ls.set_layer(self, self._ls.Layer.OVERLAY)
-        if self.get_mapped():
-            self._animate(1.0, FADE_IN_MS)
-        else:
-            self.box.set_opacity(0.0)
+        if not self.get_mapped():
+            self.box.set_opacity(1.0 if self._fade_in_ms == 0 else 0.0)
             self.present()          # fades in on "map"
+        elif self._fade_in_ms == 0:
+            self.box.set_opacity(1.0)
+        else:
+            self._animate(1.0, self._fade_in_ms)
 
     def fade_out(self) -> None:
         if not self._showing:
             return
         self._showing = False
         self._stop_fade()
-        if not self.get_mapped():
+        if not self.get_mapped() or self._fade_out_ms == 0:
             self.box.set_opacity(0.0)
             self._park()
             return
-        self._animate(0.0, FADE_OUT_MS)
+        self._animate(0.0, self._fade_out_ms)
 
     def _park(self) -> None:
         """Hidden: stay mapped (see the class docstring), below all windows."""
@@ -224,8 +229,8 @@ class OverlaySurface(Gtk.Window):
 
     def _on_map(self, *_args: object) -> None:
         self._click_through()
-        if self._showing:
-            self._animate(1.0, FADE_IN_MS)
+        if self._showing and self._fade_in_ms > 0:
+            self._animate(1.0, self._fade_in_ms)
 
     def _animate(self, target: float, duration: int) -> None:
         anim = Adw.TimedAnimation.new(self.box, self.box.get_opacity(), target, duration,
@@ -339,8 +344,10 @@ class OverlayController(GObject.Object):
         if self.config.idle_seconds <= 0:
             self._cancel_idle()
             self._idle = False
+        fades = fade_durations(self.config)
         for surface in self._surfaces:
             surface.set_rest_opacity(self.config.opacity / 100)
+            surface.set_fade_durations(*fades)
         self._update()
 
     def _on_layer_changed(self, _index: int) -> None:
@@ -452,6 +459,7 @@ class OverlayController(GObject.Object):
             surface.place(monitor, vertical, placement, halign)
             surface.set_board(part, placement)
             surface.set_rest_opacity(self.config.opacity / 100)
+            surface.set_fade_durations(*fade_durations(self.config))
             self._surfaces.append(surface)
         if self._binder is not None:
             self._binder.set_views(*(s.view for s in self._surfaces))

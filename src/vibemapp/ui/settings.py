@@ -36,6 +36,7 @@ _DEFAULTS: dict[str, object] = {
     "overlay-anchor": "bottom",
     "overlay-size": 80,
     "overlay-opacity": 60,
+    "overlay-fade-ms": 200,
     "overlay-half-spacing": 0,
     "overlay-monitor": "",
     "overlay-idle-seconds": 0,

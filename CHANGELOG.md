@@ -2,6 +2,20 @@
 
 All notable changes to Vibemapp. Each version is a tag and a GitHub release.
 
+## 1.1.4 (2026-10-13)
+
+### Added
+- **Fade Duration** setting on the Overlay page: how long the overlay takes to fade in, in
+  milliseconds (default 200; fading out takes three quarters of it; 0 shows it at once).
+
+### Fixed
+- The overlay visibly fades in and out again. Since 1.1.3 it no longer closes its window to
+  hide, so the compositor's own fade stopped applying and only a very short fade was left.
+  Vibemapp now runs the fade itself, on any compositor.
+
+### Changed
+- The README and AppStream screenshot shows the whole Overlay page.
+
 ## 1.1.3 (2026-10-13)
 
 ### Fixed

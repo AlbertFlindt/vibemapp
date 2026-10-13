@@ -157,6 +157,57 @@ class OverlayControllerTests(unittest.TestCase):
         self.assertEqual(self.ls.state(surface)["layer"], FakeLayerShell.Layer.OVERLAY)
         self.assertNotIn(True, hidden)            # never set_visible(False)
 
+    def real_surface(self):
+        """The first surface with the real fade_in/fade_out, never presented."""
+        surface = self.ctl.surfaces[0]
+        hidden: list[bool] = []
+        surface.set_visible = lambda visible: hidden.append(not visible)  # type: ignore[method-assign]
+        surface.present = lambda: None                                   # type: ignore[method-assign]
+        surface.get_mapped = lambda: True                                # type: ignore[method-assign]
+        surface._showing = False
+        # Adw finishes animations on unmapped widgets at once; record instead.
+        surface.animations = []
+        surface._animate = lambda target, ms: surface.animations.append((target, ms))
+        return surface, hidden
+
+    def test_fade_setting_applies_live(self) -> None:
+        self.connect_keyboard()
+        self.settings.set_string("overlay-mode", "always")
+        surface = self.ctl.surfaces[0]
+        self.assertEqual((surface._fade_in_ms, surface._fade_out_ms), (200, 150))
+        self.settings.set_int("overlay-fade-ms", 600)
+        self.assertEqual((surface._fade_in_ms, surface._fade_out_ms), (600, 450))
+        self.settings.set_int("overlay-half-spacing", 100)     # rebuilt surfaces too
+        self.assertEqual({(s._fade_in_ms, s._fade_out_ms) for s in self.ctl.surfaces},
+                         {(600, 450)})
+
+    def test_animated_fade_uses_the_durations(self) -> None:
+        self.connect_keyboard()
+        self.settings.set_int("overlay-fade-ms", 400)
+        self.settings.set_string("overlay-mode", "always")
+        surface, _hidden = self.real_surface()
+        real_in, real_out = self._orig
+        real_in(surface)
+        self.assertEqual(self.ls.state(surface)["layer"], FakeLayerShell.Layer.OVERLAY)
+        real_out(surface)
+        self.assertEqual(surface.animations, [(1.0, 400), (0.0, 300)])
+
+    def test_zero_fade_shows_and_hides_at_once_but_still_parks(self) -> None:
+        self.connect_keyboard()
+        self.settings.set_int("overlay-fade-ms", 0)
+        self.settings.set_string("overlay-mode", "always")
+        surface, hidden = self.real_surface()
+        real_in, real_out = self._orig
+        surface.box.set_opacity(0.0)
+        real_in(surface)
+        self.assertEqual(surface.box.get_opacity(), 1.0)
+        self.assertEqual(self.ls.state(surface)["layer"], FakeLayerShell.Layer.OVERLAY)
+        real_out(surface)
+        self.assertEqual(surface.animations, [])              # no animation either way
+        self.assertEqual(surface.box.get_opacity(), 0.0)
+        self.assertEqual(self.ls.state(surface)["layer"], FakeLayerShell.Layer.BACKGROUND)
+        self.assertNotIn(True, hidden)                        # never unmapped
+
     def test_hidden_surface_switches_layer_without_crossfade(self) -> None:
         # Hidden surfaces stay mapped; crossfading on show would flash the old layer.
         self.settings.set_value("overlay-layers", GLib.Variant("ai", [1, 2]))

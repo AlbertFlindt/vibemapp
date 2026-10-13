@@ -1,6 +1,6 @@
 # Progress / handoff
 
-**Last updated:** 2026-10-13. **Released:** 1.1.3 (overlay hides without stealing focus or flashing the old layer; 1.1.2 title changes keep a hand-picked layer; 1.1.1 waits for held keys; 1.1.0 added the overlay).
+**Last updated:** 2026-10-13. **Released:** 1.1.4 (overlay fade owned by Vibemapp, Fade Duration setting; 1.1.3 overlay hides without stealing focus or flashing the old layer; 1.1.2 title changes keep a hand-picked layer; 1.1.1 waits for held keys; 1.1.0 added the overlay).
 How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
 
 ## Current state
@@ -34,6 +34,8 @@ How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
   screenshot URLs (steps in CLAUDE.md).
 
 ## Decisions
+- **Vibemapp owns the overlay's behaviour, not the compositor:** e.g. the fade is our own
+  animation with a setting, rather than Hyprland's layer animations.
 - **Overlay requires gtk4-layer-shell, no fallback window:** the user keeps the app lean with
   optional packages, as long as the UI says what to install.
 - **Overlay settings live on their own sidebar page**, not in Preferences: it has many tweaks.
@@ -42,7 +44,7 @@ How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
   half spacing is a 0–100 % value, not a toggle.
 - **Screenshots come from the mock service** (`data/screenshots/`, `tests/ui/screenshot.py` and
   `tray_menu_shot.py`; heatmap with `VIBEMAPP_MOCK_HEATMAP_SEED=1 --record --size 1000x1000`;
-  overlay page with `--page overlay --overlay-layers 1,2 --size 1000x1000`): no personal data.
+  overlay page with `--page overlay --overlay-layers 1,2 --size 1000x1300`): no personal data.
 - **PKGBUILD builds the GitHub tag, not the working tree:** reproducible packages. Tag and push
   before `makepkg`; use `./run-dev.sh` for untagged work.
 - **PKGBUILD in `packaging/arch/`:** `makepkg -c/-C` deletes `./src`, which at the repo root was our code.
@@ -68,7 +70,7 @@ How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
 - **Dev-run conflict is a warning, not a block:** banner with "Quit Installed App".
 
 ## Known issues / dead ends
-- **Tests:** `./check.sh` passes, 257 tests plus lint and data validation (2026-10-13).
+- **Tests:** `./check.sh` passes, 263 tests plus lint and data validation (2026-10-13).
 - **PyGObject asyncio warning:** PyGObject 3.58.0 on Python 3.14.7 still emits it (2026-10-12).
   Filtered only where unittest runs (check.sh, PKGBUILD `check()`). Drop the filter once fixed upstream.
 - **GSettings dead end:** `Gio.Settings.new_full(schema, None, old_path)` aborts on a fixed-path

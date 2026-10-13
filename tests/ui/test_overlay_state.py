@@ -7,7 +7,7 @@ from gi.repository import GLib
 from vibemapp.backend import geometries
 from vibemapp.mock_service import voyager_geometry
 from vibemapp.models import KeyboardModel, KeyGeometry
-from vibemapp.ui.overlay_state import (MARGIN_PX, MonitorInfo, OverlayConfig, anchor_edges,
+from vibemapp.ui.overlay_state import (DEFAULT_FADE_MS, MARGIN_PX, fade_durations, MonitorInfo, OverlayConfig, anchor_edges,
                                        geometry_bounds, place_parts, px_per_mm,
                                        should_show, split_geometry, toggled_mode, unit_px)
 from vibemapp.ui.settings import MemorySettings
@@ -78,6 +78,27 @@ class ConfigTests(unittest.TestCase):
         settings.set_string("overlay-anchor", "middle")
         config = OverlayConfig.from_settings(settings)
         self.assertEqual((config.mode, config.anchor), ("selected", "bottom"))
+
+
+class FadeTests(unittest.TestCase):
+    def test_out_is_three_quarters_of_in_rounded(self) -> None:
+        self.assertEqual(fade_durations(OverlayConfig(fade_ms=200)), (200, 150))
+        self.assertEqual(fade_durations(OverlayConfig(fade_ms=1000)), (1000, 750))
+        self.assertEqual(fade_durations(OverlayConfig(fade_ms=333)), (333, 250))  # 249.75
+        self.assertEqual(fade_durations(OverlayConfig(fade_ms=2)), (2, 2))        # 1.5 rounds up
+        self.assertEqual(fade_durations(OverlayConfig(fade_ms=1)), (1, 1))
+
+    def test_zero_is_instant_and_out_of_range_is_clamped(self) -> None:
+        self.assertEqual(fade_durations(OverlayConfig(fade_ms=0)), (0, 0))
+        self.assertEqual(fade_durations(OverlayConfig(fade_ms=-5)), (0, 0))
+        self.assertEqual(fade_durations(OverlayConfig(fade_ms=5000)), (1000, 750))
+
+    def test_default_and_setting(self) -> None:
+        settings = MemorySettings()
+        self.assertEqual(OverlayConfig.from_settings(settings).fade_ms, DEFAULT_FADE_MS)
+        self.assertEqual(OverlayConfig().fade_ms, 200)
+        settings.set_int("overlay-fade-ms", 0)
+        self.assertEqual(fade_durations(OverlayConfig.from_settings(settings)), (0, 0))
 
 
 class PlacementTests(unittest.TestCase):

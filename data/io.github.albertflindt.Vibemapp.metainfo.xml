@@ -40,19 +40,19 @@
   <screenshots>
     <screenshot type="default">
       <caption>Your Oryx layout with the active layer</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.1.3/data/screenshots/layout.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.1.4/data/screenshots/layout.png</image>
     </screenshot>
     <screenshot>
       <caption>Smart Layers switches layers per app</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.1.3/data/screenshots/smart-layers.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.1.4/data/screenshots/smart-layers.png</image>
     </screenshot>
     <screenshot>
       <caption>An opt-in heatmap of your key presses</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.1.3/data/screenshots/heatmap.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.1.4/data/screenshots/heatmap.png</image>
     </screenshot>
     <screenshot>
       <caption>Overlay settings: which layers show it, where and how large</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.1.3/data/screenshots/overlay.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.1.4/data/screenshots/overlay.png</image>
     </screenshot>
   </screenshots>
   <branding>
@@ -69,6 +69,11 @@
     <keyword>layer</keyword>
   </keywords>
   <releases>
+    <release version="1.1.4" date="2026-10-13">
+      <description>
+        <p>The overlay fades in and out again, with a Fade Duration setting on the Overlay page (200 ms by default, 0 for instant).</p>
+      </description>
+    </release>
     <release version="1.1.3" date="2026-10-13">
       <description>
         <ul>
