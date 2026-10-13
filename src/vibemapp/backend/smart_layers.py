@@ -251,6 +251,11 @@ class SmartLayersEngine:
     ``send_layer`` is ``layer_move``, which turns off every other layer, so
     switching mid-hold would drop a momentary layer (MO/LT) the user is holding,
     e.g. when Super+arrow on a held layer moves focus to another window.
+
+    A focus change to another app (and enable, connect, rule edits) re-asserts
+    the target layer even if it's unchanged. A title-only change (same class)
+    sends a layer only when the matched target changes, so a shell that sets
+    the title on every command doesn't undo a layer the user toggled by hand.
     """
 
     def __init__(self, store: RulesStore,
@@ -285,6 +290,8 @@ class SmartLayersEngine:
         self._keys_held = False
         self._deferred = False           # an evaluation is waiting for the keys to be released
         self._held_timer: object | None = None
+        self._last_target: int | None = None   # target of the last evaluation
+        self._reassert = True            # send even if the target didn't change
 
     # -- state --
 
@@ -384,6 +391,9 @@ class SmartLayersEngine:
                       steam_app_id: str | None = None) -> None:
         if app_class == self._own_app_class or is_own_app_class(app_class):
             return     # don't reset the layer when our own window takes focus
+        if self._focus is None or self._focus[0] != app_class \
+                or self._focus_steam_app_id != steam_app_id:
+            self._reassert = True
         self._focus = (app_class, title)
         self._focus_steam_app_id = steam_app_id
         if self._active:
@@ -391,6 +401,7 @@ class SmartLayersEngine:
 
     def reevaluate(self) -> None:
         """Evaluate the current focus right now (no debounce)."""
+        self._reassert = True
         self._cancel_pending()
         if self._active:
             self._evaluate()
@@ -449,6 +460,10 @@ class SmartLayersEngine:
             return
         app_class, title = self._focus
         rule, target = self.target_for(app_class, title, self._focus_steam_app_id)
+        if not self._reassert and target == self._last_target:
+            return                       # title-only change, same target: keep the user's layer
+        self._reassert = False
+        self._last_target = target
         if target is None:
             return
         if self.layer_count is not None and not 0 <= target < self.layer_count:

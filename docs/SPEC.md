@@ -105,7 +105,11 @@ exists but can't be opened.
   - `STEAM_GAME`: empty `app_class` means any Steam game; an app id means that game (still
     matched and editable, no longer creatable from the UI).
 - First enabled matching rule wins; no match → fallback layer (`None` = don't change, the
-  default). Set-layer is only sent when the target differs; focus flips are debounced ~50 ms.
+  default). Set-layer is only sent when the target differs from the keyboard's layer; focus
+  flips are debounced ~50 ms.
+- A title-only change (same class) sends a layer only when the matched target changes, so a
+  shell setting its title per command doesn't undo a layer toggled by hand. Focusing another
+  app, enabling, connecting and rule edits re-assert the target.
 - While any key is held, switching waits until the last key is released (10 s timeout in case
   a KEYUP is lost). Set-layer is `layer_move`, which would drop a held MO/LT layer, e.g. when
   Super+arrow on a held layer moves focus.

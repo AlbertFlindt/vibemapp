@@ -186,9 +186,44 @@ class EngineTests(unittest.TestCase):
         self.sched.advance(50)
         self.assertEqual(self.sent, [2])
         self.engine.keyboard_layer_changed(0)            # user changed layer by hand
-        self.engine.focus_changed("firefox", "Docs")
+        self.engine.focus_changed("kitty", "shell")
         self.sched.advance(50)
-        self.assertEqual(self.sent, [2, 2])
+        self.engine.keyboard_layer_changed(1)
+        self.engine.focus_changed("firefox", "Docs")     # back to firefox: re-assert
+        self.sched.advance(50)
+        self.assertEqual(self.sent, [2, 1, 2])
+
+    def test_title_change_keeps_manual_layer(self) -> None:
+        # Shells set the title on every command; that mustn't undo a toggled layer.
+        self._activate()
+        self.engine.focus_changed("kitty", "~")
+        self.sched.advance(50)
+        self.assertEqual(self.sent, [1])
+        self.engine.keyboard_layer_changed(4)            # user toggled a layer (TG)
+        self.engine.focus_changed("kitty", "vim notes.md")
+        self.engine.focus_changed("kitty", "~")
+        self.sched.advance(50)
+        self.assertEqual(self.sent, [1])
+
+    def test_title_change_that_changes_target_sends(self) -> None:
+        self._activate()
+        self.engine.focus_changed("firefox", "GitHub")
+        self.sched.advance(50)
+        self.engine.keyboard_layer_changed(2)
+        self.engine.focus_changed("firefox", "Cats - YouTube")
+        self.sched.advance(50)
+        self.engine.keyboard_layer_changed(3)
+        self.engine.focus_changed("firefox", "GitHub")
+        self.sched.advance(50)
+        self.assertEqual(self.sent, [2, 3, 2])
+
+    def test_reevaluate_reasserts_unchanged_target(self) -> None:
+        self._activate()
+        self.engine.focus_changed("kitty", "~")
+        self.sched.advance(50)
+        self.engine.keyboard_layer_changed(4)
+        self.engine.reevaluate()                         # e.g. TRIGGER_SMART_LAYER
+        self.assertEqual(self.sent, [1, 1])
 
     def test_own_window_ignored(self) -> None:
         self._activate()

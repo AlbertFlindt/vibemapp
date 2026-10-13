@@ -68,7 +68,7 @@ How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
 - **Dev-run conflict is a warning, not a block:** banner with "Quit Installed App".
 
 ## Known issues / dead ends
-- **Tests:** `./check.sh` passes, 248 tests plus lint and data validation (2026-10-13).
+- **Tests:** `./check.sh` passes, 255 tests plus lint and data validation (2026-10-13).
 - **PyGObject asyncio warning:** PyGObject 3.58.0 on Python 3.14.7 still emits it (2026-10-12).
   Filtered only where unittest runs (check.sh, PKGBUILD `check()`). Drop the filter once fixed upstream.
 - **GSettings dead end:** `Gio.Settings.new_full(schema, None, old_path)` aborts on a fixed-path

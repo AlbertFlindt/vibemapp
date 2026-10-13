@@ -2,6 +2,13 @@
 
 All notable changes to Vibemapp. Each version is a tag and a GitHub release.
 
+## Unreleased
+
+### Fixed
+- Smart Layers no longer undoes a layer you switched to by hand when the window title
+  changes. Shells and terminals that set the title on every command used to snap the
+  keyboard back to the app's layer. Switching to another app still applies its layer.
+
 ## 1.1.1 (2026-10-13)
 
 ### Fixed
