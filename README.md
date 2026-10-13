@@ -2,21 +2,57 @@
 
 A GNOME/libadwaita take on ZSA Keymapp for Linux, written in Python with PyGObject.
 
-![Vibemapp's layout view, showing a Voyager layout with layer tabs](data/screenshots/layout.png)
-
-- **Smart Layers:** switches your ZSA keyboard's layer when the focused app changes.
-  Rules can match one app, a window-class regex or all Steam games. Needs Hyprland.
-- **Live layout:** shows your Oryx layout and the active layer.
-- **Overlay:** a click-through, always-on-top drawing of the active layer with live key
-  presses, e.g. while you hold your symbols layer key. Needs `gtk4-layer-shell`.
-- **Heatmap:** opt-in key-press counts. Only counts are stored, never what you typed.
-- **Tray icon:** closing the window keeps Vibemapp running in the tray.
-
 Vibemapp never flashes firmware or writes to the keyboard's EEPROM.
 
-| Smart Layers | Heatmap |
-| --- | --- |
-| ![Smart Layers rules for Firefox, kitty, Blender and all Steam games](data/screenshots/smart-layers.png) | ![Heatmap of key presses over the last 7 days, with the top keys](data/screenshots/heatmap.png) |
+## Features
+
+### Live Layout
+
+Shows your Oryx layout with the keyboard's active layer and the keys you press, live.
+Transparent keys show the key they fall through to.
+
+![Vibemapp's layout view, showing a Voyager layout with layer tabs](data/screenshots/layout.png)
+
+### Smart Layers
+
+Switches your keyboard's layer when the focused app changes. Rules can match one app, a
+window-class regex or all Steam games, with a fallback layer for everything else. Needs Hyprland.
+
+![Smart Layers rules for Firefox, kitty, Blender and all Steam games](data/screenshots/smart-layers.png)
+
+### Overlay
+
+A see-through, click-through drawing of the active layer that lights up the keys you press.
+In "selected" mode it shows only while one of the layers you picked is active: hold your
+symbols layer key and it appears, release it and it fades out. "Always" shows it on every
+layer. It never takes focus, and it follows the focused monitor or stays on a fixed one.
+
+![Overlay settings with the symbols and media layers selected](data/screenshots/overlay.png)
+
+- **Size** is a percentage of your keyboard's real size, so it looks the same on every
+  monitor (computed from each monitor's physical width).
+- **Half spacing** moves the keyboard halves apart, up to the two corners of the screen edge.
+- **Toggle** it from the tray ("Show Overlay"), or bind a key in `~/.config/hypr/keybindings.lua`:
+
+  ```lua
+  hl.bind("SUPER + O", hl.dsp.exec_cmd("vibemapp --toggle-overlay"))
+  ```
+
+Needs `gtk4-layer-shell`: the overlay is a layer-shell surface (namespace `vibemapp-overlay`)
+that sits above fullscreen windows and panels. Without the package the overlay is off, its
+page says what to install, and the rest of Vibemapp works as usual.
+
+### Heatmap
+
+Opt-in key-press counts per key and layer, for today, the last 7 days or all time. Only
+counts are stored, never what you typed.
+
+![Heatmap of key presses over the last 7 days, with the top keys](data/screenshots/heatmap.png)
+
+### Tray Icon
+
+Closing the window keeps Vibemapp, and Smart Layers, running in the tray. The menu shows the
+keyboard and current layer, and toggles Smart Layers and the overlay.
 
 <p align="center">
   <img src="data/screenshots/tray.png" alt="Tray menu with the current layer, Hide Vibemapp, Smart Layers, Preferences and Quit" width="260">
@@ -53,29 +89,6 @@ To start Vibemapp in the tray when Hyprland starts, add this to
 ```lua
 hl.on("hyprland.start", function () hl.exec_cmd("vibemapp --background") end)
 ```
-
-## Overlay
-
-![Overlay settings with the symbols and media layers selected](data/screenshots/overlay.png)
-
-The overlay shows the keyboard's active layer on screen: in "selected" mode only while one
-of the layers you picked is active (hold your symbols layer key and it appears, release it
-and it fades out), in "always" mode on every layer. It never takes focus, clicks go through
-it and it follows the focused monitor (Hyprland), or a fixed one.
-
-Toggle it from the tray ("Show Overlay"), or bind a key in `~/.config/hypr/keybindings.lua`:
-
-```lua
-hl.bind("SUPER + O", hl.dsp.exec_cmd("vibemapp --toggle-overlay"))
-```
-
-The overlay needs `gtk4-layer-shell` (`sudo pacman -S gtk4-layer-shell`): it draws on a
-layer-shell surface (namespace `vibemapp-overlay`) above fullscreen games and panels. Without
-the package the overlay is off and its tray item is hidden.
-
-Its size is a percentage of your keyboard's real size, so it looks the same on every monitor
-(computed from each monitor's physical width). Half spacing moves the keyboard halves apart,
-up to the two corners of the screen edge.
 
 ## Running from source
 

@@ -2,8 +2,10 @@
 
 GNOME/libadwaita clone of ZSA Keymapp for Arch Linux (Python + PyGObject). Headline
 feature: **Smart Layers** — switch the ZSA keyboard's layer when the focused app
-changes (Hyprland only). Also: live layout view, opt-in key heatmap, tray icon.
-Full spec and design history: @docs/SPEC.md. Handoff state: @PROGRESS.md.
+changes (Hyprland only). Also: live layout view, click-through layout overlay
+(gtk4-layer-shell), opt-in key heatmap, tray icon.
+How it works, by feature: @docs/SPEC.md. Handoff state, decisions, dead ends: @PROGRESS.md.
+Release history: `CHANGELOG.md` (not loaded; read it when needed).
 
 ## Install (Arch)
 - Runtime: `python python-gobject gtk4 libadwaita glib2`. Build: `meson`.
@@ -29,7 +31,7 @@ Full spec and design history: @docs/SPEC.md. Handoff state: @PROGRESS.md.
 - Single test module: `PYTHONPATH=src python3 -m unittest tests.backend.test_steam`
 - Staged install: `meson setup build --prefix=/usr && meson install -C build --destdir /tmp/stage`
 - Screenshot (no grim on this machine; GTK renders it):
-  `PYTHONPATH=src python3 tests/ui/screenshot.py OUT.png [--page smart-layers|heatmap] [--dialog add-rule|preferences|…]`
+  `PYTHONPATH=src python3 tests/ui/screenshot.py OUT.png [--page smart-layers|heatmap|overlay] [--dialog add-rule|preferences|…]`
   Tray menu (private dbus-daemon, real dbusmenu layout): `PYTHONPATH=src python3 tests/ui/tray_menu_shot.py OUT.png [--state ready|no-keyboard|smart-off] [--window-visible]`.
   Overlay over a checkerboard/busy backdrop: `PYTHONPATH=src python3 tests/ui/screenshot.py OUT.png --overlay [--backdrop busy] [--half-spacing 40] [--size 1920x1080 --width-mm 530] [--layer 1] [--press 3,15] [--anchor top-right]`.
   Key tooltips (no pointer moves): `PYTHONPATH=src python3 tests/ui/tooltip_shot.py PREFIX [--layer N] KEY…`
@@ -44,7 +46,9 @@ Full spec and design history: @docs/SPEC.md. Handoff state: @PROGRESS.md.
   engine + JSON), `steam`, `heatmap`, `migration`, `geometries`.
 - `tray/`: StatusNotifierItem + dbusmenu over Gio D-Bus (no GTK).
 - `ui/`: libadwaita pages and dialogs. `.ui` files are GtkBuilder XML loaded from the
-  package dir. App lifecycle, tray and signals live in `main.py`.
+  package dir. App lifecycle, tray and signals live in `main.py`. Overlay: `overlay.py`
+  (layer-shell surfaces), `overlay_state.py` (pure logic, unit-tested), `overlay_page.py`;
+  `view_binder.py` wires key/layer signals into any `KeyboardView`.
 - `data/`: desktop, metainfo, gschema, icons, `udev/50-zsa.rules`.
 
 ## Gotchas and constraints
@@ -57,7 +61,8 @@ Full spec and design history: @docs/SPEC.md. Handoff state: @PROGRESS.md.
   interleave). Geometry, layouts, key events and heatmap all use it.
 - Contract and rules JSON changes must stay additive and backward compatible (a missing
   `match` field means `APP`). Update `models.py`/`service.py`, then the backend, mock and UI together.
-- Hyprland config is **Lua** (`hl.on`, `hl.exec_cmd`, `hl.window_rule`), not hyprlang.
+- Hyprland config is **Lua** (`hl.on`, `hl.exec_cmd`, `hl.bind`, `hl.dsp.exec_cmd`), not hyprlang.
+  Vibemapp only reads Hyprland state (`j/` queries); it never sends `keyword`/dispatch.
   `HYPRLAND_INSTANCE_SIGNATURE` may be unset; the code globs `$XDG_RUNTIME_DIR/hypr/*/`.
 - The GSettings schema has a fixed path. `Gio.Settings.new_full(schema, None, other_path)`
   **aborts the process**. `VIBEMAPP_MEMORY_SETTINGS=1` keeps test runs out of dconf.
@@ -82,5 +87,6 @@ Full spec and design history: @docs/SPEC.md. Handoff state: @PROGRESS.md.
   `ui/resources.py` dev fallback, a metainfo `<release>` entry and a `CHANGELOG.md` section.
   Metainfo screenshot URLs point at the tag (`.../vibemapp/vX.Y.Z/data/screenshots/`), so bump them too.
   Then commit, `git tag vX.Y.Z`, `git push origin main --tags`, and publish a GitHub release
-  with that version's changelog section: `gh release create vX.Y.Z --title "Vibemapp X.Y.Z" --notes-file NOTES.md`.
+  with that version's changelog section (write NOTES.md in the scratchpad, not the repo):
+  `gh release create vX.Y.Z --title "Vibemapp X.Y.Z" --notes-file NOTES.md`.
   Repo: https://github.com/AlbertFlindt/vibemapp
