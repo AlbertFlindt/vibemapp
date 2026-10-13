@@ -13,19 +13,17 @@ How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
 - Transparent keys in the layout view.
 - Overlay: click-through, key highlighting, follow-focused and fixed monitor, physical size on
   both monitors, half spacing, SUPER+O `--toggle-overlay` bind with the installed package.
-- Tray (Noctalia), heatmap recording, migration from `keymappforlinux`, dev app ID.
+- Heatmap: counts land on the right keys (user-confirmed 2026-10-13).
+- Tray (Noctalia), migration from `keymappforlinux`, dev app ID.
 
 **Not verified:**
-- Heatmap counts landing on the right keys (key events themselves are confirmed).
 - Steam game focus with a real game running (unit tests only).
 - Moonlander, ErgoDox EZ and Planck EZ: geometry and key order come from QMK data; thumb-key
   angles are estimates.
 - Overlay with fractional monitor scaling, and the overlay on a Planck (no halves).
 
 ## Next steps
-1. **Live-verify heatmap counts.** Turn on recording, type on the Voyager, check the Heatmap
-   page. Index mapping: `backend/oryx.py` (col/row in the event) → `backend/geometries.py`.
-2. **Translations.** Add `po/` (`POTFILES`, `LINGUAS`) and meson `i18n.gettext('vibemapp')`.
+1. **Translations.** Add `po/` (`POTFILES`, `LINGUAS`) and meson `i18n.gettext('vibemapp')`.
    Strings are already in `_()`.
 
 ## Workflow
