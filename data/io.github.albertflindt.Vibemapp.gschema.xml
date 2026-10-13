@@ -36,6 +36,63 @@
       <summary>Obsolete settings cleaned up</summary>
       <description>Internal: which cleanup of settings removed in earlier versions has run.</description>
     </key>
+    <key name="overlay-mode" type="s">
+      <choices>
+        <choice value="off"/>
+        <choice value="selected"/>
+        <choice value="always"/>
+      </choices>
+      <default>"selected"</default>
+      <summary>Overlay visibility</summary>
+      <description>When to show the layout overlay: never, while one of the selected layers is active, or always.</description>
+    </key>
+    <key name="overlay-layers" type="ai">
+      <default>[]</default>
+      <summary>Overlay layers</summary>
+      <description>Layer indices that show the overlay while active, when the overlay visibility is “selected”.</description>
+    </key>
+    <key name="overlay-anchor" type="s">
+      <choices>
+        <choice value="bottom"/>
+        <choice value="bottom-left"/>
+        <choice value="bottom-right"/>
+        <choice value="top"/>
+        <choice value="top-left"/>
+        <choice value="top-right"/>
+      </choices>
+      <default>"bottom"</default>
+      <summary>Overlay position</summary>
+      <description>Screen edge or corner the overlay is anchored to.</description>
+    </key>
+    <key name="overlay-size" type="i">
+      <range min="20" max="150"/>
+      <default>80</default>
+      <summary>Overlay size</summary>
+      <description>Overlay size as a percentage of the keyboard's real size, so it looks the same on every monitor. 100 is life-size.</description>
+    </key>
+    <key name="overlay-opacity" type="i">
+      <range min="20" max="100"/>
+      <default>60</default>
+      <summary>Overlay opacity</summary>
+      <description>Overlay opacity in percent while no key is pressed.</description>
+    </key>
+    <key name="overlay-half-spacing" type="i">
+      <range min="0" max="100"/>
+      <default>0</default>
+      <summary>Overlay half spacing</summary>
+      <description>How far apart the keyboard halves are drawn: 0 joins them, 100 puts them in the two corners of the anchored screen edge.</description>
+    </key>
+    <key name="overlay-monitor" type="s">
+      <default>""</default>
+      <summary>Overlay monitor</summary>
+      <description>Connector name of the monitor that shows the overlay. Empty follows the focused monitor.</description>
+    </key>
+    <key name="overlay-idle-seconds" type="i">
+      <range min="0" max="60"/>
+      <default>0</default>
+      <summary>Hide overlay when idle</summary>
+      <description>Hide the overlay after this many seconds without key presses. 0 never hides it.</description>
+    </key>
     <key name="window-width" type="i">
       <default>960</default>
       <summary>Window width</summary>

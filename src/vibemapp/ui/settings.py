@@ -31,6 +31,14 @@ _DEFAULTS: dict[str, object] = {
     "heatmap-recording": False,
     "migrated-from-keymappforlinux": True,
     "obsolete-keys-version": 0,
+    "overlay-mode": "selected",
+    "overlay-layers": [],
+    "overlay-anchor": "bottom",
+    "overlay-size": 80,
+    "overlay-opacity": 60,
+    "overlay-half-spacing": 0,
+    "overlay-monitor": "",
+    "overlay-idle-seconds": 0,
 }
 
 OLD_PATH = "/io/github/albertflindt/KeyMappForLinux/"
@@ -48,7 +56,8 @@ class MemorySettings(GObject.Object):
 
     def __init__(self) -> None:
         super().__init__()
-        self._values = dict(_DEFAULTS)
+        self._values = {key: list(value) if isinstance(value, list) else value
+                        for key, value in _DEFAULTS.items()}
 
     def _get(self, key: str) -> object:
         return self._values[key]
@@ -68,7 +77,14 @@ class MemorySettings(GObject.Object):
             return GLib.Variant("b", value)
         if isinstance(value, int):
             return GLib.Variant("i", value)
+        if isinstance(value, list):
+            return GLib.Variant("ai", [int(v) for v in value])
         return GLib.Variant("s", str(value))
+
+    def set_value(self, key: str, value: GLib.Variant) -> bool:
+        unpacked = value.unpack()
+        return self._set(key, list(unpacked) if isinstance(unpacked, (list, tuple))
+                         else unpacked)
 
     def bind(self, key: str, obj: GObject.Object, prop: str,
              flags: Gio.SettingsBindFlags) -> None:

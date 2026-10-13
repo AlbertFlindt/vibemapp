@@ -121,6 +121,28 @@ class TrayControllerTests(unittest.TestCase):
         finally:
             tray.shutdown()
 
+    def test_overlay_item(self) -> None:
+        self.tray.shutdown()
+        tray = tc.TrayController(self.svc, self.ctl, self.settings,
+                                 on_toggle_window=lambda: None, on_show_window=lambda: None,
+                                 on_quit=lambda: None,
+                                 on_toggle_overlay=lambda: self.calls.append("overlay"))
+        try:
+            fake = FakeTray.instances[-1]
+            self.assertEqual([i.id for i in fake.menu],
+                             ["status", "sep1", "show", "smart-layers", "overlay", "sep2",
+                              "preferences", "quit"])
+            self.assertEqual(self.item("overlay").label, "Show Overlay")
+            self.assertTrue(self.item("overlay").toggle)      # default mode "selected"
+            fake.emit("menu-item-activated", "overlay")
+            self.assertEqual(self.calls, ["overlay"])
+            self.settings.set_string("overlay-mode", "off")
+            self.assertFalse(self.item("overlay").toggle)
+            self.settings.set_string("overlay-mode", "always")
+            self.assertTrue(self.item("overlay").toggle)
+        finally:
+            tray.shutdown()
+
     def test_setting_off_closes_tray(self) -> None:
         fake = FakeTray.instances[-1]
         self.settings.set_boolean("show-in-tray", False)

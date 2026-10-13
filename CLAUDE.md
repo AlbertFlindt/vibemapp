@@ -9,7 +9,8 @@ Full spec and design history: @docs/SPEC.md. Handoff state: @PROGRESS.md.
 - Runtime: `python python-gobject gtk4 libadwaita glib2`. Build: `meson`.
   `./check.sh` also needs `desktop-file-utils appstream`.
 - Optional: `hyprland` (the only focus source), a StatusNotifier tray host
-  (e.g. Noctalia, waybar) for the tray icon, Steam for Steam-game rules.
+  (e.g. Noctalia, waybar) for the tray icon, Steam for Steam-game rules,
+  `gtk4-layer-shell` (required for the overlay; without it the overlay is off).
 - Keyboard: ZSA board with Oryx firmware (raw HID). Nothing from pip.
 - `cd packaging/arch && makepkg -si` (PKGBUILD builds the `v$pkgver` tag from GitHub, so
   commit, tag and push first; use `./run-dev.sh` for untagged changes. Replaces the old
@@ -30,6 +31,7 @@ Full spec and design history: @docs/SPEC.md. Handoff state: @PROGRESS.md.
 - Screenshot (no grim on this machine; GTK renders it):
   `PYTHONPATH=src python3 tests/ui/screenshot.py OUT.png [--page smart-layers|heatmap] [--dialog add-rule|preferences|…]`
   Tray menu (private dbus-daemon, real dbusmenu layout): `PYTHONPATH=src python3 tests/ui/tray_menu_shot.py OUT.png [--state ready|no-keyboard|smart-off] [--window-visible]`.
+  Overlay over a checkerboard/busy backdrop: `PYTHONPATH=src python3 tests/ui/screenshot.py OUT.png --overlay [--backdrop busy] [--half-spacing 40] [--size 1920x1080 --width-mm 530] [--layer 1] [--press 3,15] [--anchor top-right]`.
   Key tooltips (no pointer moves): `PYTHONPATH=src python3 tests/ui/tooltip_shot.py PREFIX [--layer N] KEY…`
 - Lint is byte-compile plus data validation inside `check.sh`. No ruff, flake8 or mypy installed.
 
@@ -62,6 +64,13 @@ Full spec and design history: @docs/SPEC.md. Handoff state: @PROGRESS.md.
 - PyGObject 3.58.0 + Python 3.14.7 emit an asyncio DeprecationWarning from `gi/events.py`
   (still true 2026-10-12). It's filtered with `-W ignore::DeprecationWarning:gi.events` where
   unittest runs (check.sh, `packaging/arch/PKGBUILD`); app runs hide it by default.
+- **gtk4-layer-shell must be loaded before GTK.** `vibemapp/_preload.py` `ctypes.CDLL`s
+  `libgtk4-layer-shell.so.0` and must be the first import in every entry point
+  (`build-aux/vibemapp.in`, `__main__.py`, `main.py`, `tests/__init__.py`, the `tests/ui/*shot.py`
+  tools). Imported later, `Gtk4LayerShell.is_supported()` is False and the overlay is off (no
+  fallback window). Overlay windows are never added to the Gtk.Application (they'd keep it alive).
+  `VIBEMAPP_NO_LAYER_SHELL=1` simulates the package missing. Tests and the screenshot tool use
+  `tests/ui/shot_util.FakeLayerShell` so surfaces are built off screen.
 - During tests, "Skipping rule with unknown match kind" and "Tray registration failed"
   are expected log lines, not failures.
 - System packages only. There's no pip, pytest or blueprint-compiler; use stdlib `unittest`.

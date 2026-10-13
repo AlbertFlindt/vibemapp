@@ -64,6 +64,13 @@
                                 <property name="icon-name">vibemapp-heatmap-symbolic</property>
                               </object>
                             </child>
+                            <child>
+                              <object class="AdwSidebarItem" id="overlay_item">
+                                <property name="title" translatable="yes">_Overlay</property>
+                                <property name="use-underline">True</property>
+                                <property name="icon-name">video-display-symbolic</property>
+                              </object>
+                            </child>
                           </object>
                         </child>
                       </object>
@@ -148,6 +155,14 @@
                         <property name="name">heatmap</property>
                         <property name="child">
                           <object class="KmlHeatmapPage" id="heatmap_page"/>
+                        </property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkStackPage">
+                        <property name="name">overlay</property>
+                        <property name="child">
+                          <object class="KmlOverlayPage" id="overlay_page"/>
                         </property>
                       </object>
                     </child>

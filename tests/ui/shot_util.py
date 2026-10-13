@@ -54,3 +54,51 @@ def save_widget_png(widget: Gtk.Widget, path: str) -> tuple[int, int]:
     texture = renderer.render_texture(node, Graphene.Rect().init(0, 0, w, h))
     texture.save_to_png(path)
     return w, h
+
+
+class FakeLayerShell:
+    """Stand-in for the ``Gtk4LayerShell`` module: records what the overlay
+    asks of each window instead of turning it into a layer surface. Lets tests
+    and ``screenshot.py --overlay`` build real overlay surfaces off screen."""
+
+    class Edge:
+        LEFT, RIGHT, TOP, BOTTOM = "left", "right", "top", "bottom"
+
+    class Layer:
+        BACKGROUND, BOTTOM, TOP, OVERLAY = range(4)
+
+    class KeyboardMode:
+        NONE, EXCLUSIVE, ON_DEMAND = range(3)
+
+    def __init__(self) -> None:
+        self.windows: dict[int, dict] = {}
+
+    def _state(self, window) -> dict:
+        return self.windows.setdefault(id(window), {"anchor": {}, "margin": {}})
+
+    def init_for_window(self, window) -> None:
+        self._state(window)["init"] = True
+
+    def set_layer(self, window, layer) -> None:
+        self._state(window)["layer"] = layer
+
+    def set_namespace(self, window, namespace) -> None:
+        self._state(window)["namespace"] = namespace
+
+    def set_keyboard_mode(self, window, mode) -> None:
+        self._state(window)["keyboard_mode"] = mode
+
+    def set_exclusive_zone(self, window, zone) -> None:
+        self._state(window)["exclusive_zone"] = zone
+
+    def set_anchor(self, window, edge, anchored) -> None:
+        self._state(window)["anchor"][edge] = bool(anchored)
+
+    def set_margin(self, window, edge, margin) -> None:
+        self._state(window)["margin"][edge] = int(margin)
+
+    def set_monitor(self, window, monitor) -> None:
+        self._state(window)["monitor"] = monitor
+
+    def state(self, window) -> dict:
+        return self.windows[id(window)]

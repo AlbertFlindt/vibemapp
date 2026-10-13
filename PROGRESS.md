@@ -1,6 +1,6 @@
 # Progress / handoff
 
-**Last updated:** 2026-10-12. **Version:** 1.0.2 (tray menu rework, dev app ID, obsolete dconf key cleanup).
+**Last updated:** 2026-10-13. **Version:** 1.1.0 (layout overlay).
 The PKGBUILD has since moved to `packaging/arch/`, so install with `cd packaging/arch && makepkg -si`.
 
 ## Current state
@@ -52,14 +52,31 @@ The PKGBUILD has since moved to `packaging/arch/`, so install with `cd packaging
     - Tray menu (user-approved): status header on top / — / Show|Hide Vibemapp (follows window visibility) /
       Smart Layers / — / Preferences / Quit. No mnemonics (user's choice).
 
+  - **Overlay, released as 1.1.0** (2026-10-13). Built by the PM + UX/backend subagent team.
+    - `ui/overlay.py` (layer-shell surfaces + `OverlayController`, owned by `Application`, not
+      attached to it), pure logic in `ui/overlay_state.py` (visibility, physical sizing at
+      19.05 mm/unit with a 96 DPI fallback, half-spacing placement), `ui/view_binder.py`
+      (shared key/layer wiring for Layout page and overlay), `ui/overlay_page.py`/`.ui` (sidebar page).
+    - `_preload.py` must be imported before any Gtk import (gtk4-layer-shell load order).
+    - Additive contract: `get_pressed_keys()`, `get_focused_monitor()`, `focused-monitor-changed`.
+    - Verified by the user on hardware: click-through, live key highlighting (this also
+      confirms live key events), monitor follow/fixed, physical size on both monitors, half spacing.
+      `--toggle-overlay` was verified against a running dev instance, not yet from the user's
+      Hyprland bind with the installed package.
+
 ## Next steps
-1. **Live-verify key events.** Turn on heatmap recording, type on the Voyager, and check that
-   counts land on the right keys in the Heatmap page. Index mapping is in `backend/oryx.py` and
-   `backend/geometries.py`; it's col/row in the event, then Oryx order.
+1. **Live-verify heatmap counts.** Key events are confirmed live via the overlay; still check that
+   heatmap counts land on the right keys. Also confirm the SUPER+O `--toggle-overlay` bind with 1.1.0 installed.
 2. **Translations.** Add a `po/` directory (`POTFILES`, `LINGUAS`) and meson `i18n.gettext('vibemapp')`.
    Strings are already wrapped in `_()`.
 
 ## Decisions
+- **Overlay requires gtk4-layer-shell, no fallback window:** the user keeps the app lean with optional
+  packages, as long as the UI says what to install.
+- **Overlay settings live on their own sidebar page**, not in Preferences: it has many tweaks.
+- **Overlay shows whenever a selected layer is active**, not only while a layer key is physically held.
+- **Overlay size is % of the real keyboard size** (same look on every monitor), default 80; half
+  spacing is a 0–100 % value, not a toggle.
 - **GitHub releases with `CHANGELOG.md`:** the user wants releases with changelogs, not bare tags. Each release
   gets a CHANGELOG section, a metainfo `<release>`, and `gh release create` with those notes.
 - **Screenshots come from the mock service** (`data/screenshots/`, rendered with `tests/ui/screenshot.py` and

@@ -12,7 +12,8 @@ from vibemapp.backend.focus.hyprland import (HyprlandFocusWatcher,
                                                     find_hyprland_instance,
                                                     parse_activewindow,
                                                     parse_activewindow_json,
-                                                    parse_clients_json, parse_event_line)
+                                                    parse_clients_json, parse_event_line,
+                                                    parse_focusedmon, parse_monitors_json)
 
 from ._util import drain, spin
 
@@ -34,6 +35,7 @@ class FakeHyprland:
         self.active = active if active is not None else {
             "address": "0x2", "class": "kitty", "title": "nvim, a, b"}
         self.queries: list[str] = []
+        self.monitors = [{"name": "DP-1", "focused": False}, {"name": "HDMI-A-1", "focused": True}]
         self.event_clients: list[socket.socket] = []
         self._cmd = self._listen(".socket.sock")
         self._evt = self._listen(".socket2.sock")
@@ -66,6 +68,8 @@ class FakeHyprland:
                         c.sendall(json.dumps(self.active).encode())
                     elif q == "j/clients":
                         c.sendall(json.dumps(CLIENTS).encode())
+                    elif q == "j/monitors":
+                        c.sendall(json.dumps(self.monitors).encode())
                     else:
                         c.sendall(b"unknown request")
                 except OSError:
@@ -121,6 +125,21 @@ class ParseTests(unittest.TestCase):
         apps = parse_clients_json(json.dumps(CLIENTS))
         self.assertEqual([(a.app_class, a.title) for a in apps],
                          [("kitty", "nvim"), ("firefox", "Tab, with, commas")])
+
+
+class MonitorParseTests(unittest.TestCase):
+    def test_focusedmon(self) -> None:
+        self.assertEqual(parse_focusedmon("DP-1,2"), "DP-1")
+        self.assertEqual(parse_focusedmon("HDMI-A-1,my, workspace"), "HDMI-A-1")
+        self.assertIsNone(parse_focusedmon(",3"))
+        self.assertIsNone(parse_focusedmon(""))
+
+    def test_monitors_json(self) -> None:
+        self.assertEqual(parse_monitors_json(json.dumps(
+            [{"name": "DP-1", "focused": False}, {"name": "DP-2", "focused": True}])), "DP-2")
+        self.assertIsNone(parse_monitors_json('[{"name": "DP-1", "focused": false}]'))
+        self.assertIsNone(parse_monitors_json("unknown request"))
+        self.assertIsNone(parse_monitors_json('{"name": "DP-1"}'))
 
 
 class WatcherTests(unittest.TestCase):
@@ -188,6 +207,18 @@ class WatcherTests(unittest.TestCase):
         self.assertTrue(spin(lambda: len(self.server.event_clients) == 1))
         self.server.emit("activewindow>>kitty,shell")
         self.assertTrue(spin(lambda: self.focus[-1] == ("kitty", "shell")))
+
+    def test_focused_monitor(self) -> None:
+        w = self._start()
+        monitors: list[str] = []
+        w.connect("monitor-changed", lambda _w, name: monitors.append(name))
+        self.assertEqual(w.current_monitor(), "HDMI-A-1")     # from j/monitors
+        self.assertTrue(spin(lambda: len(self.server.event_clients) == 1))
+        self.server.emit("focusedmon>>DP-1,3", "focusedmonv2>>DP-1,3",
+                         "focusedmonv2>>HDMI-A-1,1")
+        self.assertTrue(spin(lambda: monitors == ["DP-1", "HDMI-A-1"]))
+        self.assertEqual(w.current_monitor(), "HDMI-A-1")
+        self.assertIn("j/monitors", self.server.queries)
 
     def test_query_refuses_dispatch(self) -> None:
         w = HyprlandFocusWatcher(runtime_dir=self.runtime)

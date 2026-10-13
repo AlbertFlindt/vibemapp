@@ -23,6 +23,7 @@ from . import heat  # noqa: E402
 from .transparency import (BASE_ONLY, TRANSPARENT_MARK, FallThrough,  # noqa: E402
                            binding_label, fallthrough_map, is_transparent, transparent_tooltip)
 from .i18n import _, ngettext  # noqa: E402
+from .overlay_state import geometry_bounds  # noqa: E402,F401  (re-exported)
 
 KEY_GAP = 0.08          # key units between neighbouring keys
 KEY_RADIUS = 0.16       # corner radius, key units
@@ -31,7 +32,8 @@ PRESS_IN_MS = 60
 PRESS_OUT_MS = 280
 FADE_MS = 220
 
-_PROBES = ("fg", "key", "border", "dash", "shade", "accent-bg", "accent-fg")
+_PROBES = ("fg", "key", "border", "dash", "shade", "accent-bg", "accent-fg",
+           "overlay-fg", "overlay-halo")
 
 # Transparent keys: a faint, flat face with a dashed outline, the ▽ marker and
 # the fall-through binding in dimmed text.
@@ -39,6 +41,14 @@ TRANSPARENT_FACE_ALPHA = 0.3
 TRANSPARENT_LABEL_ALPHA = 0.45
 TRANSPARENT_MARK_ALPHA = 0.7
 BLANK_FACE_ALPHA = 0.55
+
+# Overlay style (see set_overlay_style): outlines and tap labels only, light
+# with a dark halo so they read over any content.
+OVERLAY_PRESS_ALPHA = 0.85        # accent fill of a pressed key
+OVERLAY_TRANSPARENT_ALPHA = 0.5   # fall-through label of a transparent key
+OVERLAY_BLANK_ALPHA = 0.6         # outline of a key without a binding
+OVERLAY_LINE_PX = 1.0
+OVERLAY_HALO_PX = 1.5
 
 
 def _rgba(spec: str | None) -> Gdk.RGBA | None:
@@ -61,23 +71,6 @@ def _mix(a: Gdk.RGBA, b: Gdk.RGBA, t: float) -> Gdk.RGBA:
     out.blue = a.blue + (b.blue - a.blue) * t
     out.alpha = a.alpha + (b.alpha - a.alpha) * t
     return out
-
-
-def geometry_bounds(geometry: tuple[KeyGeometry, ...]) -> tuple[float, float, float, float]:
-    """Bounding box (x0, y0, x1, y1) in key units, honouring rotation."""
-    if not geometry:
-        return 0.0, 0.0, 1.0, 1.0
-    xs: list[float] = []
-    ys: list[float] = []
-    for key in geometry:
-        cx, cy = key.x + key.w / 2, key.y + key.h / 2
-        rad = math.radians(key.rotation)
-        cos, sin = math.cos(rad), math.sin(rad)
-        for dx, dy in ((-key.w / 2, -key.h / 2), (key.w / 2, -key.h / 2),
-                       (key.w / 2, key.h / 2), (-key.w / 2, key.h / 2)):
-            xs.append(cx + dx * cos - dy * sin)
-            ys.append(cy + dx * sin + dy * cos)
-    return min(xs), min(ys), max(xs), max(ys)
 
 
 class KeyboardView(Gtk.Widget):
@@ -103,6 +96,10 @@ class KeyboardView(Gtk.Widget):
         self._colors: dict[str, Gdk.RGBA] = {}
         self._heat: dict[int, int] | None = None
         self._heat_max = 0
+        self._overlay = False
+        self._rest_opacity = 1.0
+        self.max_unit_px = MAX_UNIT_PX
+        self._fixed_size: tuple[int, int] | None = None
 
         self._probes: list[Gtk.Widget] = []
         for name in _PROBES:
@@ -165,6 +162,38 @@ class KeyboardView(Gtk.Widget):
         self._heat_max = max(self._heat.values(), default=0) if self._heat else 0
         self._update_accessible_label()
         self.queue_draw()
+
+    def set_overlay_style(self, overlay: bool) -> None:
+        """Overlay drawing: no key faces at rest, light 1px outlines and tap
+        labels with a dark halo, accent fill on pressed keys, no hold labels
+        and no tooltips. Used by the on-screen overlay, never the Layout page."""
+        self._overlay = overlay
+        self.set_has_tooltip(not overlay)
+        if overlay:
+            self.add_css_class("overlay")
+        else:
+            self.remove_css_class("overlay")
+        self._colors.clear()
+        self.queue_draw()
+
+    def set_rest_opacity(self, opacity: float) -> None:
+        """Overlay style: opacity of keys that aren't pressed (pressed keys are
+        drawn at full strength)."""
+        opacity = max(0.0, min(1.0, opacity))
+        if opacity != self._rest_opacity:
+            self._rest_opacity = opacity
+            self.queue_draw()
+
+    def set_fixed_size(self, width: int, height: int) -> None:
+        """Measure exactly ``width`` x ``height`` (the overlay sizes itself
+        from the monitor, not from its window)."""
+        self._fixed_size = (width, height)
+        self.max_unit_px = float("inf")
+        self.queue_resize()
+
+    @property
+    def is_overlay(self) -> bool:
+        return self._overlay
 
     @property
     def heat_max(self) -> int:
@@ -237,7 +266,9 @@ class KeyboardView(Gtk.Widget):
         Gtk.Widget.do_dispose(self)
 
     def _update_accessible_label(self) -> None:
-        if self._heat is not None:
+        if self._overlay and self._layer is not None:
+            label = _("Keyboard overlay showing {layer}").format(layer=self._layer.title)
+        elif self._heat is not None:
             label = _("Key press heatmap")
         elif self._layer is None:
             label = _("Keyboard layout")
@@ -255,12 +286,15 @@ class KeyboardView(Gtk.Widget):
         return Gtk.SizeRequestMode.HEIGHT_FOR_WIDTH
 
     def do_measure(self, orientation: Gtk.Orientation, for_size: int) -> tuple[int, int, int, int]:
+        if self._fixed_size is not None:
+            size = self._fixed_size[0 if orientation == Gtk.Orientation.HORIZONTAL else 1]
+            return size, size, -1, -1
         x0, _y0, x1, _y1 = self._bounds
         width_units = max(x1 - x0, 1.0)
         if orientation == Gtk.Orientation.HORIZONTAL:
             return 200, max(200, int(width_units * 52)), -1, -1
         natural_w = for_size if for_size > 0 else width_units * 52
-        natural = int(min(natural_w, width_units * MAX_UNIT_PX) * self._aspect())
+        natural = int(min(natural_w, width_units * self.max_unit_px) * self._aspect())
         return 100, max(natural, 100), -1, -1
 
     def do_size_allocate(self, width: int, height: int, baseline: int) -> None:
@@ -270,7 +304,7 @@ class KeyboardView(Gtk.Widget):
         """(unit_px, offset_x, offset_y) mapping key units to widget pixels."""
         x0, y0, x1, y1 = self._bounds
         width, height = self.get_width(), self.get_height()
-        unit = min(width / max(x1 - x0, 0.1), height / max(y1 - y0, 0.1), MAX_UNIT_PX)
+        unit = min(width / max(x1 - x0, 0.1), height / max(y1 - y0, 0.1), self.max_unit_px)
         off_x = (width - (x1 - x0) * unit) / 2 - x0 * unit
         off_y = (height - (y1 - y0) * unit) / 2 - y0 * unit
         return unit, off_x, off_y
@@ -319,6 +353,9 @@ class KeyboardView(Gtk.Widget):
         bindings_new = {k.index: k for k in self._layer.keys} if self._layer else {}
         bindings_old = ({k.index: k for k in self._prev_layer.keys}
                         if self._prev_layer is not None and self._fade < 1.0 else None)
+        if self._overlay:
+            self._snapshot_overlay(snapshot, unit, off_x, off_y, bindings_new, bindings_old)
+            return
         for geo in self._geometry:
             self._draw_key(snapshot, geo, unit, off_x, off_y,
                            bindings_new.get(geo.index),
@@ -402,6 +439,108 @@ class KeyboardView(Gtk.Widget):
             self._draw_key_face(snapshot, binding, fall, w, h, unit, fg, self._fade, press)
         else:
             self._draw_key_face(snapshot, binding, fall, w, h, unit, fg, 1.0, press)
+        snapshot.restore()
+
+    # --- overlay style ---------------------------------------------------
+
+    def _snapshot_overlay(self, snapshot: Gtk.Snapshot, unit: float, off_x: float,
+                          off_y: float, bindings_new: dict[int, KeyBinding],
+                          bindings_old: dict[int, KeyBinding] | None) -> None:
+        # One shadow node for the whole board: a crisp 1px dark rim around
+        # every outline and label (four offset copies) plus a soft glow.
+        halo = self._color("overlay-halo")
+        shadows = []
+        for dx, dy, radius in ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0),
+                               (0, 0, OVERLAY_HALO_PX * 2)):
+            shadow = Gsk.Shadow()
+            shadow.color = halo
+            shadow.dx, shadow.dy = float(dx), float(dy)
+            shadow.radius = float(radius)
+            shadows.append(shadow)
+        snapshot.push_shadow(shadows)
+        for geo in self._geometry:
+            self._draw_overlay_key(
+                snapshot, geo, unit, off_x, off_y, bindings_new.get(geo.index),
+                bindings_old.get(geo.index) if bindings_old is not None else None,
+                self._fall.get(geo.index), self._prev_fall.get(geo.index))
+        snapshot.pop()
+
+    def _draw_overlay_key(self, snapshot: Gtk.Snapshot, geo: KeyGeometry, unit: float,
+                          off_x: float, off_y: float, binding: KeyBinding | None,
+                          old: KeyBinding | None, fall: FallThrough | None,
+                          old_fall: FallThrough | None) -> None:
+        transition = self._prev_layer is not None and self._fade < 1.0
+        press = self._press.get(geo.index, 0.0)
+        # Pressed keys come up to full strength whatever the rest opacity.
+        strength = self._rest_opacity + (1.0 - self._rest_opacity) * press
+        cx = off_x + (geo.x + geo.w / 2) * unit
+        cy = off_y + (geo.y + geo.h / 2) * unit
+        w = geo.w * unit - KEY_GAP * unit
+        h = geo.h * unit - KEY_GAP * unit
+        radius = KEY_RADIUS * unit
+
+        snapshot.save()
+        snapshot.translate(Graphene.Point().init(cx, cy))
+        if geo.rotation:
+            snapshot.rotate(geo.rotation)
+        rect = Graphene.Rect().init(-w / 2, -h / 2, w, h)
+        rounded = Gsk.RoundedRect()
+        rounded.init_from_rect(rect, radius)
+
+        if press > 0:
+            snapshot.push_rounded_clip(rounded)
+            snapshot.append_color(
+                _with_alpha(self._color("accent-bg"), OVERLAY_PRESS_ALPHA * press), rect)
+            snapshot.pop()
+
+        def outline_alpha(b: KeyBinding | None) -> float:
+            if is_transparent(b):
+                return OVERLAY_TRANSPARENT_ALPHA
+            blank = b is None or not (b.tap_label or b.hold_label or b.glyph)
+            return OVERLAY_BLANK_ALPHA if blank else 1.0
+
+        line_alpha = outline_alpha(binding)
+        if transition:
+            line_alpha = outline_alpha(old) * (1 - self._fade) + line_alpha * self._fade
+        fg = self._color("overlay-fg")
+        line = _with_alpha(fg, strength * (line_alpha + (1 - line_alpha) * press))
+        snapshot.append_border(rounded, [OVERLAY_LINE_PX] * 4, [line] * 4)
+
+        label_fg = _mix(fg, self._color("accent-fg"), press)
+        if transition:
+            self._draw_overlay_label(snapshot, old, old_fall, w, h, unit, label_fg,
+                                     strength * (1 - self._fade), press)
+            self._draw_overlay_label(snapshot, binding, fall, w, h, unit, label_fg,
+                                     strength * self._fade, press)
+        else:
+            self._draw_overlay_label(snapshot, binding, fall, w, h, unit, label_fg,
+                                     strength, press)
+        snapshot.restore()
+
+    def _draw_overlay_label(self, snapshot: Gtk.Snapshot, binding: KeyBinding | None,
+                            fall: FallThrough | None, w: float, h: float, unit: float,
+                            fg: Gdk.RGBA, alpha: float, press: float) -> None:
+        """Tap label only (the hold label when there's no tap action)."""
+        if alpha <= 0.01 or binding is None:
+            return
+        if is_transparent(binding):
+            dim = OVERLAY_TRANSPARENT_ALPHA + (1 - OVERLAY_TRANSPARENT_ALPHA) * press
+            shown = fall.binding if fall is not None else None
+            if shown is None or not (binding_label(shown) or shown.glyph):
+                shown = KeyBinding(binding.index, tap_label=TRANSPARENT_MARK)
+            binding, alpha = shown, alpha * dim
+        color = _with_alpha(fg, alpha)
+        if binding.glyph and self._draw_glyph(snapshot, binding.glyph, unit * 0.36, 0.0, color):
+            return
+        text = binding_label(binding)
+        if not text:
+            return
+        px = unit * (0.34 if len(text) <= 2 else 0.24)
+        layout = self._fitted_layout(text, px, w * 0.84, bold=True)
+        lw, lh = layout.get_pixel_size()
+        snapshot.save()
+        snapshot.translate(Graphene.Point().init(-lw / 2, -lh / 2))
+        snapshot.append_layout(layout, color)
         snapshot.restore()
 
     def _draw_dashed_outline(self, snapshot: Gtk.Snapshot, rect: Graphene.Rect,

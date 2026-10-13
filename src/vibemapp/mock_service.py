@@ -214,6 +214,8 @@ class MockKeyboardService(KeyboardService):
         self._device: Device | None = None
         self._layout: Layout | None = None
         self._active_layer = 0
+        self._pressed: set[int] = set()
+        self._monitor: str | None = None
         self._focused: tuple[str, str] | None = None
         self._focus_step = 0
         self._last_sent: int | None = None
@@ -323,6 +325,7 @@ class MockKeyboardService(KeyboardService):
         self._device = None
         self._layout = None
         self._active_layer = 0
+        self._pressed.clear()
         self._last_sent = None
         self.emit("disconnected")
 
@@ -351,6 +354,10 @@ class MockKeyboardService(KeyboardService):
 
     def simulate_key(self, index: int, pressed: bool) -> None:
         if self._device is not None:
+            if pressed:
+                self._pressed.add(index)
+            else:
+                self._pressed.discard(index)
             self.emit("key-event", index, pressed)
             if pressed:
                 self._count_press(index)
@@ -425,6 +432,12 @@ class MockKeyboardService(KeyboardService):
         if self._layout is not None:
             self._counts.pop(self._layout.id, None)
             self.emit("key-counts-changed")
+
+    def simulate_monitor(self, connector: str) -> None:
+        """The compositor focused another monitor."""
+        if self._focus_available and connector != self._monitor:
+            self._monitor = connector
+            self.emit("focused-monitor-changed", connector)
 
     def simulate_layer(self, index: int) -> None:
         """The user pressed a layer key on the keyboard."""
@@ -528,6 +541,9 @@ class MockKeyboardService(KeyboardService):
     def get_active_layer(self) -> int:
         return self._active_layer
 
+    def get_pressed_keys(self) -> set[int]:
+        return set(self._pressed)
+
     def request_layer(self, index: int) -> None:
         if self._device is None:
             self.emit("error", _("No keyboard is connected"))
@@ -601,6 +617,9 @@ class MockKeyboardService(KeyboardService):
 
     def get_focused_app(self) -> tuple[str, str] | None:
         return self._focused
+
+    def get_focused_monitor(self) -> str | None:
+        return self._monitor if self._focus_available else None
 
     def shutdown(self) -> None:
         for source_id in list(self._timers):

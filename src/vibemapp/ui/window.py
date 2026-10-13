@@ -1,4 +1,4 @@
-"""Main window: sidebar navigation between Layout and Smart Layers."""
+"""Main window: sidebar navigation between Layout, Smart Layers, Heatmap and Overlay."""
 
 from __future__ import annotations
 
@@ -18,14 +18,15 @@ from ..appid import is_devel  # noqa: E402
 from .resources import app_title, ui_file  # noqa: E402
 from .rules_model import layer_label  # noqa: E402
 from .heatmap_page import HeatmapPage  # noqa: E402
+from .overlay_page import OverlayPage  # noqa: E402
 from .smart_layers_page import SmartLayersPage  # noqa: E402
 
-PAGES = ("layout", "smart-layers", "heatmap")
+PAGES = ("layout", "smart-layers", "heatmap", "overlay")
 
 
 def page_title(name: str) -> str:
     return {"layout": _("Layout"), "smart-layers": _("Smart Layers"),
-            "heatmap": _("Heatmap")}[name]
+            "heatmap": _("Heatmap"), "overlay": _("Overlay")}[name]
 
 
 @Gtk.Template(filename=ui_file("window.ui"))
@@ -40,6 +41,7 @@ class Window(Adw.ApplicationWindow):
     layout_page: LayoutPage = Gtk.Template.Child()
     smart_layers_page: SmartLayersPage = Gtk.Template.Child()
     heatmap_page: HeatmapPage = Gtk.Template.Child()
+    overlay_page: OverlayPage = Gtk.Template.Child()
     device_status_icon: Gtk.Image = Gtk.Template.Child()
     device_status_title: Gtk.Label = Gtk.Template.Child()
     device_status_subtitle: Gtk.Label = Gtk.Template.Child()
@@ -66,6 +68,7 @@ class Window(Adw.ApplicationWindow):
         self.layout_page.setup(service, controller)
         self.smart_layers_page.setup(service, controller, self.add_toast)
         self.heatmap_page.setup(service, controller)
+        self.overlay_page.setup(service, controller, settings, self.add_toast)
         self.layout_page.connect("layers-changed", lambda *_a: self._sync_actions())
 
         self._handlers = [
@@ -92,7 +95,8 @@ class Window(Adw.ApplicationWindow):
             return
         # One banner under each page's header bar (HIG placement); each page
         # has its own toolbar view.
-        for page in (self.layout_page, self.smart_layers_page, self.heatmap_page):
+        for page in (self.layout_page, self.smart_layers_page, self.heatmap_page,
+                     self.overlay_page):
             toolbar = page.get_child()
             if not isinstance(toolbar, Adw.ToolbarView):
                 continue
@@ -275,3 +279,4 @@ class Window(Adw.ApplicationWindow):
         self.layout_page.teardown()
         self.smart_layers_page.teardown()
         self.heatmap_page.teardown()
+        self.overlay_page.teardown()

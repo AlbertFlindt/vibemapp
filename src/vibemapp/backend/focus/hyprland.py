@@ -4,7 +4,9 @@
   ``activewindow>>kitty,nvim foo.py``. The title can contain commas, so only
   the first comma is split. ``activewindow>>,`` means nothing is focused.
 * Command socket ``.socket.sock``: one request per connection. We only send
-  read-only ``j/activewindow`` and ``j/clients``.
+  read-only ``j/activewindow``, ``j/clients`` and ``j/monitors``.
+* The focused monitor comes from ``focusedmon>>NAME,WORKSPACE`` /
+  ``focusedmonv2>>NAME,WORKSPACEID`` (initially from ``j/monitors``).
 * Instance discovery: ``$HYPRLAND_INSTANCE_SIGNATURE`` first, then the newest
   live ``hypr/*/.socket2.sock`` (the env var is often missing in shells that
   weren't started by Hyprland).
@@ -131,6 +133,27 @@ def parse_clients_json(text: str) -> list[RunningApp]:
     return list(seen.values())
 
 
+def parse_focusedmon(data: str) -> str | None:
+    """``focusedmon``/``focusedmonv2`` payload ``MONNAME,WORKSPACE`` -> name.
+    Connector names never contain commas; workspace names may."""
+    name = data.partition(",")[0].strip()
+    return name or None
+
+
+def parse_monitors_json(text: str) -> str | None:
+    """Name of the focused monitor in ``j/monitors`` output, or None."""
+    try:
+        monitors = json.loads(text)
+    except ValueError:
+        return None
+    if not isinstance(monitors, list):
+        return None
+    for mon in monitors:
+        if isinstance(mon, dict) and mon.get("focused") is True and mon.get("name"):
+            return str(mon["name"])
+    return None
+
+
 class HyprlandFocusWatcher(FocusWatcher):
     __gtype_name__ = "KmlHyprlandFocusWatcher"
 
@@ -153,6 +176,7 @@ class HyprlandFocusWatcher(FocusWatcher):
         self._current: tuple[str, str] | None = None
         self._pid: int | None = None
         self._active_address: str | None = None
+        self._monitor: str | None = None
         self._available = False
         self._started = False
 
@@ -163,6 +187,9 @@ class HyprlandFocusWatcher(FocusWatcher):
 
     def current(self) -> tuple[str, str] | None:
         return self._current
+
+    def current_monitor(self) -> str | None:
+        return self._monitor
 
     @property
     def instance_dir(self) -> str | None:
@@ -245,6 +272,7 @@ class HyprlandFocusWatcher(FocusWatcher):
             self._on_io)
         self._set_available(True)
         self._refresh_active()
+        self._refresh_monitor()
 
     def _schedule_retry(self) -> None:
         if not self._started or self._retry_id:
@@ -330,6 +358,10 @@ class HyprlandFocusWatcher(FocusWatcher):
             if self._current and self._active_address and \
                     normalize_address(addr) == self._active_address:
                 self._set_focus(self._current[0], title, self._pid)
+        elif name in ("focusedmon", "focusedmonv2"):
+            monitor = parse_focusedmon(data)
+            if monitor:
+                self._set_monitor(monitor)
         elif name == "closewindow":
             if self._active_address and normalize_address(data) == self._active_address:
                 # Hyprland normally follows up with activewindow; re-query to be safe.
@@ -358,6 +390,17 @@ class HyprlandFocusWatcher(FocusWatcher):
         except ValueError:
             pass
         self._set_focus(*parse_activewindow_json(text), pid)
+
+    def _refresh_monitor(self) -> None:
+        text = self.query("j/monitors")
+        monitor = parse_monitors_json(text) if text else None
+        if monitor:
+            self._set_monitor(monitor)
+
+    def _set_monitor(self, monitor: str) -> None:
+        if monitor != self._monitor:
+            self._monitor = monitor
+            self.emit("monitor-changed", monitor)
 
     def current_pid(self) -> int | None:
         return self._pid

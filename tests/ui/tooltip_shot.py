@@ -38,6 +38,7 @@ os.environ.setdefault("VIBEMAPP_MOCK_HOTPLUG", "0")
 os.environ.setdefault("VIBEMAPP_MOCK_SPEED", "4")
 os.environ.setdefault("VIBEMAPP_MEMORY_SETTINGS", "1")
 
+import vibemapp._preload  # noqa: E402,F401  (gtk4-layer-shell must load before GTK)
 import gi  # noqa: E402
 
 gi.require_version("Gtk", "4.0")

@@ -42,7 +42,8 @@ class TrayController(GObject.Object):
                  settings: Gio.Settings, *, on_toggle_window: Callable[[], None],
                  on_show_window: Callable[[], None], on_quit: Callable[[], None],
                  on_hide_window: Callable[[], None] | None = None,
-                 on_preferences: Callable[[], None] | None = None) -> None:
+                 on_preferences: Callable[[], None] | None = None,
+                 on_toggle_overlay: Callable[[], None] | None = None) -> None:
         super().__init__()
         self.service = service
         self.controller = controller
@@ -52,6 +53,7 @@ class TrayController(GObject.Object):
         self._on_quit = on_quit
         self._on_hide_window = on_hide_window
         self._on_preferences = on_preferences
+        self._on_toggle_overlay = on_toggle_overlay
         self._tray = None
         self._tray_handlers: list[int] = []
         self._handlers = [
@@ -61,6 +63,7 @@ class TrayController(GObject.Object):
             (controller, controller.connect("notify::state", lambda *_a: self._sync())),
             (settings, settings.connect("changed::show-in-tray",
                                         lambda *_a: self._apply_setting())),
+            (settings, settings.connect("changed::overlay-mode", lambda *_a: self._sync())),
             (self, self.connect("notify::window-visible", lambda *_a: self._sync())),
         ]
         self._apply_setting()
@@ -140,13 +143,19 @@ class TrayController(GObject.Object):
         self._tray.set_tooltip(device.name if device else _("Vibemapp"), self._layer_text())
         # Status first (informational, so insensitive), then the window and
         # feature toggles, then app-level items with Quit last.
-        self._tray.set_menu([
+        items = [
             TrayMenuItem("status", self._status_text(), enabled=False),
             TrayMenuItem("sep1", "", separator=True),
             TrayMenuItem("show", _("Hide Vibemapp") if self.window_visible
                          else _("Show Vibemapp")),
             TrayMenuItem("smart-layers", _("Smart Layers"),
                          toggle=bool(self.service.props.smart_layers_enabled)),
+        ]
+        if self._on_toggle_overlay is not None:
+            # Checked while the overlay is on (any visibility but "off").
+            items.append(TrayMenuItem("overlay", _("Show Overlay"),
+                                      toggle=self.settings.get_string("overlay-mode") != "off"))
+        self._tray.set_menu(items + [
             TrayMenuItem("sep2", "", separator=True),
             TrayMenuItem("preferences", _("Preferences")),
             TrayMenuItem("quit", _("Quit")),
@@ -160,6 +169,8 @@ class TrayController(GObject.Object):
                 self._on_show_window()
         elif item_id == "smart-layers":
             self.service.props.smart_layers_enabled = not self.service.props.smart_layers_enabled
+        elif item_id == "overlay" and self._on_toggle_overlay is not None:
+            self._on_toggle_overlay()
         elif item_id == "preferences" and self._on_preferences is not None:
             self._on_preferences()
         elif item_id == "quit":

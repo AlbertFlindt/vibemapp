@@ -95,6 +95,7 @@ class ZsaKeyboardService(KeyboardService):
         self._watcher = focus_watcher if focus_watcher is not None else create_focus_watcher()
         self._watcher.connect("focus-changed", self._on_focus_changed)
         self._watcher.connect("availability-changed", self._on_focus_source_changed)
+        self._watcher.connect("monitor-changed", self._on_monitor_changed)
         self._repo = repository or LayoutRepository(LayoutCache(cache_dir))
         self._connection_factory = connection_factory or (
             lambda path, on_event, on_closed: OryxConnection(path, on_event, on_closed))
@@ -108,6 +109,7 @@ class ZsaKeyboardService(KeyboardService):
         self._layout: Layout | None = None
         self._layout_waiters: dict[tuple[str, str | None], list[Callable]] = {}
         self._active_layer = 0
+        self._pressed: set[int] = set()
         self._focused: tuple[str, str] | None = None
         self._shut_down = False
         self._started = False
@@ -313,6 +315,7 @@ class ZsaKeyboardService(KeyboardService):
         self._device = None
         self._layout = None
         self._active_layer = 0
+        self._pressed.clear()
         self._engine.set_connected(False)
         self._engine.layer_count = None
         self._engine.set_layout(None)      # emits rules-changed (no rules without a keyboard)
@@ -442,6 +445,10 @@ class ZsaKeyboardService(KeyboardService):
             index = geometries.matrix_to_index(self._device.model, ev.row, ev.col)
             if index is not None:
                 pressed = ev.code == Evt.KEYDOWN
+                if pressed:
+                    self._pressed.add(index)
+                else:
+                    self._pressed.discard(index)
                 if pressed and self.props.heatmap_recording:
                     self._heatmap.record(self._active_layer, index)
                     self._schedule_counts_changed()
@@ -524,6 +531,9 @@ class ZsaKeyboardService(KeyboardService):
     def get_active_layer(self) -> int:
         return self._active_layer
 
+    def get_pressed_keys(self) -> set[int]:
+        return set(self._pressed)
+
     def request_layer(self, index: int) -> None:
         if self._device is None:
             self.emit("error", _("No keyboard is connected"))
@@ -584,6 +594,13 @@ class ZsaKeyboardService(KeyboardService):
 
     def list_steam_games(self) -> list[SteamGame]:
         return self._steam.games()
+
+    def get_focused_monitor(self) -> str | None:
+        return self._watcher.current_monitor()
+
+    def _on_monitor_changed(self, _watcher: FocusWatcher, monitor: str) -> None:
+        # Watchers emit from GLib sources, i.e. already on the main loop.
+        self.emit("focused-monitor-changed", monitor)
 
     def _update_focus(self, app_class: str, title: str) -> FocusedWindow:
         try:

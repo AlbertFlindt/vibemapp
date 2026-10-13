@@ -15,6 +15,7 @@ from .i18n import _  # noqa: E402
 from .keyboard_view import KeyboardView  # noqa: E402,F401  (registers the type)
 from .resources import ui_file  # noqa: E402
 from .rules_model import layer_label  # noqa: E402
+from .view_binder import KeyboardViewBinder  # noqa: E402
 from .widgets import LayerDot  # noqa: E402
 
 MAX_TOGGLES = 6
@@ -49,15 +50,16 @@ class LayoutPage(Adw.Bin):
         self._selector: Gtk.Widget | None = None
         self._selector_handler = 0
         self._status_action: str | None = None
+        self._binder: KeyboardViewBinder | None = None
 
     def setup(self, service: KeyboardService, controller: DeviceController) -> None:
         self.service = service
         self.controller = controller
+        self._binder = KeyboardViewBinder(service, self.keyboard_view,
+                                          on_layer_changed=self._on_layer_changed,
+                                          active=lambda: self._layout is not None)
         self._handlers = [
-            (service, service.connect("layer-changed", self._on_layer_changed)),
-            (service, service.connect("key-event", self._on_key_event)),
             (service, service.connect("layout-loaded", lambda *_a: self._sync())),
-            (service, service.connect("disconnected", lambda *_a: self.keyboard_view.clear_pressed())),
             (controller, controller.connect("notify::state", lambda *_a: self._sync())),
             (controller, controller.connect("notify::message", lambda *_a: self._sync())),
         ]
@@ -67,6 +69,9 @@ class LayoutPage(Adw.Bin):
         for obj, handler in getattr(self, "_handlers", []):
             obj.disconnect(handler)
         self._handlers = []
+        if self._binder is not None:
+            self._binder.disconnect()
+            self._binder = None
 
     # --- state -----------------------------------------------------------
 
@@ -246,13 +251,9 @@ class LayoutPage(Adw.Bin):
             layer=layer_label(active_layer, active)))
         self.request_revealer.set_reveal_child(active != self._view_layer)
 
-    def _on_layer_changed(self, _service: KeyboardService, index: int) -> None:
+    def _on_layer_changed(self, index: int) -> None:
         # Follow the keyboard: the view jumps to whatever layer it reports.
         if self._layout is not None and 0 <= index < len(self._layout.layers):
             self.view_layer_index(index)
         self._update_active_label()
         self.emit("layers-changed")
-
-    def _on_key_event(self, _service: KeyboardService, index: int, pressed: bool) -> None:
-        if self._layout is not None:
-            self.keyboard_view.set_key_pressed(index, pressed)

@@ -1,0 +1,287 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface domain="vibemapp">
+  <requires lib="gtk" version="4.0"/>
+  <requires lib="Adw" version="1.0"/>
+  <template class="KmlOverlayPage" parent="AdwBin">
+    <property name="child">
+      <object class="AdwToolbarView">
+        <child type="top">
+          <object class="AdwHeaderBar">
+            <property name="title-widget">
+              <object class="AdwWindowTitle">
+                <property name="title" translatable="yes">Overlay</property>
+              </object>
+            </property>
+          </object>
+        </child>
+        <property name="content">
+          <object class="GtkStack" id="stack">
+            <child>
+              <object class="GtkStackPage">
+                <property name="name">settings</property>
+                <property name="child">
+                  <object class="AdwPreferencesPage" id="prefs_page">
+                    <property name="description" translatable="yes">A see-through view of the active layer that lights up the keys you press. Clicks pass through it.</property>
+                    <child>
+                      <object class="AdwPreferencesGroup">
+                        <property name="title" translatable="yes">Visibility</property>
+                        <child>
+                          <object class="AdwComboRow" id="mode_row">
+                            <property name="title" translatable="yes">_Show Overlay</property>
+                            <property name="use-underline">True</property>
+                            <property name="model">
+                              <object class="GtkStringList">
+                                <items>
+                                  <item translatable="yes">Off</item>
+                                  <item translatable="yes">On Selected Layers</item>
+                                  <item translatable="yes">Always</item>
+                                </items>
+                              </object>
+                            </property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwSpinRow" id="idle_row">
+                            <property name="title" translatable="yes">Hide When _Idle</property>
+                            <property name="use-underline">True</property>
+                            <property name="subtitle" translatable="yes">Seconds without key presses, or 0 to keep it shown</property>
+                            <property name="numeric">True</property>
+                            <property name="adjustment">
+                              <object class="GtkAdjustment">
+                                <property name="lower">0</property>
+                                <property name="upper">60</property>
+                                <property name="step-increment">1</property>
+                                <property name="page-increment">5</property>
+                              </object>
+                            </property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="AdwPreferencesGroup" id="layers_group">
+                        <property name="title" translatable="yes">Layers</property>
+                        <property name="description" translatable="yes">The overlay shows while one of these layers is active, for example while you hold a layer key</property>
+                        <child>
+                          <object class="GtkListBox" id="layers_list">
+                            <property name="selection-mode">none</property>
+                            <accessibility>
+                              <property name="label" translatable="yes">Layers that show the overlay</property>
+                            </accessibility>
+                            <style>
+                              <class name="boxed-list"/>
+                            </style>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="AdwPreferencesGroup">
+                        <property name="title" translatable="yes">Appearance</property>
+                        <child>
+                          <object class="AdwSwitchRow" id="preview_row">
+                            <property name="title" translatable="yes">_Preview Overlay</property>
+                            <property name="use-underline">True</property>
+                            <property name="subtitle" translatable="yes">Show the overlay now while you adjust it</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwComboRow" id="anchor_row">
+                            <property name="title" translatable="yes">P_osition</property>
+                            <property name="use-underline">True</property>
+                            <property name="model">
+                              <object class="GtkStringList">
+                                <items>
+                                  <item translatable="yes">Bottom</item>
+                                  <item translatable="yes">Bottom Left</item>
+                                  <item translatable="yes">Bottom Right</item>
+                                  <item translatable="yes">Top</item>
+                                  <item translatable="yes">Top Left</item>
+                                  <item translatable="yes">Top Right</item>
+                                </items>
+                              </object>
+                            </property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwComboRow" id="monitor_row">
+                            <property name="title" translatable="yes">_Monitor</property>
+                            <property name="use-underline">True</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwSpinRow" id="size_row">
+                            <property name="title" translatable="yes">Si_ze</property>
+                            <property name="use-underline">True</property>
+                            <property name="subtitle" translatable="yes">Percent of your keyboard's real size, so 100 is life-size</property>
+                            <property name="adjustment">
+                              <object class="GtkAdjustment">
+                                <property name="lower">20</property>
+                                <property name="upper">150</property>
+                                <property name="step-increment">5</property>
+                                <property name="page-increment">10</property>
+                              </object>
+                            </property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwSpinRow" id="half_spacing_row">
+                            <property name="title" translatable="yes">Half _Spacing</property>
+                            <property name="use-underline">True</property>
+                            <property name="subtitle" translatable="yes">Percent: 0 joins the halves, 100 puts them in the screen corners</property>
+                            <property name="adjustment">
+                              <object class="GtkAdjustment">
+                                <property name="lower">0</property>
+                                <property name="upper">100</property>
+                                <property name="step-increment">5</property>
+                                <property name="page-increment">10</property>
+                              </object>
+                            </property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwSpinRow" id="opacity_row">
+                            <property name="title" translatable="yes">Op_acity</property>
+                            <property name="use-underline">True</property>
+                            <property name="subtitle" translatable="yes">Percent, while no key is pressed</property>
+                            <property name="adjustment">
+                              <object class="GtkAdjustment">
+                                <property name="lower">20</property>
+                                <property name="upper">100</property>
+                                <property name="step-increment">5</property>
+                                <property name="page-increment">10</property>
+                              </object>
+                            </property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="AdwPreferencesGroup">
+                        <property name="title" translatable="yes">Keyboard Shortcut</property>
+                        <property name="description" translatable="yes">Apps can't add system-wide shortcuts on Wayland. To show or hide the overlay with a key, add this to ~/.config/hypr/keybindings.lua (or any file required from hyprland.lua)</property>
+                        <child>
+                          <object class="GtkOverlay">
+                            <property name="child">
+                              <object class="GtkBox">
+                                <style>
+                                  <class name="card"/>
+                                </style>
+                                <child>
+                                  <object class="GtkLabel" id="snippet_label">
+                                    <property name="selectable">True</property>
+                                    <property name="hexpand">True</property>
+                                    <property name="xalign">0</property>
+                                    <property name="wrap">True</property>
+                                    <property name="wrap-mode">char</property>
+                                    <property name="margin-top">12</property>
+                                    <property name="margin-bottom">12</property>
+                                    <property name="margin-start">12</property>
+                                    <property name="margin-end">48</property>
+                                    <accessibility>
+                                      <property name="label" translatable="yes">Hyprland shortcut snippet</property>
+                                    </accessibility>
+                                    <style>
+                                      <class name="monospace"/>
+                                    </style>
+                                  </object>
+                                </child>
+                              </object>
+                            </property>
+                            <child type="overlay">
+                              <object class="GtkButton">
+                                <property name="icon-name">edit-copy-symbolic</property>
+                                <property name="halign">end</property>
+                                <property name="valign">start</property>
+                                <property name="margin-top">6</property>
+                                <property name="margin-end">6</property>
+                                <property name="tooltip-text" translatable="yes">Copy</property>
+                                <signal name="clicked" handler="on_copy_clicked"/>
+                                <accessibility>
+                                  <property name="label" translatable="yes">Copy the Hyprland shortcut snippet</property>
+                                </accessibility>
+                                <style>
+                                  <class name="flat"/>
+                                </style>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkStackPage">
+                <property name="name">unavailable</property>
+                <property name="child">
+                  <object class="AdwStatusPage" id="unavailable_page">
+                    <property name="icon-name">video-display-symbolic</property>
+                    <property name="title" translatable="yes">Overlay Unavailable</property>
+                    <property name="description" translatable="yes">The overlay needs the gtk4-layer-shell package. The rest of Vibemapp works without it.
+
+Install it, then restart Vibemapp.</property>
+                    <property name="child">
+                      <object class="AdwClamp">
+                        <property name="maximum-size">400</property>
+                        <property name="child">
+                          <object class="GtkOverlay">
+                            <property name="child">
+                              <object class="GtkBox">
+                                <style>
+                                  <class name="card"/>
+                                </style>
+                                <child>
+                                  <object class="GtkLabel" id="install_label">
+                                    <property name="selectable">False</property>
+                                    <property name="hexpand">True</property>
+                                    <property name="xalign">0</property>
+                                    <property name="wrap">True</property>
+                                    <property name="wrap-mode">char</property>
+                                    <property name="margin-top">12</property>
+                                    <property name="margin-bottom">12</property>
+                                    <property name="margin-start">12</property>
+                                    <property name="margin-end">48</property>
+                                    <accessibility>
+                                      <property name="label" translatable="yes">Install command</property>
+                                    </accessibility>
+                                    <style>
+                                      <class name="monospace"/>
+                                    </style>
+                                  </object>
+                                </child>
+                              </object>
+                            </property>
+                            <child type="overlay">
+                              <object class="GtkButton">
+                                <property name="icon-name">edit-copy-symbolic</property>
+                                <property name="halign">end</property>
+                                <property name="valign">start</property>
+                                <property name="margin-top">6</property>
+                                <property name="margin-end">6</property>
+                                <property name="tooltip-text" translatable="yes">Copy</property>
+                                <signal name="clicked" handler="on_copy_install_clicked"/>
+                                <accessibility>
+                                  <property name="label" translatable="yes">Copy the install command</property>
+                                </accessibility>
+                                <style>
+                                  <class name="flat"/>
+                                </style>
+                              </object>
+                            </child>
+                          </object>
+                        </property>
+                      </object>
+                    </property>
+                  </object>
+                </property>
+              </object>
+            </child>
+          </object>
+        </property>
+      </object>
+    </property>
+  </template>
+</interface>

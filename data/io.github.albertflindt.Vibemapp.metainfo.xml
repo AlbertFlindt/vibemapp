@@ -40,15 +40,19 @@
   <screenshots>
     <screenshot type="default">
       <caption>Your Oryx layout with the active layer</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.0.2/data/screenshots/layout.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.1.0/data/screenshots/layout.png</image>
     </screenshot>
     <screenshot>
       <caption>Smart Layers switches layers per app</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.0.2/data/screenshots/smart-layers.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.1.0/data/screenshots/smart-layers.png</image>
     </screenshot>
     <screenshot>
       <caption>An opt-in heatmap of your key presses</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.0.2/data/screenshots/heatmap.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.1.0/data/screenshots/heatmap.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Overlay settings: which layers show it, where and how large</caption>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.1.0/data/screenshots/overlay.png</image>
     </screenshot>
   </screenshots>
   <branding>
@@ -65,6 +69,15 @@
     <keyword>layer</keyword>
   </keywords>
   <releases>
+    <release version="1.1.0" date="2026-10-13">
+      <description>
+        <ul>
+          <li>A see-through, click-through overlay of the active layer that lights up the keys you press, shown on the layers you choose (needs gtk4-layer-shell)</li>
+          <li>The overlay has the same physical size on every monitor, can follow the focused monitor, and can spread the keyboard halves apart</li>
+          <li>Toggle the overlay from the tray or with vibemapp --toggle-overlay bound to a Hyprland key</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.2" date="2026-10-12">
       <description>
         <ul>

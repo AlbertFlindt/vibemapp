@@ -13,12 +13,14 @@ class FocusWatcher(GObject.Object):
     ``app_class`` is ``""`` when no window is focused. Signals are emitted on
     the GLib main loop. ``availability-changed(bool)`` fires when the
     source appears or goes away (for example when the compositor restarts).
+    ``monitor-changed(connector)`` fires when the focused monitor changes.
     """
 
     __gtype_name__ = "KmlFocusWatcher"
     __gsignals__ = {
         "focus-changed": (GObject.SignalFlags.RUN_LAST, None, (str, str)),
         "availability-changed": (GObject.SignalFlags.RUN_LAST, None, (bool,)),
+        "monitor-changed": (GObject.SignalFlags.RUN_LAST, None, (str,)),
     }
 
     def available(self) -> bool:
@@ -30,6 +32,10 @@ class FocusWatcher(GObject.Object):
 
     def current(self) -> tuple[str, str] | None:
         """Last known (app_class, title), or None if unknown."""
+        return None
+
+    def current_monitor(self) -> str | None:
+        """Connector name of the focused monitor ("DP-1"), if known."""
         return None
 
     def current_pid(self) -> int | None:

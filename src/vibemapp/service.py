@@ -54,6 +54,10 @@ class KeyboardService(GObject.Object):
         # Heatmap counts for the current layout changed (throttled to at most
         # about once per second; also emitted after reset and layout change).
         "key-counts-changed": (GObject.SignalFlags.RUN_LAST, None, ()),
+        # The compositor's focused monitor changed (connector name, e.g.
+        # "DP-1"). Additive (1.1): the overlay follows it. Never emitted
+        # without a focus source.
+        "focused-monitor-changed": (GObject.SignalFlags.RUN_LAST, None, (str,)),
         # Human-readable, user-presentable error (shown as a toast).
         "error": (GObject.SignalFlags.RUN_LAST, None, (str,)),
     }
@@ -100,6 +104,12 @@ class KeyboardService(GObject.Object):
     def get_active_layer(self) -> int:
         raise NotImplementedError
 
+    def get_pressed_keys(self) -> set[int]:
+        """Key indices held down right now on the connected keyboard (from
+        ``key-event``), so a view that appears mid-hold is correct. Empty when
+        disconnected. Additive (1.1): the default knows of no pressed keys."""
+        return set()
+
     def request_layer(self, index: int) -> None:
         """Ask the keyboard to switch to ``index`` (Oryx set-layer, RAM only)."""
         raise NotImplementedError
@@ -136,6 +146,11 @@ class KeyboardService(GObject.Object):
         """Last known focused window with Steam details, or None. Up to date
         whenever ``focus-changed`` is emitted."""
         raise NotImplementedError
+
+    def get_focused_monitor(self) -> str | None:
+        """Connector name of the compositor's focused monitor ("DP-1"), or
+        None when unknown. Additive (1.1); see ``focused-monitor-changed``."""
+        return None
 
     def list_steam_games(self) -> list[SteamGame]:
         """Installed Steam games (all Steam libraries), sorted by name, without

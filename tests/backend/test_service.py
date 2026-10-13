@@ -45,6 +45,13 @@ class FakeWatcher(FocusWatcher):
         self._current = (cls, title)
         self.emit("focus-changed", cls, title)
 
+    def current_monitor(self):
+        return getattr(self, "_monitor", None)
+
+    def monitor(self, name: str) -> None:
+        self._monitor = name
+        self.emit("monitor-changed", name)
+
 
 class ServiceTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -106,8 +113,14 @@ class ServiceTests(unittest.TestCase):
         self.fw.send(0x07, 0, 5, 0xFE)
         self.assertTrue(spin(lambda: ("key-event", 24, False) in self.signals))
         self.assertIn(("key-event", 24, True), self.signals)
+        self.assertEqual(self.svc.get_pressed_keys(), set())
+        self.fw.send(0x06, 0, 5, 0xFE)        # hold the thumb key...
+        self.assertTrue(spin(lambda: self.svc.get_pressed_keys() == {24}))
         self.fw.send(0x05, 2, 0xFE)
         self.assertTrue(spin(lambda: self.svc.get_active_layer() == 2))
+        self.assertEqual(self.svc.get_pressed_keys(), {24})   # ...across the layer change
+        self.fw.send(0x07, 0, 5, 0xFE)
+        self.assertTrue(spin(lambda: self.svc.get_pressed_keys() == set()))
         self.assertIn(("layer-changed", 2), self.signals)
         self.assertEqual(self.off_main, [])
 
@@ -150,6 +163,21 @@ class ServiceTests(unittest.TestCase):
         self.assertTrue(spin(lambda: "disconnected" in self.names()))
         self.assertIsNone(self.svc.get_connected_device())
         self.assertEqual(self.svc.get_rules(), [])
+
+    def test_focused_monitor_relayed(self) -> None:
+        seen: list[str] = []
+        self.svc.connect("focused-monitor-changed", lambda _s, name: seen.append(name))
+        self.assertIsNone(self.svc.get_focused_monitor())
+        self.watcher.monitor("DP-2")
+        self.assertEqual(seen, ["DP-2"])
+        self.assertEqual(self.svc.get_focused_monitor(), "DP-2")
+
+    def test_pressed_keys_cleared_on_disconnect(self) -> None:
+        self.wait_connected()
+        self.fw.send(0x06, 0, 5, 0xFE)
+        self.assertTrue(spin(lambda: self.svc.get_pressed_keys() == {24}))
+        self.svc.disconnect_device()
+        self.assertEqual(self.svc.get_pressed_keys(), set())
 
     def test_manual_disconnect(self) -> None:
         self.wait_connected()

@@ -34,6 +34,7 @@ os.environ.setdefault("VIBEMAPP_MEMORY_SETTINGS", "1")
 # tests.tray.test_tray (the fake watcher) lives at the repository root.
 sys.path.insert(1, os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
+import vibemapp._preload  # noqa: E402,F401  (gtk4-layer-shell must load before GTK)
 import gi  # noqa: E402
 
 gi.require_version("Gtk", "4.0")

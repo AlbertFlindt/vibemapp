@@ -7,6 +7,8 @@ A GNOME/libadwaita take on ZSA Keymapp for Linux, written in Python with PyGObje
 - **Smart Layers:** switches your ZSA keyboard's layer when the focused app changes.
   Rules can match one app, a window-class regex or all Steam games. Needs Hyprland.
 - **Live layout:** shows your Oryx layout and the active layer.
+- **Overlay:** a click-through, always-on-top drawing of the active layer with live key
+  presses, e.g. while you hold your symbols layer key. Needs `gtk4-layer-shell`.
 - **Heatmap:** opt-in key-press counts. Only counts are stored, never what you typed.
 - **Tray icon:** closing the window keeps Vibemapp running in the tray.
 
@@ -30,6 +32,7 @@ Vibemapp never flashes firmware or writes to the keyboard's EEPROM.
   - `hyprland`, the only focus source Smart Layers supports.
   - A StatusNotifier tray host such as Noctalia or Waybar, for the tray icon.
   - Steam, for Steam-game rules.
+  - `gtk4-layer-shell`, for the overlay.
 
 Nothing is installed from pip.
 
@@ -50,6 +53,29 @@ To start Vibemapp in the tray when Hyprland starts, add this to
 ```lua
 hl.on("hyprland.start", function () hl.exec_cmd("vibemapp --background") end)
 ```
+
+## Overlay
+
+![Overlay settings with the symbols and media layers selected](data/screenshots/overlay.png)
+
+The overlay shows the keyboard's active layer on screen: in "selected" mode only while one
+of the layers you picked is active (hold your symbols layer key and it appears, release it
+and it fades out), in "always" mode on every layer. It never takes focus, clicks go through
+it and it follows the focused monitor (Hyprland), or a fixed one.
+
+Toggle it from the tray ("Show Overlay"), or bind a key in `~/.config/hypr/keybindings.lua`:
+
+```lua
+hl.bind("SUPER + O", hl.dsp.exec_cmd("vibemapp --toggle-overlay"))
+```
+
+The overlay needs `gtk4-layer-shell` (`sudo pacman -S gtk4-layer-shell`): it draws on a
+layer-shell surface (namespace `vibemapp-overlay`) above fullscreen games and panels. Without
+the package the overlay is off and its tray item is hidden.
+
+Its size is a percentage of your keyboard's real size, so it looks the same on every monitor
+(computed from each monitor's physical width). Half spacing moves the keyboard halves apart,
+up to the two corners of the screen edge.
 
 ## Running from source
 

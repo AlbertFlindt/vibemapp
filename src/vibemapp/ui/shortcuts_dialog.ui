@@ -26,6 +26,12 @@
         </child>
         <child>
           <object class="AdwShortcutsItem">
+            <property name="title" translatable="yes">Show Overlay</property>
+            <property name="accelerator">&lt;Ctrl&gt;4</property>
+          </object>
+        </child>
+        <child>
+          <object class="AdwShortcutsItem">
             <property name="title" translatable="yes">Keyboard Information</property>
             <property name="accelerator">&lt;Ctrl&gt;i</property>
           </object>

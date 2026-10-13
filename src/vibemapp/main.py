@@ -7,7 +7,9 @@ import os
 import signal
 import sys
 
-import gi
+from . import _preload  # noqa: F401  (gtk4-layer-shell must load before GTK)
+
+import gi  # noqa: E402
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
@@ -56,10 +58,16 @@ class Application(Adw.Application):
         self._notified_background = False
         self._quitting = False
         self.tray = None
+        self.overlay = None
+        self._overlay_last_on: str | None = None
 
         self.add_main_option("background", ord("b"), GLib.OptionFlags.NONE,
                              GLib.OptionArg.NONE,
                              _("Start in the tray (or in the background) without a window"),
+                             None)
+        self.add_main_option("toggle-overlay", 0, GLib.OptionFlags.NONE,
+                             GLib.OptionArg.NONE,
+                             _("Turn the layout overlay on or off in the running app"),
                              None)
         self.connect("window-removed", self._on_window_removed)
         self.add_main_option("version", 0, GLib.OptionFlags.NONE, GLib.OptionArg.NONE,
@@ -97,11 +105,21 @@ class Application(Adw.Application):
         self.settings.connect("changed::run-in-background",
                               lambda *_a: self._sync_hold())
         self._setup_actions()
+        self._setup_overlay()
         self._setup_tray()
         self._sync_hold()
 
     def do_command_line(self, command_line: Gio.ApplicationCommandLine) -> int:
         options = command_line.get_options_dict()
+        if options.contains("toggle-overlay"):
+            # Runs in the primary instance; never opens the window. The hint
+            # goes to the stderr of the process that was started.
+            if self.overlay is None or not self.overlay.available:
+                command_line.printerr_literal(
+                    _("The overlay needs the gtk4-layer-shell package") + "\n")
+                return 1
+            self.activate_action("toggle-overlay", None)
+            return 0
         if options.contains("background"):
             # Only meaningful for the first instance; a running app ignores it.
             if self.window is None:
@@ -125,6 +143,9 @@ class Application(Adw.Application):
         self.window.present()
 
     def do_shutdown(self) -> None:
+        if self.overlay is not None:
+            self.overlay.destroy()
+            self.overlay = None
         if self.window is not None:
             self.window.teardown()
         if self.tray is not None:
@@ -148,6 +169,8 @@ class Application(Adw.Application):
             on_toggle_window=self._toggle_window, on_show_window=self.activate,
             on_hide_window=self._hide_window,
             on_preferences=lambda: self.activate_action("preferences", None),
+            on_toggle_overlay=(lambda: self.activate_action("toggle-overlay", None))
+            if self.overlay is not None and self.overlay.available else None,
             on_quit=self._quit)
         self._sync_tray_window()
         self.tray.connect("notify::active", self._on_tray_active_changed)
@@ -236,12 +259,57 @@ class Application(Adw.Application):
                 ("win.page::layout", ["<Control>1"]),
                 ("win.page::smart-layers", ["<Control>2"]),
                 ("win.page::heatmap", ["<Control>3"]),
+                ("win.page::overlay", ["<Control>4"]),
                 ("win.previous-layer", ["<Control>Page_Up"]),
                 ("win.next-layer", ["<Control>Page_Down"]),
                 ("win.request-layer", ["<Control>Return"]),
                 ("win.add-rule", ["<Control>n"]),
                 ("win.device-info", ["<Control>i"])):
             self.set_accels_for_action(action, accels)
+
+    # --- overlay ---------------------------------------------------------
+
+    def _setup_overlay(self) -> None:
+        from .ui.overlay import OverlayController
+
+        mode = self.settings.get_string("overlay-mode")
+        self._overlay_last_on = mode if mode != "off" else None
+        self.settings.connect("changed::overlay-mode", self._on_overlay_mode_changed)
+        try:
+            self.overlay = OverlayController(self.service, self.settings)
+        except Exception:  # noqa: BLE001 — the overlay must never break the app
+            log.exception("Could not set up the overlay")
+            self.overlay = None
+
+        available = self.overlay is not None and self.overlay.available
+        toggle = Gio.SimpleAction.new("toggle-overlay", None)
+        toggle.connect("activate", lambda *_a: self._toggle_overlay())
+        toggle.set_enabled(available)
+        self.add_action(toggle)
+
+        # Stateful: a Gtk.Switch with action-name="app.overlay-preview" follows it.
+        preview = Gio.SimpleAction.new_stateful("overlay-preview", None,
+                                                GLib.Variant("b", False))
+        preview.connect("change-state", self._on_overlay_preview)
+        preview.set_enabled(available)
+        self.add_action(preview)
+
+    def _on_overlay_mode_changed(self, settings: Gio.Settings, key: str) -> None:
+        mode = settings.get_string(key)
+        if mode != "off":
+            self._overlay_last_on = mode
+
+    def _toggle_overlay(self) -> None:
+        from .ui.overlay_state import OverlayConfig, toggled_mode
+
+        config = OverlayConfig.from_settings(self.settings)
+        self.settings.set_string("overlay-mode", toggled_mode(
+            config.mode, self._overlay_last_on, config.layers))
+
+    def _on_overlay_preview(self, action: Gio.SimpleAction, value: GLib.Variant) -> None:
+        action.set_state(value)
+        if self.overlay is not None:
+            self.overlay.props.preview = value.get_boolean()
 
     def _quit(self) -> None:
         self._quitting = True

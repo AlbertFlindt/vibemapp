@@ -2,6 +2,25 @@
 
 All notable changes to Vibemapp. Each version is a tag and a GitHub release.
 
+## 1.1.0 (2026-10-13)
+
+### Added
+- **Overlay:** a see-through, click-through drawing of the active layer that lights up the
+  keys you press. It shows on the layers you pick (e.g. while you hold your symbols layer
+  key) or always, and never takes focus.
+  - Its own sidebar page (Ctrl+4) with a live preview: position, monitor (focused or
+    fixed), size, half spacing, opacity and hide-when-idle.
+  - Size is a percentage of the keyboard's real size, so it looks the same on every monitor.
+  - Half spacing moves the keyboard halves apart, up to the two screen corners.
+  - Toggle it from the tray ("Show Overlay") or with `vibemapp --toggle-overlay` bound to a
+    Hyprland key.
+  - Needs the optional `gtk4-layer-shell` package. Without it the Overlay page says what to
+    install and the rest of Vibemapp works as before.
+
+### Development
+- `tests/ui/screenshot.py --overlay` renders the overlay on a test backdrop, and
+  `--page overlay` renders its settings page.
+
 ## 1.0.2 (2026-10-12)
 
 ### Changed
