@@ -115,6 +115,54 @@ class EngineTests(unittest.TestCase):
         self.sched.advance(1)
         self.assertEqual(self.sent, [1])
 
+    def test_held_keys_defer_switch_until_release(self) -> None:
+        # Holding a momentary layer key, Super+arrow moves focus to another window:
+        # layer_move(fallback) would drop the held layer, so wait for the release.
+        self._activate()
+        self.engine.keyboard_layer_changed(3)
+        self.engine.key_activity(True)      # layer key down
+        self.engine.key_activity(True)      # Super down
+        self.engine.focus_changed("nautilus", "")
+        self.sched.advance(100)
+        self.engine.focus_changed("kitty", "")
+        self.sched.advance(100)
+        self.assertEqual(self.sent, [])
+        self.engine.key_activity(True)      # Super up, layer key still held
+        self.sched.advance(100)
+        self.assertEqual(self.sent, [])
+        self.engine.key_activity(False)     # layer key up
+        self.sched.advance(49)
+        self.assertEqual(self.sent, [])
+        self.sched.advance(1)
+        self.assertEqual(self.sent, [1])    # the window focused at release time
+
+    def test_release_without_focus_change_sends_nothing(self) -> None:
+        self._activate()
+        self.engine.key_activity(True)
+        self.engine.key_activity(False)
+        self.sched.advance(100)
+        self.assertEqual(self.sent, [])
+
+    def test_held_keys_time_out(self) -> None:
+        self._activate()
+        self.engine.key_activity(True)      # its KEYUP never arrives
+        self.engine.focus_changed("kitty", "")
+        self.sched.advance(9_999)
+        self.assertEqual(self.sent, [])
+        self.sched.advance(1)               # timeout: keys count as released
+        self.assertEqual(self.sent, [])
+        self.sched.advance(50)              # then the usual debounce
+        self.assertEqual(self.sent, [1])
+
+    def test_disconnect_clears_held_keys(self) -> None:
+        self._activate()
+        self.engine.key_activity(True)
+        self.engine.focus_changed("kitty", "")
+        self.sched.advance(100)
+        self.engine.set_connected(False)
+        self.engine.set_connected(True)     # nothing held on a fresh connection
+        self.assertEqual(self.sent, [1])
+
     def test_fallback_and_keep(self) -> None:
         self._activate()
         self.engine.focus_changed("nautilus", "")

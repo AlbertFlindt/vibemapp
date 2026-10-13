@@ -106,6 +106,9 @@ exists but can't be opened.
     matched and editable, no longer creatable from the UI).
 - First enabled matching rule wins; no match → fallback layer (`None` = don't change, the
   default). Set-layer is only sent when the target differs; focus flips are debounced ~50 ms.
+- While any key is held, switching waits until the last key is released (10 s timeout in case
+  a KEYUP is lost). Set-layer is `layer_move`, which would drop a held MO/LT layer, e.g. when
+  Super+arrow on a held layer moves focus.
 - Our own window (both app IDs) is ignored, so editing rules doesn't reset the layer.
 - Paused when disabled or disconnected; re-evaluates on enable/connect. Restores layer 0 on
   quit, SIGTERM or disconnect if Smart Layers moved it. Firmware keys TOGGLE_SMART_LAYER and

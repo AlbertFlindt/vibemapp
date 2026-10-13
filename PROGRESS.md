@@ -1,6 +1,6 @@
 # Progress / handoff
 
-**Last updated:** 2026-10-13. **Released:** 1.1.0 (layout overlay), installed on the user's machine.
+**Last updated:** 2026-10-13. **Released:** 1.1.1 (Smart Layers waits for held keys; 1.1.0 added the overlay), installed on the user's machine.
 How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
 
 ## Current state

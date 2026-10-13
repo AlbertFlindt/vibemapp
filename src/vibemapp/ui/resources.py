@@ -46,7 +46,7 @@ def app_title() -> str:
 
 
 def version() -> str:
-    return os.environ.get("VIBEMAPP_VERSION") or "1.1.0-dev"
+    return os.environ.get("VIBEMAPP_VERSION") or "1.1.1-dev"
 
 
 _css_loaded = False

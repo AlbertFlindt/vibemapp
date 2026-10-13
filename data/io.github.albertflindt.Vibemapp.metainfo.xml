@@ -40,19 +40,19 @@
   <screenshots>
     <screenshot type="default">
       <caption>Your Oryx layout with the active layer</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.1.0/data/screenshots/layout.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.1.1/data/screenshots/layout.png</image>
     </screenshot>
     <screenshot>
       <caption>Smart Layers switches layers per app</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.1.0/data/screenshots/smart-layers.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.1.1/data/screenshots/smart-layers.png</image>
     </screenshot>
     <screenshot>
       <caption>An opt-in heatmap of your key presses</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.1.0/data/screenshots/heatmap.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.1.1/data/screenshots/heatmap.png</image>
     </screenshot>
     <screenshot>
       <caption>Overlay settings: which layers show it, where and how large</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.1.0/data/screenshots/overlay.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.1.1/data/screenshots/overlay.png</image>
     </screenshot>
   </screenshots>
   <branding>
@@ -69,6 +69,11 @@
     <keyword>layer</keyword>
   </keywords>
   <releases>
+    <release version="1.1.1" date="2026-10-13">
+      <description>
+        <p>Smart Layers no longer switches layers while you hold keys, so a held layer key isn't dropped when focus moves to another window. The switch happens when you release the keys.</p>
+      </description>
+    </release>
     <release version="1.1.0" date="2026-10-13">
       <description>
         <ul>

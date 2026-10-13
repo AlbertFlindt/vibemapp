@@ -31,6 +31,8 @@ APP_ID = BASE_APP_ID
 FILE_VERSION = 1
 DEFAULT_LAYOUT_KEY = "_default"   # rules for firmware that reports no layout id
 DEFAULT_DEBOUNCE_MS = 50
+# Treat keys as released after this long without any key event, in case a KEYUP got lost.
+HELD_KEYS_TIMEOUT_MS = 10_000
 
 
 def default_rules_path() -> str:
@@ -244,6 +246,11 @@ class SmartLayersEngine:
 
     The engine is paused unless both ``enabled`` and ``connected`` are true.
     Enabling or connecting re-evaluates the current focus immediately.
+
+    While any key is held, switching is deferred until the last key is released.
+    ``send_layer`` is ``layer_move``, which turns off every other layer, so
+    switching mid-hold would drop a momentary layer (MO/LT) the user is holding,
+    e.g. when Super+arrow on a held layer moves focus to another window.
     """
 
     def __init__(self, store: RulesStore,
@@ -252,6 +259,7 @@ class SmartLayersEngine:
                  on_rules_changed: Callable[[], None] | None = None,
                  *, scheduler: Scheduler | None = None,
                  debounce_ms: int = DEFAULT_DEBOUNCE_MS,
+                 held_timeout_ms: int = HELD_KEYS_TIMEOUT_MS,
                  own_app_class: str = APP_ID) -> None:
         self._store = store
         self._send_layer = send_layer
@@ -259,6 +267,7 @@ class SmartLayersEngine:
         self._on_rules_changed = on_rules_changed
         self._scheduler: Scheduler = scheduler or GLibScheduler()
         self._debounce_ms = debounce_ms
+        self._held_timeout_ms = held_timeout_ms
         self._own_app_class = own_app_class
 
         self._layout_id: str | None = None
@@ -273,6 +282,9 @@ class SmartLayersEngine:
         self._last_sent: int | None = None
         self._reported: int | None = None
         self._pending: object | None = None
+        self._keys_held = False
+        self._deferred = False           # an evaluation is waiting for the keys to be released
+        self._held_timer: object | None = None
 
     # -- state --
 
@@ -344,6 +356,8 @@ class SmartLayersEngine:
         self._connected = connected
         self._last_sent = None
         self._reported = None
+        if not connected:
+            self._release_keys()
         if connected:
             self.reevaluate()
         else:
@@ -351,6 +365,20 @@ class SmartLayersEngine:
 
     def keyboard_layer_changed(self, layer: int) -> None:
         self._reported = layer
+
+    def key_activity(self, keys_held: bool) -> None:
+        """Call on every key event with whether any key is still held down."""
+        self._cancel_held_timer()
+        if keys_held:
+            self._keys_held = True
+            self._held_timer = self._scheduler.schedule(self._held_timeout_ms,
+                                                        self._on_held_timeout)
+        elif self._keys_held:
+            self._keys_held = False
+            if self._deferred:
+                self._deferred = False
+                if self._active:
+                    self._schedule(self._debounce_ms)
 
     def focus_changed(self, app_class: str, title: str,
                       steam_app_id: str | None = None) -> None:
@@ -377,6 +405,21 @@ class SmartLayersEngine:
         if self._on_rules_changed is not None:
             self._on_rules_changed()
 
+    def _cancel_held_timer(self) -> None:
+        if self._held_timer is not None:
+            self._scheduler.cancel(self._held_timer)
+            self._held_timer = None
+
+    def _on_held_timeout(self) -> None:
+        self._held_timer = None
+        log.debug("No key event for %d ms; treating keys as released", self._held_timeout_ms)
+        self.key_activity(False)
+
+    def _release_keys(self) -> None:
+        self._cancel_held_timer()
+        self._keys_held = False
+        self._deferred = False
+
     def _cancel_pending(self) -> None:
         if self._pending is not None:
             self._scheduler.cancel(self._pending)
@@ -400,6 +443,9 @@ class SmartLayersEngine:
 
     def _evaluate(self) -> None:
         if self._focus is None:
+            return
+        if self._keys_held:
+            self._deferred = True        # evaluated again on release (key_activity)
             return
         app_class, title = self._focus
         rule, target = self.target_for(app_class, title, self._focus_steam_app_id)

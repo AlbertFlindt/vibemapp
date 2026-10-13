@@ -2,6 +2,13 @@
 
 All notable changes to Vibemapp. Each version is a tag and a GitHub release.
 
+## 1.1.1 (2026-10-13)
+
+### Fixed
+- Smart Layers no longer switches layers while you hold keys. Holding a layer key and moving
+  focus (e.g. Super+arrow on a system layer) used to apply the new window's layer or the
+  fallback at once, which dropped the held layer. It now switches when you release the keys.
+
 ## 1.1.0 (2026-10-13)
 
 ### Added

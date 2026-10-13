@@ -449,6 +449,7 @@ class ZsaKeyboardService(KeyboardService):
                     self._pressed.add(index)
                 else:
                     self._pressed.discard(index)
+                self._engine.key_activity(bool(self._pressed))
                 if pressed and self.props.heatmap_recording:
                     self._heatmap.record(self._active_layer, index)
                     self._schedule_counts_changed()
