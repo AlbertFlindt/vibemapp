@@ -5,7 +5,9 @@ import json
 import os
 import tempfile
 import unittest
+from unittest import mock
 
+from vibemapp.backend import zsa_service
 from vibemapp.backend.heatmap import HeatmapStore
 from vibemapp.backend.oryx import OryxConnection
 from vibemapp.backend.oryx_api import LayoutCache, LayoutRepository
@@ -503,6 +505,20 @@ class ServiceHeatmapTests(unittest.TestCase):
 
     def test_no_report_without_layout(self) -> None:
         self.assertIsNone(self.svc.get_ergo_report(HeatmapPeriod.ALL))
+        self.assertEqual(self.svc.get_coach_hints(HeatmapPeriod.ALL), [])
+
+    def test_coach_hints_wiring(self) -> None:
+        self.start_pairs()
+        self.pair_press(5, 0, 10.0)
+        self.pair_press(0, 1, 10.2)
+        self.assertTrue(spin(lambda: self.svc.get_layout() is not None))
+        self.assertEqual(self.svc.get_coach_hints(HeatmapPeriod.ALL), [])    # below the gate
+        sentinel = [object()]
+        with mock.patch.object(zsa_service.coach, "hints", return_value=sentinel) as m:
+            self.assertIs(self.svc.get_coach_hints(HeatmapPeriod.ALL), sentinel)
+        counts, pairs = m.call_args.args[:2]
+        self.assertEqual(counts, self.svc._heatmap.layer_counts(HeatmapPeriod.ALL, None))
+        self.assertEqual(sum(pairs.values()), 1)
 
     def test_throttle_interval(self) -> None:
         self.svc.HEATMAP_THROTTLE_MS = 300

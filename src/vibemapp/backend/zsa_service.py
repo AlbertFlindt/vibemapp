@@ -31,11 +31,11 @@ from typing import Any, Callable
 
 from gi.repository import Gio, GLib
 
-from ..models import (AppRule, Device, ErgoReport, FocusedWindow, HeatmapApp, HeatmapPeriod, Layout, RunningApp,
+from ..models import (AppRule, CoachHint, Device, ErgoReport, FocusedWindow, HeatmapApp, HeatmapPeriod, Layout, RunningApp,
                       SteamGame)
 from ..service import KeyboardService
 from . import devices as devmod
-from . import ergo, geometries
+from . import coach, ergo, geometries
 from ._i18n import _
 from .focus import FocusWatcher, create_focus_watcher
 from .heatmap import HeatmapStore
@@ -663,6 +663,19 @@ class ZsaKeyboardService(KeyboardService):
             return None
         geometry = dev.geometry or geometries.geometry_for(dev.model)
         return ergo.report(self._heatmap.layer_counts(period, app),
+                           self._heatmap.pairs(period, app), geometry, fingers,
+                           geometries.HOME_KEYS[dev.model])
+
+    def get_coach_hints(self, period: HeatmapPeriod,
+                        app: str | None = None) -> list[CoachHint]:
+        dev, layout = self._device, self._layout
+        if dev is None or layout is None:
+            return []
+        fingers = geometries.FINGERS.get(dev.model)
+        if fingers is None:
+            return []
+        geometry = dev.geometry or geometries.geometry_for(dev.model)
+        return coach.hints(self._heatmap.layer_counts(period, app),
                            self._heatmap.pairs(period, app), geometry, fingers,
                            geometries.HOME_KEYS[dev.model])
 

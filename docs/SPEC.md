@@ -195,6 +195,16 @@ pause and reset (confirmation dialog), and an App filter (hidden while no app ha
   from the layout), Reach, Layer Switches, then Score (each penalty and the total out of 100). A
   Recording group holds both opt-ins (`pair-recording` insensitive while key presses are off). States:
   no layout, recording off with no data (opt-in status page), no finger map, no presses yet.
+- **Layout coach** (`backend/coach.py`, pure; tunables in `THRESHOLDS`): rule-based hints, each with
+  its numbers: a heavily used far key, an unused prime key (home row or thumb, on a layer in real
+  use; `geometries.prime_keys`), one hand doing much more work, the worst same-finger pairs (a pair
+  and its reverse merged), and up to three key swaps on one layer with the predicted score change,
+  rescored through `ergo.report`. Nothing below `COACH_MIN_PRESSES` = 2,000 presses; same-finger
+  hints need `COACH_MIN_PAIRS` = 500 pairs; every rule has its own minimums. At most 8 hints: swaps,
+  hand imbalance, same-finger, far keys, unused prime keys. Contract: `get_coach_hints(period, app)`
+  → `list[CoachHint]` (`CoachHintKind`, keys in the service's own indices). The coach only suggests
+  changes to make in Oryx; it never writes to the keyboard. UI: a Suggestions group on the Insights
+  page after Score, with notes for too few presses or pairs.
 
 ### 4.5 Tray and background
 Hyprland has no minimise, so with "Show in tray" on and a tray host present, closing the

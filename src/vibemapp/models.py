@@ -202,6 +202,47 @@ class ErgoReport:
     penalties: dict[str, float] = field(default_factory=dict)
 
 
+# The layout coach shows no hints below these totals for the queried period;
+# hints built from key pairs also need COACH_MIN_PAIRS pairs.
+COACH_MIN_PRESSES = 2000
+COACH_MIN_PAIRS = 500
+
+
+class CoachHintKind(str, Enum):
+    """What a layout-coach hint is about (additive, 1.2). ``CoachHint.keys``
+    and ``numbers`` per kind:
+
+    * FAR_KEY: keys = (key,); ``finger`` set. numbers: presses, share (of all
+      presses), reach (strength-weighted distance from its finger's home key, key units).
+    * UNUSED_PRIME_KEY: keys = (key,), a home-row or thumb key on a layer in
+      real use; ``finger`` set. numbers: presses, share; ``thumb`` 1.0 for a
+      thumb key, else 0.0.
+    * HAND_IMBALANCE: keys = (). numbers: left_share, right_share.
+    * SAME_FINGER: keys = (first, second); ``finger`` set. numbers: count,
+      rate (of all pairs).
+    * SWAP: keys = (a, b), two keys on the same layer whose bindings would trade
+      places. numbers: score_before, score_after; ``score_delta`` set.
+    """
+    FAR_KEY = "far-key"
+    UNUSED_PRIME_KEY = "unused-prime-key"
+    HAND_IMBALANCE = "hand-imbalance"
+    SAME_FINGER = "same-finger"
+    SWAP = "swap"
+
+
+@dataclass(frozen=True)
+class CoachHint:
+    """One rule-based layout-coach hint with the numbers behind it (additive,
+    1.2). Keys are (layer, key index) in the service's own key indices, like
+    ``ErgoReport.worst_same_finger``. The UI writes the text from ``kind`` and
+    ``numbers``. The coach only suggests; it never writes to the keyboard."""
+    kind: CoachHintKind
+    keys: tuple[tuple[int, int], ...] = ()
+    numbers: dict[str, float] = field(default_factory=dict)
+    finger: Finger | None = None
+    score_delta: float | None = None      # predicted score change (SWAP), > 0 is better
+
+
 # Sentinel for set_fallback_layer(): leave the layer untouched when no rule matches.
 FALLBACK_KEEP: None = None
 
@@ -209,5 +250,6 @@ FALLBACK_KEEP: None = None
 __all__ = [
     "KeyboardModel", "KeyGeometry", "Device", "KeyBinding", "Layer", "Layout",
     "AppRule", "RuleMatch", "FocusedWindow", "SteamGame", "RunningApp", "HeatmapPeriod", "HeatmapApp", "Finger", "KeyPairCount",
-    "ErgoReport", "FALLBACK_KEEP", "field",
+    "ErgoReport", "COACH_MIN_PRESSES", "COACH_MIN_PAIRS", "CoachHintKind", "CoachHint",
+    "FALLBACK_KEEP", "field",
 ]

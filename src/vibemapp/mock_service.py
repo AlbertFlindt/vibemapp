@@ -33,7 +33,7 @@ from gi.repository import Gio, GLib
 
 from .models import (AppRule, Device, ErgoReport, FocusedWindow, HeatmapApp, HeatmapPeriod, RuleMatch, SteamGame, KeyBinding, KeyboardModel, KeyGeometry,
                      Layer, Layout, RunningApp)
-from .backend import ergo, geometries
+from .backend import coach, ergo, geometries
 from .service import KeyboardService
 from .ui.i18n import _
 from .ui.rules_model import OWN_APP_CLASS, is_own_app_class, target_layer
@@ -94,6 +94,7 @@ def _mock_to_oryx_index(i: int) -> int:
 
 
 MOCK_TO_ORYX: tuple[int, ...] = tuple(_mock_to_oryx_index(i) for i in range(52))
+_ORYX_TO_MOCK: dict[int, int] = {o: m for m, o in enumerate(MOCK_TO_ORYX)}
 
 
 def _layer_keys(rows: list[list[object]], thumbs: list[object],
@@ -513,6 +514,11 @@ class MockKeyboardService(KeyboardService):
         for (day, layer, key, app), n in sorted(self._app_counts.get(layout.id, {}).items()):
             per.setdefault((day, app), []).append(((layer, key), n))
         pairs = self._pair_counts.setdefault(layout.id, {})
+        # A few common bigrams typed with one finger (E then D, D then E, U then M),
+        # so the layout coach has same-finger pairs to show.
+        base = {b.tap_label: b.index for b in layout.layers[0].keys if b.tap_label}
+        habit = {(0, base[a]): (0, base[b]) for a, b in (("E", "D"), ("D", "E"), ("U", "M"))
+                 if a in base and b in base}
 
         def finger(k: Key) -> object:
             return fingers[MOCK_TO_ORYX[k[1]]] if k[1] < len(MOCK_TO_ORYX) else None
@@ -528,6 +534,9 @@ class MockKeyboardService(KeyboardService):
             for first in rng.choices(keys, cum_weights=cum, k=cum[-1] // 2):
                 lkeys, lcum = by_layer[first[0]]
                 for _try in range(3):
+                    if first in habit and rng.random() < 0.05:
+                        second = habit[first]
+                        break
                     if rng.random() < 0.05:
                         second = rng.choices(keys, cum_weights=cum)[0]      # layer switch
                     else:
@@ -609,8 +618,8 @@ class MockKeyboardService(KeyboardService):
                 out[(a, b)] = out.get((a, b), 0) + n
         return out
 
-    def get_ergo_report(self, period: HeatmapPeriod,
-                        app: str | None = None) -> ErgoReport | None:
+    def _oryx_inputs(self, period: HeatmapPeriod, app: str | None):
+        """(counts, pairs, geometry, fingers, home keys) in Oryx indices, or None."""
         if self._layout is None or self._device is None:
             return None
         model = self._device.model
@@ -635,14 +644,32 @@ class MockKeyboardService(KeyboardService):
             if a[1] < len(MOCK_TO_ORYX) and b[1] < len(MOCK_TO_ORYX):
                 pair = ((a[0], MOCK_TO_ORYX[a[1]]), (b[0], MOCK_TO_ORYX[b[1]]))
                 oryx_pairs[pair] = oryx_pairs.get(pair, 0) + n
-        rep = ergo.report(oryx_counts, oryx_pairs, geometries.geometry_for(model),
-                          fingers, geometries.HOME_KEYS[model])
+        return (oryx_counts, oryx_pairs, geometries.geometry_for(model), fingers,
+                geometries.HOME_KEYS[model])
+
+    @staticmethod
+    def _to_mock_key(k: Key) -> Key:
+        return (k[0], _ORYX_TO_MOCK[k[1]])
+
+    def get_ergo_report(self, period: HeatmapPeriod,
+                        app: str | None = None) -> ErgoReport | None:
+        inputs = self._oryx_inputs(period, app)
+        if inputs is None:
+            return None
+        rep = ergo.report(*inputs)
         # Report keys in the mock's own indices, as the contract requires.
-        back = {o: m for m, o in enumerate(MOCK_TO_ORYX)}
-        worst = tuple(replace(w, first=(w.first[0], back[w.first[1]]),
-                              second=(w.second[0], back[w.second[1]]))
+        worst = tuple(replace(w, first=self._to_mock_key(w.first),
+                              second=self._to_mock_key(w.second))
                       for w in rep.worst_same_finger)
         return replace(rep, worst_same_finger=worst)
+
+    def get_coach_hints(self, period: HeatmapPeriod,
+                        app: str | None = None) -> list[CoachHint]:
+        inputs = self._oryx_inputs(period, app)
+        if inputs is None:
+            return []
+        return [replace(h, keys=tuple(self._to_mock_key(k) for k in h.keys))
+                for h in coach.hints(*inputs)]
 
     def reset_key_counts(self) -> None:
         if self._layout is not None:

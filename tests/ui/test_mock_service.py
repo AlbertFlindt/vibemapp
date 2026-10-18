@@ -8,7 +8,7 @@ from gi.repository import GLib
 from vibemapp.backend import geometries
 from vibemapp.mock_service import (MOCK_TO_ORYX, MockKeyboardService, voyager_layout,
                                     voyager_geometry)
-from vibemapp.models import AppRule, Finger, HeatmapPeriod, KeyboardModel, RuleMatch
+from vibemapp.models import AppRule, CoachHintKind, Finger, HeatmapPeriod, KeyboardModel, RuleMatch
 from vibemapp.service import KeyboardService
 
 
@@ -262,6 +262,31 @@ class MockServiceTests(unittest.TestCase):
         self.assertTrue(worst)
         self.assertEqual({worst[0].first[1], worst[0].second[1]}, {a, b})
         self.assertEqual(worst[0].finger, fingers[MOCK_TO_ORYX[a]])
+
+    def test_coach_hints_seeded_in_mock_indices(self) -> None:
+        self.assertEqual(self.svc.get_coach_hints(HeatmapPeriod.WEEK), [])      # no layout
+        self.svc._seed_heatmap = True
+        self.connect_and_load()
+        labels = {(layer.index, b.index): b.tap_label
+                  for layer in self.svc.get_layout().layers for b in layer.keys}
+        for app in (None, "code"):
+            hints = self.svc.get_coach_hints(HeatmapPeriod.WEEK, app)
+            self.assertTrue(hints, app)
+            for h in hints:
+                for key in h.keys:
+                    self.assertIn(key, labels)
+        hints = self.svc.get_coach_hints(HeatmapPeriod.WEEK)
+        kinds = {h.kind for h in hints}
+        self.assertTrue({CoachHintKind.FAR_KEY, CoachHintKind.UNUSED_PRIME_KEY,
+                         CoachHintKind.SAME_FINGER, CoachHintKind.SWAP} <= kinds, kinds)
+        same = next(h for h in hints if h.kind == CoachHintKind.SAME_FINGER)
+        self.assertEqual({labels[k] for k in same.keys}, {"E", "D"})
+        fingers = geometries.FINGERS[KeyboardModel.VOYAGER]
+        self.assertTrue(all(fingers[MOCK_TO_ORYX[k[1]]] == same.finger for k in same.keys))
+        swap = next(h for h in hints if h.kind == CoachHintKind.SWAP)
+        self.assertGreater(swap.score_delta, 0)
+        far = next(h for h in hints if h.kind == CoachHintKind.FAR_KEY)
+        self.assertEqual(labels[far.keys[0]], "\u232b")
 
     def test_mock_to_oryx_permutation(self) -> None:
         self.assertEqual(sorted(MOCK_TO_ORYX), list(range(52)))
