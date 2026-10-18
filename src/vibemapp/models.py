@@ -151,11 +151,58 @@ class HeatmapApp:
     presses: int
 
 
+class Finger(str, Enum):
+    """Finger that presses a key (additive, 1.2: ergo score). Left to right."""
+    L_PINKY = "l-pinky"
+    L_RING = "l-ring"
+    L_MIDDLE = "l-middle"
+    L_INDEX = "l-index"
+    L_THUMB = "l-thumb"
+    R_THUMB = "r-thumb"
+    R_INDEX = "r-index"
+    R_MIDDLE = "r-middle"
+    R_RING = "r-ring"
+    R_PINKY = "r-pinky"
+
+    @property
+    def is_left(self) -> bool:
+        return self.value.startswith("l-")
+
+
+@dataclass(frozen=True)
+class KeyPairCount:
+    """How often key B was pressed within about a second after key A.
+    Keys are (layer, Oryx key index). Only counts per day are stored."""
+    first: tuple[int, int]
+    second: tuple[int, int]
+    count: int
+
+
+@dataclass(frozen=True)
+class ErgoReport:
+    """Ergonomic score of the recorded typing, as its parts (additive, 1.2).
+
+    Shares are 0..1. ``score`` is 0..100 (higher is better); ``penalties``
+    holds each part's weighted deduction, keyed like ``backend.ergo.WEIGHTS``.
+    Rates from pairs are 0 when ``pairs`` is 0."""
+    presses: int                          # presses on keys with a known finger
+    pairs: int                            # recorded key pairs
+    finger_load: dict[Finger, float]      # share of presses per finger
+    left_share: float                     # share of presses made by the left hand
+    same_finger_rate: float               # same finger, different key / pairs
+    worst_same_finger: tuple[KeyPairCount, ...]   # most frequent, at most 5
+    reach_cost: float                     # mean strength-weighted distance from home, key units
+    layer_switch_rate: float              # pairs whose layers differ / pairs
+    score: float
+    penalties: dict[str, float] = field(default_factory=dict)
+
+
 # Sentinel for set_fallback_layer(): leave the layer untouched when no rule matches.
 FALLBACK_KEEP: None = None
 
 
 __all__ = [
     "KeyboardModel", "KeyGeometry", "Device", "KeyBinding", "Layer", "Layout",
-    "AppRule", "RuleMatch", "FocusedWindow", "SteamGame", "RunningApp", "HeatmapPeriod", "HeatmapApp", "FALLBACK_KEEP", "field",
+    "AppRule", "RuleMatch", "FocusedWindow", "SteamGame", "RunningApp", "HeatmapPeriod", "HeatmapApp", "Finger", "KeyPairCount",
+    "ErgoReport", "FALLBACK_KEEP", "field",
 ]

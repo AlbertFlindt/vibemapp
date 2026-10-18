@@ -5,8 +5,10 @@ import unittest
 
 from gi.repository import GLib
 
-from vibemapp.mock_service import MockKeyboardService, voyager_geometry
-from vibemapp.models import AppRule, HeatmapPeriod, KeyboardModel, RuleMatch
+from vibemapp.backend import geometries
+from vibemapp.mock_service import (MOCK_TO_ORYX, MockKeyboardService, voyager_layout,
+                                    voyager_geometry)
+from vibemapp.models import AppRule, Finger, HeatmapPeriod, KeyboardModel, RuleMatch
 from vibemapp.service import KeyboardService
 
 
@@ -207,6 +209,88 @@ class MockServiceTests(unittest.TestCase):
             self.assertEqual(sum(a.presses for a in apps), sum(total.values()))
         names = {a.key: a.name for a in self.svc.list_heatmap_apps(HeatmapPeriod.ALL)}
         self.assertEqual(names["steam:1245620"], "ELDEN RING")
+
+    def test_pairs_and_ergo_report(self) -> None:
+        now = [10.0]
+        self.svc._monotonic = lambda: now[0]
+        self.assertIsNone(self.svc.get_ergo_report(HeatmapPeriod.ALL))
+        self.connect_and_load()
+        self.svc.props.heatmap_recording = True
+        self.svc.simulate_focus("firefox", "page")
+
+        def press(index: int, at: float) -> None:
+            now[0] = at
+            self.svc.simulate_key(index, True)
+            self.svc.simulate_key(index, False)
+
+        press(1, 10.0)
+        press(2, 10.4)                                    # pair_recording is off
+        self.assertEqual(self.svc.get_ergo_report(HeatmapPeriod.ALL).pairs, 0)
+        self.svc.props.pair_recording = True
+        press(1, 20.0)
+        press(2, 20.4)                                    # pair
+        press(3, 21.6)                                    # idle gap
+        self.svc.simulate_focus("kitty", "shell")
+        press(4, 21.7)                                    # focus changed: no pair
+        press(4, 21.9)                                    # same key twice: pair
+        r = self.svc.get_ergo_report(HeatmapPeriod.ALL)
+        self.assertEqual((r.presses, r.pairs), (7, 2))
+        self.assertEqual(self.svc.get_ergo_report(HeatmapPeriod.ALL, "firefox").pairs, 1)
+        self.assertEqual(self.svc.get_ergo_report(HeatmapPeriod.ALL, "kitty").pairs, 1)
+        self.assertEqual(self.svc.get_ergo_report(HeatmapPeriod.ALL, "nope").presses, 0)
+        self.svc.reset_key_counts()
+        r = self.svc.get_ergo_report(HeatmapPeriod.ALL)
+        self.assertEqual((r.presses, r.pairs, r.score), (0, 0, 100.0))
+
+    def test_mock_to_oryx_permutation(self) -> None:
+        self.assertEqual(sorted(MOCK_TO_ORYX), list(range(52)))
+        mock = voyager_geometry()
+        oryx = geometries.geometry_for(KeyboardModel.VOYAGER)
+        mock_right = min(mock[i].x for i in range(48) if (i % 12) >= 6)
+        for i, j in enumerate(MOCK_TO_ORYX):          # same neighbourhood within its half
+            right = j >= 26
+            self.assertLess(abs((mock[i].x - (mock_right if right else 0))
+                                - (oryx[j].x - (10 if right else 0))), 1.2, i)
+            self.assertLess(abs(mock[i].y - oryx[j].y), 0.8, i)
+        fingers = geometries.FINGERS[KeyboardModel.VOYAGER]
+        homes = geometries.HOME_KEYS[KeyboardModel.VOYAGER]
+        base = {b.tap_label: b.index for b in voyager_layout().layers[0].keys if b.tap_label}
+        for label, finger in (("A", Finger.L_PINKY), ("S", Finger.L_RING),
+                              ("D", Finger.L_MIDDLE), ("F", Finger.L_INDEX),
+                              ("J", Finger.R_INDEX), ("K", Finger.R_MIDDLE),
+                              ("L", Finger.R_RING), (";", Finger.R_PINKY)):
+            self.assertEqual(MOCK_TO_ORYX[base[label]], homes[finger], label)
+        keys = voyager_layout().layers[0].keys
+        for i in (48, 49, 50, 51):                    # thumb cluster: Space, Esc, Enter, ⌫
+            self.assertIn(fingers[MOCK_TO_ORYX[i]], (Finger.L_THUMB, Finger.R_THUMB),
+                          keys[i].tap_label)
+        self.assertEqual(keys[48].tap_label, "Space")
+        self.assertEqual(fingers[MOCK_TO_ORYX[48]], Finger.L_THUMB)
+        self.assertEqual(fingers[MOCK_TO_ORYX[51]], Finger.R_THUMB)
+        self.assertEqual(fingers[MOCK_TO_ORYX[base["E"]]], Finger.L_MIDDLE)
+        self.assertEqual(fingers[MOCK_TO_ORYX[base["O"]]], Finger.R_RING)
+
+    def test_seeded_pairs_are_consistent(self) -> None:
+        self.svc._seed_heatmap = True
+        self.connect_and_load()
+        for period in HeatmapPeriod:
+            total = self.svc.get_ergo_report(period)
+            self.assertEqual(total.presses, sum(self.svc.get_key_counts(period).values()))
+            self.assertGreater(total.pairs, 0)
+            self.assertLess(total.same_finger_rate, 0.04)
+            self.assertGreater(total.same_finger_rate, 0.01)
+            self.assertGreater(total.layer_switch_rate, 0.0)
+            self.assertLessEqual(len(total.worst_same_finger), 5)
+            apps = self.svc.list_heatmap_apps(period)
+            self.assertEqual(sum(self.svc.get_ergo_report(period, a.key).pairs for a in apps),
+                             total.pairs)
+            self.assertEqual(sum(self.svc.get_ergo_report(period, a.key).presses for a in apps),
+                             total.presses)
+        a = self.svc.get_ergo_report(HeatmapPeriod.ALL, "steam:1245620")
+        b = self.svc.get_ergo_report(HeatmapPeriod.ALL, "firefox")
+        self.assertNotEqual(a.finger_load, b.finger_load)
+        self.assertEqual(self.svc.get_ergo_report(HeatmapPeriod.ALL),
+                         self.svc.get_ergo_report(HeatmapPeriod.ALL))     # deterministic
 
     def test_heatmap_periods(self) -> None:
         import datetime as dt

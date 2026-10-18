@@ -19,7 +19,7 @@ from typing import Callable
 
 from gi.repository import Gio, GObject
 
-from .models import (AppRule, Device, FocusedWindow, HeatmapApp, HeatmapPeriod, Layout,
+from .models import (AppRule, Device, ErgoReport, FocusedWindow, HeatmapApp, HeatmapPeriod, Layout,
                      RunningApp, SteamGame)
 
 
@@ -75,6 +75,12 @@ class KeyboardService(GObject.Object):
     # Recording continues while the window is closed.
     heatmap_recording = GObject.Property(type=bool, default=False,
                                          nick="heatmap-recording")
+    # Key-pair recording is a separate opt-in (additive, 1.2) and only records
+    # while heatmap_recording is also on. Each pair is "key B pressed within
+    # about a second after key A", by (layer, key index), counted per day and
+    # app. Never sequences longer than two keys, never characters.
+    pair_recording = GObject.Property(type=bool, default=False,
+                                      nick="pair-recording")
 
     # --- devices -------------------------------------------------------
 
@@ -178,8 +184,15 @@ class KeyboardService(GObject.Object):
         first. Additive (1.2): the default knows of no apps."""
         return []
 
+    def get_ergo_report(self, period: HeatmapPeriod,
+                        app: str | None = None) -> ErgoReport | None:
+        """Ergo score of the current layout's recorded presses and pairs, or
+        None when no layout is loaded or the keyboard model has no finger map.
+        Additive (1.2): the default has no report."""
+        return None
+
     def reset_key_counts(self) -> None:
-        """Delete all recorded counts for the current layout, per-app counts included."""
+        """Delete all recorded counts for the current layout: per-app counts and key pairs included."""
         raise NotImplementedError
 
     def shutdown(self) -> None:

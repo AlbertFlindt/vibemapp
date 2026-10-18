@@ -31,11 +31,11 @@ from typing import Any, Callable
 
 from gi.repository import Gio, GLib
 
-from ..models import (AppRule, Device, FocusedWindow, HeatmapApp, HeatmapPeriod, Layout, RunningApp,
+from ..models import (AppRule, Device, ErgoReport, FocusedWindow, HeatmapApp, HeatmapPeriod, Layout, RunningApp,
                       SteamGame)
 from ..service import KeyboardService
 from . import devices as devmod
-from . import geometries
+from . import ergo, geometries
 from ._i18n import _
 from .focus import FocusWatcher, create_focus_watcher
 from .heatmap import HeatmapStore
@@ -67,6 +67,7 @@ class ZsaKeyboardService(KeyboardService):
     BACKOFF_MAX_MS = 30_000
     STABLE_AFTER_MS = 10_000     # a connection this old clears the failure count
     HEATMAP_THROTTLE_MS = 1000   # key-counts-changed at most this often
+    PAIR_WINDOW_S = 1.0          # a key pair is two presses at most this far apart
     HEATMAP_FLUSH_MS = 30_000    # heatmap written to disk at most this often
 
     def __init__(self, *, sysfs_root: str = "/sys", dev_root: str = "/dev",
@@ -78,6 +79,7 @@ class ZsaKeyboardService(KeyboardService):
                  poll_interval_ms: int = 3000,
                  heatmap_dir: str | None = None,
                  clock: Callable[[], dt.date] | None = None,
+                 monotonic: Callable[[], float] = time.monotonic,
                  migrate: bool | None = None,
                  steam_roots: list[str] | None = None,
                  proc_root: str = "/proc") -> None:
@@ -117,6 +119,9 @@ class ZsaKeyboardService(KeyboardService):
         self._retry_id = 0
         self._stable_id = 0
         self._heatmap = HeatmapStore(heatmap_dir, clock or dt.date.today)
+        self._monotonic = monotonic
+        # (layer, key index, time) of the previous press, for key pairs. Memory only.
+        self._prev_press: tuple[int, int, float] | None = None
         self._steam = SteamLibrary(steam_roots, proc_root)
         self._focused_window: FocusedWindow | None = None
         self._counts_timer = 0
@@ -130,6 +135,7 @@ class ZsaKeyboardService(KeyboardService):
         self.connect("notify::smart-layers-enabled", self._on_enabled_changed)
         self.connect("notify::auto-connect", self._on_auto_connect_changed)
         self.connect("notify::heatmap-recording", self._on_heatmap_recording_changed)
+        self.connect("notify::pair-recording", self._on_pair_recording_changed)
 
         if autostart:
             self.start()
@@ -311,6 +317,7 @@ class ZsaKeyboardService(KeyboardService):
             log.exception("closing connection failed")
 
     def _teardown_state(self) -> None:
+        self._prev_press = None
         self._set_heatmap_layout(None)
         self._device = None
         self._layout = None
@@ -453,6 +460,7 @@ class ZsaKeyboardService(KeyboardService):
                 if pressed and self.props.heatmap_recording:
                     app, app_name = self._heatmap_app()
                     self._heatmap.record(self._active_layer, index, app, app_name)
+                    self._record_pair(index, app)
                     self._schedule_counts_changed()
                 self.emit("key-event", index, pressed)
         elif ev.code == Evt.TOGGLE_SMART_LAYER:
@@ -612,6 +620,7 @@ class ZsaKeyboardService(KeyboardService):
             window = FocusedWindow(app_class, title, self._watcher.current_pid())
         self._focused = (app_class, title)
         self._focused_window = window
+        self._prev_press = None
         self._engine.focus_changed(app_class, title, window.steam_app_id)
         return window
 
@@ -630,6 +639,32 @@ class ZsaKeyboardService(KeyboardService):
 
     def list_heatmap_apps(self, period: HeatmapPeriod) -> list[HeatmapApp]:
         return self._heatmap.apps(period)
+
+    def _record_pair(self, index: int, app: str | None) -> None:
+        """Pair this press with the previous one if it was within PAIR_WINDOW_S."""
+        if not self.props.pair_recording:
+            self._prev_press = None
+            return
+        now = self._monotonic()
+        prev, self._prev_press = self._prev_press, (self._active_layer, index, now)
+        if prev is not None and 0 <= now - prev[2] < self.PAIR_WINDOW_S:
+            self._heatmap.record_pair((prev[0], prev[1]), (self._active_layer, index), app)
+
+    def _on_pair_recording_changed(self, *_args: object) -> None:
+        self._prev_press = None
+
+    def get_ergo_report(self, period: HeatmapPeriod,
+                        app: str | None = None) -> ErgoReport | None:
+        dev, layout = self._device, self._layout
+        if dev is None or layout is None:
+            return None
+        fingers = geometries.FINGERS.get(dev.model)
+        if fingers is None:
+            return None
+        geometry = dev.geometry or geometries.geometry_for(dev.model)
+        return ergo.report(self._heatmap.layer_counts(period, app),
+                           self._heatmap.pairs(period, app), geometry, fingers,
+                           geometries.HOME_KEYS[dev.model])
 
     def _heatmap_app(self) -> tuple[str | None, str | None]:
         """(app key, display name) of the focused app, for per-app counts."""
@@ -652,6 +687,7 @@ class ZsaKeyboardService(KeyboardService):
     def _set_heatmap_layout(self, layout_id: str | None) -> None:
         if layout_id == self._heatmap.layout_id:
             return
+        self._prev_press = None
         self._heatmap.set_layout(layout_id)
         self._emit_counts_changed_now()
 
@@ -686,6 +722,7 @@ class ZsaKeyboardService(KeyboardService):
         return GLib.SOURCE_CONTINUE
 
     def _on_heatmap_recording_changed(self, *_args: object) -> None:
+        self._prev_press = None
         if not self.props.heatmap_recording:
             self._flush_heatmap()
 

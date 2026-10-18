@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import math
 
-from ..models import KeyboardModel, KeyGeometry
+from ..models import Finger, KeyboardModel, KeyGeometry
 
 # Entry: (row, col, x, y, w, h)
 _Entry = tuple[int, int, float, float, float, float]
@@ -187,6 +187,93 @@ MATRIX_TO_INDEX: dict[KeyboardModel, dict[tuple[int, int], int]] = {
 }
 
 
+# --- Finger map ----------------------------------------------------------------
+#
+# Which finger presses each key, for the ergo score. Built from the geometry:
+#
+# * Thumbs are the rotated clusters (Voyager, Moonlander incl. the red keys,
+#   ErgoDox: every entry with a rotation) and, on the Planck, the bottom-row
+#   keys with x from 3 to 8 (the 2u space at x=5 is a left thumb).
+# * The hand is the half the key belongs to: Oryx index below half the key
+#   count is left on split boards; on the Planck the key's left edge x < 6.
+# * Other keys get a finger from their column counted from the outer edge
+#   ``c`` (left: x, right: mirrored). Voyager/Planck: pinky, pinky, ring,
+#   middle, index, index (Moonlander adds a third index column). ErgoDox:
+#   c < 2 pinky, < 3 ring, < 4 middle, else index.
+# * Home row: the 3rd row of the main block (Planck: the 2nd). Home keys are
+#   the home-row keys at the "A S D F" columns: pinky c=1, ring 2, middle 3,
+#   index 4 (ErgoDox +0.5). The thumb home is the thumb key nearest the index
+#   home key.
+
+_COLUMN_FINGERS = ("pinky", "pinky", "ring", "middle", "index", "index", "index")
+_PLANCK_THUMB_X = (3.0, 8.0)
+
+
+def _build_fingers(model: KeyboardModel) -> tuple[tuple[Finger, ...], dict[Finger, int]]:
+    entries = _RAW[model]
+    n = len(entries)
+    fingers: list[Finger] = []
+    cols: list[float] = []       # column from the outer edge
+    left_of: list[bool] = []
+    for i, (_r, _c, x, y, w, _h, rot) in enumerate(entries):
+        if model == KeyboardModel.PLANCK_EZ:
+            left = x < 6
+            thumb = y == 3 and _PLANCK_THUMB_X[0] <= x <= _PLANCK_THUMB_X[1]
+            c = x if left else 11 - x
+        else:
+            left = i < n // 2
+            thumb = rot != 0
+            if model == KeyboardModel.ERGODOX_EZ:
+                c = x if left else 16 - x
+            else:
+                last = 15 if model == KeyboardModel.VOYAGER else 16
+                c = x if left else last - x
+        left_of.append(left)
+        cols.append(c)
+        if thumb:
+            fingers.append(Finger.L_THUMB if left else Finger.R_THUMB)
+            continue
+        if model == KeyboardModel.ERGODOX_EZ:
+            name = "pinky" if c < 2 else "ring" if c < 3 else "middle" if c < 4 else "index"
+        else:
+            name = _COLUMN_FINGERS[int(round(c))] if model != KeyboardModel.PLANCK_EZ \
+                else _COLUMN_FINGERS[min(int(round(c)), 5)]
+        fingers.append(Finger(f"{'l' if left else 'r'}-{name}"))
+
+    def home_row(i: int) -> bool:
+        r, c, _x, y, *_ = entries[i]
+        if model == KeyboardModel.PLANCK_EZ:
+            return y == 1
+        if model == KeyboardModel.ERGODOX_EZ:
+            return c == 2
+        return r in (2, 8)
+
+    offset = 0.5 if model == KeyboardModel.ERGODOX_EZ else 0.0
+    home_c = {"pinky": 1 + offset, "ring": 2 + offset, "middle": 3 + offset,
+              "index": 4 + offset}
+    homes: dict[Finger, int] = {}
+    for i, f in enumerate(fingers):
+        name = f.value.split("-")[1]
+        if name != "thumb" and home_row(i) and cols[i] == home_c[name]:
+            homes[f] = i
+
+    def centre(i: int) -> tuple[float, float]:
+        _r, _c, x, y, w, h, _rot = entries[i]
+        return x + w / 2, y + h / 2
+
+    for thumb, index in ((Finger.L_THUMB, Finger.L_INDEX), (Finger.R_THUMB, Finger.R_INDEX)):
+        ix, iy = centre(homes[index])
+        homes[thumb] = min((i for i, f in enumerate(fingers) if f == thumb),
+                           key=lambda i: (math.hypot(centre(i)[0] - ix, centre(i)[1] - iy), i))
+    return tuple(fingers), homes
+
+
+FINGERS: dict[KeyboardModel, tuple[Finger, ...]] = {}
+HOME_KEYS: dict[KeyboardModel, dict[Finger, int]] = {}
+for _model in _RAW:
+    FINGERS[_model], HOME_KEYS[_model] = _build_fingers(_model)
+
+
 def geometry_for(model: KeyboardModel) -> tuple[KeyGeometry, ...]:
     return GEOMETRIES.get(model, ())
 
@@ -196,4 +283,4 @@ def matrix_to_index(model: KeyboardModel, row: int, col: int) -> int | None:
     return MATRIX_TO_INDEX.get(model, {}).get((row, col))
 
 
-__all__ = ["GEOMETRIES", "MATRIX_TO_INDEX", "KEY_COUNTS", "geometry_for", "matrix_to_index"]
+__all__ = ["FINGERS", "HOME_KEYS", "GEOMETRIES", "MATRIX_TO_INDEX", "KEY_COUNTS", "geometry_for", "matrix_to_index"]

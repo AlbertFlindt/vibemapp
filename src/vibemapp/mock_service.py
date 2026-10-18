@@ -22,14 +22,17 @@ Tests construct it with ``autostart=False`` and drive it through the
 from __future__ import annotations
 
 import datetime as dt
+import itertools
 import os
 import random
+import time
 from typing import Callable
 
 from gi.repository import Gio, GLib
 
-from .models import (AppRule, Device, FocusedWindow, HeatmapApp, HeatmapPeriod, RuleMatch, SteamGame, KeyBinding, KeyboardModel, KeyGeometry,
+from .models import (AppRule, Device, ErgoReport, FocusedWindow, HeatmapApp, HeatmapPeriod, RuleMatch, SteamGame, KeyBinding, KeyboardModel, KeyGeometry,
                      Layer, Layout, RunningApp)
+from .backend import ergo, geometries
 from .service import KeyboardService
 from .ui.i18n import _
 from .ui.rules_model import OWN_APP_CLASS, is_own_app_class, target_layer
@@ -72,6 +75,24 @@ def voyager_geometry() -> tuple[KeyGeometry, ...]:
     for x, y, rot in reversed(thumbs_left):
         keys.append(KeyGeometry(len(keys), total_w - x - 1.0, y, rotation=-rot))
     return tuple(keys)
+
+
+def _mock_to_oryx_index(i: int) -> int:
+    """Oryx key index of mock Voyager key ``i``.
+
+    The mock is row-interleaved (row r: 6 left keys then 6 right keys, rows 0-3
+    -> 0..47; then left thumbs 48, 49 and right thumbs 50, 51). Oryx is
+    half-major: the whole left half (4 rows of 6, then 2 thumbs = 26 keys),
+    then the right half. Thumbs keep their order (outer to inner on the left,
+    inner to outer on the right in both)."""
+    if i >= 48:
+        return 24 + (i - 48) if i < 50 else i
+    row, rest = divmod(i, 12)
+    half, col = divmod(rest, 6)
+    return half * 26 + row * 6 + col
+
+
+MOCK_TO_ORYX: tuple[int, ...] = tuple(_mock_to_oryx_index(i) for i in range(52))
 
 
 def _layer_keys(rows: list[list[object]], thumbs: list[object],
@@ -213,11 +234,18 @@ _FOCUS_SCRIPT: tuple[tuple[str, str], ...] = (
 )
 
 
+Key = tuple[int, int]
+
+
 class MockKeyboardService(KeyboardService):
     __gtype_name__ = "KmlMockKeyboardService"
+    PAIR_WINDOW_S = 1.0
 
-    def __init__(self, speed: float | None = None, *, autostart: bool = True) -> None:
+    def __init__(self, speed: float | None = None, *, autostart: bool = True,
+                 monotonic: Callable[[], float] = time.monotonic) -> None:
         super().__init__()
+        self._monotonic = monotonic
+        self._prev_press: tuple[int, int, float] | None = None
         if speed is None:
             try:
                 speed = float(os.environ.get("VIBEMAPP_MOCK_SPEED", "1") or 1)
@@ -242,6 +270,8 @@ class MockKeyboardService(KeyboardService):
         # layout id -> {(iso day, layer, key index, app key): presses}; sums to _counts
         self._app_counts: dict[str, dict[tuple[str, int, int, str], int]] = {}
         self._app_names: dict[str, str] = {}
+        # layout id -> {(iso day, first, second, app key or ""): pairs}; total = sum over apps
+        self._pair_counts: dict[str, dict[tuple[str, Key, Key, str], int]] = {}
         self._counts_pending = 0
         self._seed_heatmap = _env_flag("VIBEMAPP_MOCK_HEATMAP_SEED", False)
         seed = [] if _env_flag("VIBEMAPP_MOCK_NO_RULES", False) else demo_rules()
@@ -251,6 +281,8 @@ class MockKeyboardService(KeyboardService):
         self._rng = random.Random(4)
         self._connecting = False
         self.connect("notify::smart-layers-enabled", lambda *_a: self._evaluate())
+        self.connect("notify::pair-recording", self._clear_prev_press)
+        self.connect("notify::heatmap-recording", self._clear_prev_press)
         self.connect("notify::auto-connect", lambda *_a: self._maybe_auto_connect())
 
         if autostart:
@@ -342,7 +374,11 @@ class MockKeyboardService(KeyboardService):
             self._after(self._rng.uniform(70, 180), self.simulate_key, index, False)
         self._after(self._rng.uniform(180, 900), self._random_key)
 
+    def _clear_prev_press(self, *_args: object) -> None:
+        self._prev_press = None
+
     def _drop_connection(self) -> None:
+        self._prev_press = None
         self._device = None
         self._layout = None
         self._active_layer = 0
@@ -362,6 +398,7 @@ class MockKeyboardService(KeyboardService):
         if not self._focus_available:
             return
         self._focused = (app_class, title)
+        self._prev_press = None
         self.emit("focus-changed", app_class, title)
         self._evaluate()
 
@@ -402,7 +439,21 @@ class MockKeyboardService(KeyboardService):
             acounts[akey] = acounts.get(akey, 0) + 1
             if name != app:
                 self._app_names[app] = name
+        self._count_pair(index, app)
         self._schedule_counts_changed()
+
+    def _count_pair(self, index: int, app: str | None) -> None:
+        """Pair this press with the previous one if within PAIR_WINDOW_S (like the real service)."""
+        if not self.props.pair_recording or self._layout is None:
+            self._prev_press = None
+            return
+        now = self._monotonic()
+        prev, self._prev_press = self._prev_press, (self._active_layer, index, now)
+        if prev is not None and 0 <= now - prev[2] < self.PAIR_WINDOW_S:
+            pairs = self._pair_counts.setdefault(self._layout.id, {})
+            key = (self._today().isoformat(), (prev[0], prev[1]),
+                   (self._active_layer, index), app or "")
+            pairs[key] = pairs.get(key, 0) + 1
 
     def _heatmap_app(self) -> tuple[str | None, str]:
         window = self.get_focused_window()
@@ -450,6 +501,41 @@ class MockKeyboardService(KeyboardService):
                             counts[(date, layer.index, binding.index)] = n
                             self._split_seed(layout, date, layer.index, binding.tap_label,
                                              binding.index, n, split_rng)
+        self._seed_pairs(layout)
+
+    def _seed_pairs(self, layout: Layout) -> None:
+        """Bigrams per app and day drawn from that app's key counts: mostly same
+        layer, some same-finger pairs (~2%), a few layer switches."""
+        rng = random.Random(13)
+        fingers = geometries.FINGERS[KeyboardModel.VOYAGER]
+        per: dict[tuple[str, str], list[tuple[Key, int]]] = {}
+        for (day, layer, key, app), n in sorted(self._app_counts.get(layout.id, {}).items()):
+            per.setdefault((day, app), []).append(((layer, key), n))
+        pairs = self._pair_counts.setdefault(layout.id, {})
+
+        def finger(k: Key) -> object:
+            return fingers[MOCK_TO_ORYX[k[1]]] if k[1] < len(MOCK_TO_ORYX) else None
+
+        for (day, app), items in sorted(per.items()):
+            keys = [k for k, _n in items]
+            cum = list(itertools.accumulate(n for _k, n in items))
+            by_layer: dict[int, tuple[list[Key], list[int]]] = {}
+            for layer in {k[0] for k in keys}:
+                sub = [(k, n) for k, n in items if k[0] == layer]
+                by_layer[layer] = ([k for k, _n in sub],
+                                   list(itertools.accumulate(n for _k, n in sub)))
+            for first in rng.choices(keys, cum_weights=cum, k=cum[-1] // 2):
+                lkeys, lcum = by_layer[first[0]]
+                for _try in range(3):
+                    if rng.random() < 0.05:
+                        second = rng.choices(keys, cum_weights=cum)[0]      # layer switch
+                    else:
+                        second = rng.choices(lkeys, cum_weights=lcum)[0]
+                    if (second == first or finger(second) != finger(first)
+                            or rng.random() < 0.3):
+                        break                       # redraw most same-finger pairs
+                pk = (day, first, second, app)
+                pairs[pk] = pairs.get(pk, 0) + 1
 
     def _split_seed(self, layout: Layout, date: str, layer: int, label: str,
                     index: int, n: int, rng: random.Random) -> None:
@@ -512,8 +598,48 @@ class MockKeyboardService(KeyboardService):
         apps.sort(key=lambda a: (-a.presses, a.name.casefold(), a.key))
         return apps
 
+    def _period_pairs(self, period: HeatmapPeriod, app: str | None) -> dict[tuple[Key, Key], int]:
+        out: dict[tuple[Key, Key], int] = {}
+        if self._layout is None:
+            return out
+        first_iso = self._period_first(period)
+        for (day, a, b, papp), n in self._pair_counts.get(self._layout.id, {}).items():
+            if day >= first_iso and (app is None or papp == app):
+                out[(a, b)] = out.get((a, b), 0) + n
+        return out
+
+    def get_ergo_report(self, period: HeatmapPeriod,
+                        app: str | None = None) -> ErgoReport | None:
+        if self._layout is None or self._device is None:
+            return None
+        model = self._device.model
+        fingers = geometries.FINGERS.get(model)
+        if fingers is None:
+            return None
+        first_iso = self._period_first(period)
+        counts: dict[Key, int] = {}
+        if app is None:
+            for (day, layer, key), n in self._counts.get(self._layout.id, {}).items():
+                if day >= first_iso:
+                    counts[(layer, key)] = counts.get((layer, key), 0) + n
+        else:
+            for (day, layer, key, a), n in self._app_counts.get(self._layout.id, {}).items():
+                if a == app and day >= first_iso:
+                    counts[(layer, key)] = counts.get((layer, key), 0) + n
+        # The mock's key order is not Oryx's: score on the real board's indices.
+        oryx_counts = {(layer, MOCK_TO_ORYX[key]): n for (layer, key), n in counts.items()
+                       if key < len(MOCK_TO_ORYX)}
+        oryx_pairs: dict[tuple[Key, Key], int] = {}
+        for (a, b), n in self._period_pairs(period, app).items():
+            if a[1] < len(MOCK_TO_ORYX) and b[1] < len(MOCK_TO_ORYX):
+                pair = ((a[0], MOCK_TO_ORYX[a[1]]), (b[0], MOCK_TO_ORYX[b[1]]))
+                oryx_pairs[pair] = oryx_pairs.get(pair, 0) + n
+        return ergo.report(oryx_counts, oryx_pairs, geometries.geometry_for(model),
+                           fingers, geometries.HOME_KEYS[model])
+
     def reset_key_counts(self) -> None:
         if self._layout is not None:
+            self._pair_counts.pop(self._layout.id, None)
             self._counts.pop(self._layout.id, None)
             self._app_counts.pop(self._layout.id, None)
             self.emit("key-counts-changed")

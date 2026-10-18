@@ -170,6 +170,24 @@ UI: opt-in status page when off; when on, a heatmap keyboard (sequential ramp re
 light and dark, counts on keys, legend), period toggle, layer filter, totals and top keys,
 pause and reset (confirmation dialog), and an App filter (hidden while no app has counts).
 
+#### 4.4.1 Key pairs and ergo score (backend only so far)
+- **Finger map:** `geometries.FINGERS[model]` (one `Finger` per Oryx index) and `HOME_KEYS[model]`
+  for all four boards, from the usual column convention (outer two columns pinky, then ring,
+  middle, the rest index; rotated thumb-cluster keys and the Planck's centre bottom row are
+  thumbs). Home row is the 3rd row (Planck: 2nd); the thumb home is the thumb key nearest the
+  index home key.
+- **Key pairs:** a separate opt-in (`pair-recording`, default off; the service property
+  `pair_recording` only records while `heatmap_recording` is on too). A pair is two presses less
+  than `PAIR_WINDOW_S` = 1 s apart, by (layer, key index). The previous press is kept in memory
+  only and dropped on idle gaps, focus or layout change, disconnect and when either opt-in
+  toggles. Stored per day as `pairs` (all apps) and `app_pairs` in the same v2 heatmap file.
+- **Score** (`backend/ergo.py`, pure; all tunables in `WEIGHTS`): finger load and hand split,
+  finger overload above a per-finger capacity, hand imbalance, same-finger pair rate (target
+  under 1%), reach cost (distance from the finger's home key / finger strength) and layer-switch
+  rate. Each part becomes a penalty; `score` = 100 − Σ penalties, clamped to 0..100. Contract:
+  `get_ergo_report(period, app)` → `ErgoReport` (None without a finger map).
+- The mock's own Voyager geometry is row-interleaved, so it maps through `MOCK_TO_ORYX` before scoring.
+
 ### 4.5 Tray and background
 Hyprland has no minimise, so with "Show in tray" on and a tray host present, closing the
 window hides it to a StatusNotifierItem (`org.kde.StatusNotifierItem` + `com.canonical.dbusmenu`

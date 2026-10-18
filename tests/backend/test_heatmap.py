@@ -73,7 +73,7 @@ class StoreTests(unittest.TestCase):
             data = json.load(f)
         self.assertEqual(data, {"version": 2, "layout_id": "Bre9W",
                                 "days": {"2026-10-10": {"0": {"1": 1}, "2": {"3": 1}}},
-                                "app_days": {}, "app_names": {}})
+                                "app_days": {}, "app_names": {}, "pairs": {}, "app_pairs": {}})
         self.assertEqual([n for n in os.listdir(self.tmp.name) if n.endswith(".tmp")], [])
         other = HeatmapStore(self.tmp.name, self.clock)
         other.set_layout("Bre9W")
@@ -216,6 +216,92 @@ class AppStoreTests(unittest.TestCase):
         self.assertEqual(self.store.to_json()["app_names"], {})
 
 
+class PairStoreTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.clock = Clock(dt.date(2026, 10, 10))
+        self.store = HeatmapStore(self.tmp.name, self.clock)
+        self.store.set_layout("Bre9W")
+        self.path = os.path.join(self.tmp.name, "Bre9W.json")
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def reload(self) -> HeatmapStore:
+        other = HeatmapStore(self.tmp.name, self.clock)
+        other.set_layout("Bre9W")
+        return other
+
+    def test_record_and_roundtrip(self) -> None:
+        s = self.store
+        s.record_pair((0, 1), (0, 2), "firefox")
+        s.record_pair((0, 1), (0, 2), "firefox")
+        s.record_pair((0, 1), (2, 3))                       # no app: total only
+        s.record_pair((0, 1), (0, 1), "kitty")              # same key twice counts
+        a, b, c = ((0, 1), (0, 2)), ((0, 1), (2, 3)), ((0, 1), (0, 1))
+        self.assertEqual(s.pairs(HeatmapPeriod.ALL), {a: 2, b: 1, c: 1})
+        self.assertEqual(s.pairs(HeatmapPeriod.ALL, app="firefox"), {a: 2})
+        self.assertEqual(s.pairs(HeatmapPeriod.ALL, app="nope"), {})
+        s.flush()
+        with open(self.path) as f:
+            data = json.load(f)
+        self.assertEqual(data["pairs"], {"2026-10-10": {"0:1>0:1": 1, "0:1>0:2": 2, "0:1>2:3": 1}})
+        self.assertEqual(data["app_pairs"]["2026-10-10"]["firefox"], {"0:1>0:2": 2})
+        o = self.reload()
+        self.assertEqual(o.pairs(HeatmapPeriod.ALL), {a: 2, b: 1, c: 1})
+        self.assertEqual(o.pairs(HeatmapPeriod.TODAY, app="kitty"), {c: 1})
+        self.assertEqual(o.layer_counts(HeatmapPeriod.ALL), {})   # pairs aren't presses
+
+    def test_period_filter(self) -> None:
+        self.store.record_pair((0, 1), (0, 2), "x")
+        self.clock.advance(10)
+        self.store.record_pair((0, 3), (0, 4), "x")
+        self.assertEqual(self.store.pairs(HeatmapPeriod.WEEK), {((0, 3), (0, 4)): 1})
+        self.assertEqual(len(self.store.pairs(HeatmapPeriod.ALL)), 2)
+        self.assertEqual(self.store.pairs(HeatmapPeriod.WEEK, app="x"), {((0, 3), (0, 4)): 1})
+
+    def test_v1_and_v2_without_pairs_load(self) -> None:
+        with open(self.path, "w") as f:
+            json.dump({"version": 2, "days": {"2026-10-10": {"0": {"1": 1}}}}, f)
+        s = self.reload()
+        self.assertEqual(s.pairs(HeatmapPeriod.ALL), {})
+        self.assertEqual(s.layer_counts(HeatmapPeriod.ALL), {(0, 1): 1})
+
+    def test_garbage_pairs_skipped(self) -> None:
+        with open(self.path, "w") as f:
+            json.dump({"days": {}, "pairs": {
+                "2026-10-10": {"0:1>0:2": 3, "bad": 1, "0:1>0:x": 1, "-1:1>0:2": 1,
+                               "0:1>0:3": -2, "0:1>0:4": "q", "0:1>0:5": "2"},
+                "nodate": {"0:1>0:2": 9}, "2026-10-11": [1], "2026-10-12": 4},
+                "app_pairs": {"2026-10-10": {"ok": {"1:1>1:2": 2, "zz": 1}, "bad": 5,
+                                             "": {"0:1>0:2": 1}},
+                              "nodate": {"ok": {"0:1>0:2": 1}}, "2026-10-11": 3}}, f)
+        s = self.reload()
+        self.assertEqual(s.pairs(HeatmapPeriod.ALL),
+                         {((0, 1), (0, 2)): 3, ((0, 1), (0, 5)): 2})
+        self.assertEqual(s.pairs(HeatmapPeriod.ALL, app="ok"), {((1, 1), (1, 2)): 2})
+        for junk in ("x", ["a"], 5, None):
+            with open(self.path, "w") as f:
+                json.dump({"days": {}, "pairs": junk, "app_pairs": junk}, f)
+            self.assertEqual(self.reload().pairs(HeatmapPeriod.ALL), {})
+
+    def test_reset_clears_pairs(self) -> None:
+        self.store.record_pair((0, 1), (0, 2), "x")
+        self.store.flush()
+        self.store.reset()
+        self.assertEqual(self.store.pairs(HeatmapPeriod.ALL), {})
+        self.assertEqual(self.store.pairs(HeatmapPeriod.ALL, app="x"), {})
+        self.assertEqual(self.store.to_json()["pairs"], {})
+        self.assertEqual(self.store.to_json()["app_pairs"], {})
+
+    def test_negative_ignored_without_layout(self) -> None:
+        self.store.record_pair((0, -1), (0, 2))
+        self.assertFalse(self.store.dirty)
+        self.store.set_layout(None)
+        self.store.record_pair((0, 1), (0, 2))
+        self.assertFalse(self.store.dirty)
+
+
 class ServiceHeatmapTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
@@ -225,17 +311,20 @@ class ServiceHeatmapTests(unittest.TestCase):
         self.clock = Clock(dt.date(2026, 10, 10))
         self.hdir = os.path.join(root, "heatmap")
         self.changes = 0
+        self.watcher = FakeWatcher()
+        self.now = 100.0
         self.svc = self._make()
 
     def _make(self) -> ZsaKeyboardService:
         root = self.tmp.name
         svc = ZsaKeyboardService(
             sysfs_root=os.path.join(root, "sys"), dev_root=os.path.join(root, "dev"),
-            rules_path=os.path.join(root, "rules.json"), focus_watcher=FakeWatcher(),
+            rules_path=os.path.join(root, "rules.json"), focus_watcher=self.watcher,
             repository=LayoutRepository(LayoutCache(os.path.join(root, "c")),
                                         fetcher=lambda *a: SAMPLE),
             connection_factory=lambda p, e, c: OryxConnection(p, e, c, opener=self.fw.opener),
-            poll_interval_ms=0, heatmap_dir=self.hdir, clock=self.clock)
+            poll_interval_ms=0, heatmap_dir=self.hdir, clock=self.clock,
+            monotonic=lambda: self.now)
         svc.connect("key-counts-changed", self._on_changed)
         return svc
 
@@ -313,6 +402,107 @@ class ServiceHeatmapTests(unittest.TestCase):
                           HeatmapApp("steam:9", "steam:9", 1)])
         self.svc.reset_key_counts()
         self.assertEqual(self.svc.list_heatmap_apps(HeatmapPeriod.ALL), [])
+
+    def pair_press(self, row: int, col: int, at: float) -> None:
+        self.now = at
+        self.press(row, col)
+        drain(0.05)
+
+    def pairs(self):
+        return self.svc._heatmap.pairs(HeatmapPeriod.ALL)
+
+    def start_pairs(self) -> None:
+        self.svc.props.heatmap_recording = True
+        self.svc.props.pair_recording = True
+        self.assertTrue(spin(lambda: self.svc.get_connected_device() is not None))
+        drain(0.05)
+
+    A, B, C = (0, 24), (0, 0), (0, 25)        # (5,0) -> 24, (0,1) -> 0 on this board
+
+    def test_pair_window_and_idle_gap(self) -> None:
+        self.assertFalse(self.svc.props.pair_recording)
+        self.start_pairs()
+        self.pair_press(5, 0, 10.0)
+        self.assertEqual(self.pairs(), {})                 # no previous key yet
+        self.pair_press(0, 1, 10.5)                        # within the window
+        self.assertEqual(self.pairs(), {(self.A, self.B): 1})
+        self.pair_press(0, 1, 11.6)                        # 1.1 s later: idle gap
+        self.assertEqual(self.pairs(), {(self.A, self.B): 1})
+        self.pair_press(0, 1, 12.0)                        # same key twice counts
+        self.assertEqual(self.pairs()[(self.B, self.B)], 1)
+        self.pair_press(0, 1, 13.0)                        # exactly 1.0 s: outside
+        self.assertEqual(sum(self.pairs().values()), 2)
+        self.assertEqual(self.svc.PAIR_WINDOW_S, 1.0)
+
+    def test_pairs_use_active_layer_and_app(self) -> None:
+        self.start_pairs()
+        self.watcher.focus("firefox", "page")
+        drain(0.05)
+        self.pair_press(5, 0, 10.0)
+        self.fw.send(0x05, 2, 0xFE)
+        self.assertTrue(spin(lambda: self.svc.get_active_layer() == 2))
+        self.pair_press(0, 1, 10.4)
+        pair = (self.A, (2, 0))
+        self.assertEqual(self.pairs(), {pair: 1})
+        self.assertEqual(self.svc._heatmap.pairs(HeatmapPeriod.ALL, app="firefox"), {pair: 1})
+
+    def test_pairs_need_both_opt_ins(self) -> None:
+        self.svc.props.heatmap_recording = True            # pair_recording stays off
+        self.assertTrue(spin(lambda: self.svc.get_connected_device() is not None))
+        self.pair_press(5, 0, 10.0)
+        self.pair_press(0, 1, 10.2)
+        self.assertEqual(self.pairs(), {})
+        self.svc.props.heatmap_recording = False
+        self.svc.props.pair_recording = True
+        self.pair_press(5, 0, 11.0)
+        self.pair_press(0, 1, 11.2)
+        self.assertEqual(self.pairs(), {})
+
+    def test_previous_key_cleared_by_focus_property_and_layout(self) -> None:
+        self.start_pairs()
+        self.pair_press(5, 0, 10.0)
+        self.watcher.focus("firefox", "page")
+        drain(0.05)
+        self.pair_press(0, 1, 10.2)                        # focus changed in between
+        self.assertEqual(self.pairs(), {})
+        self.svc.props.pair_recording = False
+        self.svc.props.pair_recording = True
+        self.pair_press(5, 0, 20.0)
+        self.svc.props.pair_recording = False
+        self.svc.props.pair_recording = True
+        self.pair_press(0, 1, 20.2)
+        self.assertEqual(self.pairs(), {})
+        self.pair_press(5, 0, 30.0)
+        self.svc.props.heatmap_recording = False
+        self.svc.props.heatmap_recording = True
+        self.pair_press(0, 1, 30.2)
+        self.assertEqual(self.pairs(), {})
+        self.pair_press(5, 0, 40.0)
+        self.svc._set_heatmap_layout("other")
+        self.svc._set_heatmap_layout("Bre9W")
+        self.pair_press(0, 1, 40.2)
+        self.assertEqual(self.pairs(), {})
+        self.pair_press(0, 1, 40.5)                        # still works afterwards
+        self.assertEqual(sum(self.pairs().values()), 1)
+
+    def test_reset_clears_pairs_and_report(self) -> None:
+        self.start_pairs()
+        self.pair_press(5, 0, 10.0)
+        self.pair_press(0, 1, 10.2)
+        self.assertTrue(spin(lambda: self.svc.get_layout() is not None))
+        r = self.svc.get_ergo_report(HeatmapPeriod.ALL)
+        self.assertEqual((r.presses, r.pairs), (2, 1))
+        self.assertEqual(self.svc.get_ergo_report(HeatmapPeriod.ALL, app="nope").presses, 0)
+        self.svc._flush_heatmap()
+        with open(os.path.join(self.hdir, "Bre9W.json")) as f:     # nothing longer than a pair
+            self.assertEqual(json.load(f)["pairs"], {"2026-10-10": {"0:24>0:0": 1}})
+        self.svc.reset_key_counts()
+        self.assertEqual(self.pairs(), {})
+        r = self.svc.get_ergo_report(HeatmapPeriod.ALL)
+        self.assertEqual((r.presses, r.pairs, r.score), (0, 0, 100.0))
+
+    def test_no_report_without_layout(self) -> None:
+        self.assertIsNone(self.svc.get_ergo_report(HeatmapPeriod.ALL))
 
     def test_throttle_interval(self) -> None:
         self.svc.HEATMAP_THROTTLE_MS = 300

@@ -5,12 +5,17 @@ Storage: one file per Oryx layout, ``$XDG_DATA_HOME/vibemapp/heatmap/<layout_id>
     {"version": 2, "layout_id": "Bre9W",
      "days": {"2026-10-10": {"<layer>": {"<key index>": count}}},
      "app_days": {"2026-10-10": {"<app key>": {"<layer>": {"<key index>": count}}}},
-     "app_names": {"steam:1245620": "Elden Ring"}}
+     "app_names": {"steam:1245620": "Elden Ring"},
+     "pairs": {"2026-10-10": {"0:12>0:13": 4}},
+     "app_pairs": {"2026-10-10": {"firefox": {"0:12>0:13": 3}}}}
 
 ``days`` counts every press (the "All Apps" total). ``app_days`` splits the
 presses made while a known app was focused (window class, or ``steam:<id>``),
 ``app_names`` holds display names where they differ from the key. Version 1
-files have neither and load as totals only.
+files have neither and load as totals only. ``pairs`` / ``app_pairs`` (only
+written while pair recording is on) count "key B within ~1 s after key A" as
+``"<layer>:<key>><layer>:<key>"``, per day, as an all-apps total and per app.
+Never anything longer than a pair.
 
 Privacy: only per (local calendar day, app, layer, key index) counts are kept; never window titles.
 There's no key order and nothing finer than a day. Writes are atomic (temp
@@ -36,6 +41,7 @@ FILE_VERSION = 2
 MAX_APP_KEY = 200
 WEEK_DAYS = 7
 
+Pair = tuple[tuple[int, int], tuple[int, int]]
 Clock = Callable[[], dt.date]
 
 
@@ -69,6 +75,9 @@ class HeatmapStore:
         # day ISO string -> app key -> layer -> key index -> count
         self._app_days: dict[str, dict[str, dict[int, dict[int, int]]]] = {}
         self._app_names: dict[str, str] = {}
+        # day -> (layer, key) pair -> count; and day -> app -> pair -> count
+        self._pairs: dict[str, dict[Pair, int]] = {}
+        self._app_pairs: dict[str, dict[str, dict[Pair, int]]] = {}
         self._dirty = False
 
     # -- state --
@@ -93,8 +102,9 @@ class HeatmapStore:
         except OSError as exc:      # don't block the switch; unsaved counts are lost
             log.warning("Can't save heatmap for %s: %s", self._layout_id, exc)
         self._layout_id = layout_id
-        self._days, self._app_days, self._app_names = (
-            self._load(layout_id) if layout_id else ({}, {}, {}))
+        (self._days, self._app_days, self._app_names,
+         self._pairs, self._app_pairs) = (
+            self._load(layout_id) if layout_id else ({}, {}, {}, {}, {}))
         self._dirty = False
 
     # -- counting --
@@ -116,6 +126,50 @@ class HeatmapStore:
             else:
                 self._app_names.pop(app, None)
         self._dirty = True
+
+    def record_pair(self, first: tuple[int, int], second: tuple[int, int],
+                    app: str | None = None) -> None:
+        """Count "``second`` pressed shortly after ``first``", both (layer, key index)."""
+        if self._layout_id is None or min(*first, *second) < 0:
+            return
+        day = self._clock().isoformat()
+        pair = (tuple(first), tuple(second))
+        bucket = self._pairs.setdefault(day, {})
+        bucket[pair] = bucket.get(pair, 0) + 1     # type: ignore[index]
+        app = _clean_app(app)
+        if app:
+            abucket = self._app_pairs.setdefault(day, {}).setdefault(app, {})
+            abucket[pair] = abucket.get(pair, 0) + 1   # type: ignore[index]
+        self._dirty = True
+
+    def pairs(self, period: HeatmapPeriod, app: str | None = None) -> dict[Pair, int]:
+        if self._layout_id is None:
+            return {}
+        start = period_start(HeatmapPeriod(period), self._clock())
+        out: dict[Pair, int] = {}
+        for day, entry in self._pairs.items() if app is None else self._app_pairs.items():
+            if not self._in_period(day, start):
+                continue
+            bucket = entry if app is None else entry.get(app, {})
+            for pair, n in bucket.items():
+                out[pair] = out.get(pair, 0) + n
+        return out
+
+    def layer_counts(self, period: HeatmapPeriod,
+                     app: str | None = None) -> dict[tuple[int, int], int]:
+        """Counts keyed by (layer, key index), for the ergo score."""
+        if self._layout_id is None:
+            return {}
+        start = period_start(HeatmapPeriod(period), self._clock())
+        out: dict[tuple[int, int], int] = {}
+        for day, entry in self._days.items() if app is None else self._app_days.items():
+            if not self._in_period(day, start):
+                continue
+            for layers in ([entry] if app is None else [entry.get(app, {})]):
+                for lay, keys in layers.items():
+                    for idx, n in keys.items():
+                        out[(lay, idx)] = out.get((lay, idx), 0) + n
+        return out
 
     def _in_period(self, day: str, start: dt.date | None) -> bool:
         if start is None:
@@ -168,6 +222,8 @@ class HeatmapStore:
         self._days = {}
         self._app_days = {}
         self._app_names = {}
+        self._pairs = {}
+        self._app_pairs = {}
         self._dirty = False
         try:
             os.unlink(self.path_for(self._layout_id))
@@ -188,6 +244,9 @@ class HeatmapStore:
             "app_days": {day: {app: layers_json(layers) for app, layers in sorted(apps.items())}
                          for day, apps in sorted(self._app_days.items())},
             "app_names": dict(sorted(self._app_names.items())),
+            "pairs": {day: _pairs_json(b) for day, b in sorted(self._pairs.items())},
+            "app_pairs": {day: {app: _pairs_json(b) for app, b in sorted(apps.items())}
+                          for day, apps in sorted(self._app_pairs.items())},
         }
 
     def flush(self) -> bool:
@@ -215,8 +274,9 @@ class HeatmapStore:
     def _load(self, layout_id: str) -> tuple[
             dict[str, dict[int, dict[int, int]]],
             dict[str, dict[str, dict[int, dict[int, int]]]],
-            dict[str, str]]:
-        empty: tuple[dict, dict, dict] = ({}, {}, {})
+            dict[str, str], dict[str, dict[Pair, int]],
+            dict[str, dict[str, dict[Pair, int]]]]:
+        empty: tuple[dict, dict, dict, dict, dict] = ({}, {}, {}, {}, {})
         path = self.path_for(layout_id)
         try:
             with open(path, "r", encoding="utf-8") as f:
@@ -257,7 +317,55 @@ class HeatmapStore:
                 key, name = _clean_app(k), _clean_app(v)
                 if key and name:
                     names[key] = name
-        return days, app_days, names
+        pairs: dict[str, dict[Pair, int]] = {}
+        raw_pairs = data.get("pairs")
+        if isinstance(raw_pairs, dict):
+            for day, bucket in raw_pairs.items():
+                parsed = _parse_pairs(day, bucket)
+                if parsed:
+                    pairs[day] = parsed
+        app_pairs: dict[str, dict[str, dict[Pair, int]]] = {}
+        raw_app_pairs = data.get("app_pairs")
+        if isinstance(raw_app_pairs, dict):
+            for day, apps in raw_app_pairs.items():
+                if not isinstance(apps, dict):
+                    continue
+                for app, bucket in apps.items():
+                    key = _clean_app(app)
+                    parsed = _parse_pairs(day, bucket) if key else {}
+                    if parsed:
+                        merged = app_pairs.setdefault(day, {}).setdefault(key, {})
+                        for pair, n in parsed.items():
+                            merged[pair] = merged.get(pair, 0) + n
+        return days, app_days, names, pairs, app_pairs
+
+
+def _pairs_json(bucket: dict[Pair, int]) -> dict[str, int]:
+    return {f"{a[0]}:{a[1]}>{b[0]}:{b[1]}": n for (a, b), n in sorted(bucket.items())}
+
+
+_PAIR_RE = re.compile(r"^(\d{1,4}):(\d{1,4})>(\d{1,4}):(\d{1,4})$")
+
+
+def _parse_pairs(day: object, bucket: object) -> dict[Pair, int]:
+    """Valid ``"la:ka>lb:kb": n`` entries of one day; {} for anything malformed."""
+    if not isinstance(bucket, dict):
+        return {}
+    try:
+        dt.date.fromisoformat(day)    # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return {}
+    out: dict[Pair, int] = {}
+    for text, n in bucket.items():
+        m = _PAIR_RE.match(text) if isinstance(text, str) else None
+        try:
+            cnt = int(n)
+        except (TypeError, ValueError):
+            continue
+        if m and cnt > 0:
+            la, ka, lb, kb = (int(g) for g in m.groups())
+            out[((la, ka), (lb, kb))] = cnt
+    return out
 
 
 def _clean_app(value: object) -> str:

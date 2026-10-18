@@ -26,6 +26,11 @@
       <summary>Record key heatmap</summary>
       <description>Count key presses per key for the heatmap, also per focused app (window class only, never window titles). Only per-key counts are stored, never what is typed.</description>
     </key>
+    <key name="pair-recording" type="b">
+      <default>false</default>
+      <summary>Record key pairs</summary>
+      <description>While the heatmap records, also count which key follows which within about a second, by key position, for the ergonomic score. Only pair counts per day are stored, never what is typed.</description>
+    </key>
     <key name="migrated-from-keymappforlinux" type="b">
       <default>false</default>
       <summary>Settings migrated</summary>
