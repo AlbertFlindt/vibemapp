@@ -10,7 +10,12 @@ python3 -m compileall -q src tests >/dev/null
 
 echo "==> Validating data files"
 desktop-file-validate data/io.github.albertflindt.Vibemapp.desktop
-appstreamcli validate --no-net --pedantic data/io.github.albertflindt.Vibemapp.metainfo.xml >/dev/null
+# Optional: metainfo only matters for software centres, not the AUR package.
+if command -v appstreamcli >/dev/null; then
+  appstreamcli validate --no-net --pedantic data/io.github.albertflindt.Vibemapp.metainfo.xml >/dev/null
+else
+  echo "    appstreamcli not found, skipping metainfo validation"
+fi
 glib-compile-schemas --strict --dry-run data
 
 echo "==> Unit tests"

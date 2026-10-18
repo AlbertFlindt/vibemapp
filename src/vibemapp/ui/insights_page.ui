@@ -1,0 +1,328 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface domain="vibemapp">
+  <requires lib="gtk" version="4.0"/>
+  <requires lib="Adw" version="1.0"/>
+  <template class="KmlInsightsPage" parent="AdwBin">
+    <property name="child">
+      <object class="AdwToolbarView">
+        <child type="top">
+          <object class="AdwHeaderBar">
+            <property name="title-widget">
+              <object class="AdwWindowTitle" id="window_title">
+                <property name="title" translatable="yes">Insights</property>
+              </object>
+            </property>
+          </object>
+        </child>
+        <property name="content">
+          <object class="GtkStack" id="stack">
+            <property name="transition-type">crossfade</property>
+            <child>
+              <object class="GtkStackPage">
+                <property name="name">no-keyboard</property>
+                <property name="child">
+                  <object class="AdwStatusPage">
+                    <property name="icon-name">input-keyboard-symbolic</property>
+                    <property name="title" translatable="yes">No Keyboard Layout</property>
+                    <property name="description" translatable="yes">Connect your keyboard to see how your typing is spread over your fingers</property>
+                  </object>
+                </property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkStackPage">
+                <property name="name">opt-in</property>
+                <property name="child">
+                  <object class="AdwStatusPage">
+                    <property name="icon-name">power-profile-performance-symbolic</property>
+                    <property name="title" translatable="yes">Insights Need Key Recording</property>
+                    <property name="description" translatable="yes">Vibemapp can score how comfortable your layout is to type on, from how often you press each key. It counts presses per key and, if you turn it on, which key follows which.
+
+Only counts are stored, never what you type. They stay on this computer.</property>
+                    <property name="child">
+                      <object class="GtkButton" id="start_button">
+                        <property name="label" translatable="yes">_Start Recording</property>
+                        <property name="use-underline">True</property>
+                        <property name="halign">center</property>
+                        <style>
+                          <class name="pill"/>
+                          <class name="suggested-action"/>
+                        </style>
+                      </object>
+                    </property>
+                  </object>
+                </property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkStackPage">
+                <property name="name">no-map</property>
+                <property name="child">
+                  <object class="AdwStatusPage">
+                    <property name="icon-name">input-keyboard-symbolic</property>
+                    <property name="title" translatable="yes">No Finger Map for This Keyboard</property>
+                    <property name="description" translatable="yes">Insights need to know which finger presses each key, and that isn't known for this keyboard model yet.</property>
+                  </object>
+                </property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkStackPage">
+                <property name="name">insights</property>
+                <property name="child">
+                  <object class="GtkScrolledWindow">
+                    <property name="hscrollbar-policy">never</property>
+                    <property name="child">
+                      <object class="AdwClamp">
+                        <property name="maximum-size">640</property>
+                        <property name="tightening-threshold">480</property>
+                        <property name="margin-top">18</property>
+                        <property name="margin-bottom">24</property>
+                        <property name="margin-start">18</property>
+                        <property name="margin-end">18</property>
+                        <property name="child">
+                          <object class="GtkBox">
+                            <property name="orientation">vertical</property>
+                            <property name="spacing">24</property>
+                            <child>
+                          <object class="AdwWrapBox" id="filter_box">
+                            <property name="halign">center</property>
+                            <property name="align">0.5</property>
+                            <property name="child-spacing">12</property>
+                            <property name="line-spacing">12</property>
+                            <child>
+                              <object class="AdwToggleGroup" id="period_group">
+                                <property name="can-shrink">True</property>
+                                <property name="active-name">week</property>
+                                <accessibility>
+                                  <property name="label" translatable="yes">Period</property>
+                                </accessibility>
+                                <child>
+                                  <object class="AdwToggle">
+                                    <property name="name">today</property>
+                                    <property name="label" translatable="yes">Today</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="AdwToggle">
+                                    <property name="name">week</property>
+                                    <property name="label" translatable="yes">7 Days</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="AdwToggle">
+                                    <property name="name">all</property>
+                                    <property name="label" translatable="yes">All Time</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkDropDown" id="app_dropdown">
+                                <property name="visible">False</property>
+                                <property name="tooltip-text" translatable="yes">App</property>
+                                <accessibility>
+                                  <property name="label" translatable="yes">App</property>
+                                </accessibility>
+                              </object>
+                            </child>
+                          </object>
+                        </child>
+                            <child>
+                              <object class="AdwStatusPage" id="empty_status">
+                                <property name="visible">False</property>
+                                <property name="icon-name">power-profile-performance-symbolic</property>
+                                <property name="title" translatable="yes">No Key Presses Yet</property>
+                                <property name="description" translatable="yes">Insights appear once you've typed for a while with recording on. Try a longer period if you've been typing earlier.</property>
+                                <style>
+                                  <class name="compact"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkBox" id="results_box">
+                                <property name="orientation">vertical</property>
+                                <property name="spacing">24</property>
+                                <child>
+                                  <object class="AdwPreferencesGroup">
+                                    <property name="title" translatable="yes">Finger Load</property>
+                                    <property name="description" translatable="yes">Share of key presses per finger. A line marks each finger's comfortable share; bars above it are highlighted.</property>
+                                    <child>
+                                      <object class="GtkListBox">
+                                        <property name="selection-mode">none</property>
+                                        <style>
+                                          <class name="boxed-list"/>
+                                        </style>
+                                        <child>
+                                          <object class="GtkListBoxRow">
+                                            <property name="activatable">False</property>
+                                            <property name="focusable">False</property>
+                                            <property name="child">
+                                              <object class="KmlFingerLoadChart" id="finger_chart">
+                                                <property name="margin-top">12</property>
+                                                <property name="margin-bottom">8</property>
+                                                <property name="margin-start">12</property>
+                                                <property name="margin-end">12</property>
+                                                <accessibility>
+                                                  <property name="label" translatable="yes">Key presses per finger</property>
+                                                </accessibility>
+                                              </object>
+                                            </property>
+                                          </object>
+                                        </child>
+                                        <child>
+                                          <object class="AdwActionRow" id="hands_row">
+                                            <property name="title" translatable="yes">Hand Split</property>
+                                            <property name="use-markup">False</property>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="AdwPreferencesGroup">
+                                    <property name="title" translatable="yes">Same-Finger Pairs</property>
+                                    <property name="description" translatable="yes">Two different keys in a row with the same finger are slow and tiring to type.</property>
+                                    <child>
+                                      <object class="GtkListBox" id="same_list">
+                                        <property name="selection-mode">none</property>
+                                        <accessibility>
+                                          <property name="label" translatable="yes">Same-finger pairs</property>
+                                        </accessibility>
+                                        <style>
+                                          <class name="boxed-list"/>
+                                        </style>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="AdwPreferencesGroup">
+                                    <property name="title" translatable="yes">Reach</property>
+                                    <child>
+                                      <object class="GtkListBox">
+                                        <property name="selection-mode">none</property>
+                                        <style>
+                                          <class name="boxed-list"/>
+                                        </style>
+                                        <child>
+                                          <object class="AdwActionRow" id="reach_row">
+                                            <property name="title" translatable="yes">Reach Cost</property>
+                                            <property name="subtitle" translatable="yes">Average distance from each finger's home key, weighted by finger strength, in key widths. Lower is better.</property>
+                                            <child type="suffix">
+                                              <object class="GtkLabel" id="reach_label">
+                                                <property name="valign">center</property>
+                                                <style>
+                                                  <class name="numeric"/>
+                                                </style>
+                                              </object>
+                                            </child>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="AdwPreferencesGroup">
+                                    <property name="title" translatable="yes">Layer Switches</property>
+                                    <child>
+                                      <object class="GtkListBox">
+                                        <property name="selection-mode">none</property>
+                                        <style>
+                                          <class name="boxed-list"/>
+                                        </style>
+                                        <child>
+                                          <object class="AdwActionRow" id="switch_row">
+                                            <property name="title" translatable="yes">Pairs Across Layers</property>
+                                            <property name="subtitle" translatable="yes">Share of key pairs where the second key is on another layer than the first</property>
+                                            <child type="suffix">
+                                              <object class="GtkLabel" id="switch_label">
+                                                <property name="valign">center</property>
+                                                <style>
+                                                  <class name="numeric"/>
+                                                </style>
+                                              </object>
+                                            </child>
+                                          </object>
+                                        </child>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="AdwPreferencesGroup">
+                                    <property name="title" translatable="yes">Score</property>
+                                    <property name="description" translatable="yes">Points taken off a perfect 100 by each part above</property>
+                                    <child>
+                                      <object class="GtkListBox" id="penalty_list">
+                                        <property name="selection-mode">none</property>
+                                        <accessibility>
+                                          <property name="label" translatable="yes">Score deductions</property>
+                                        </accessibility>
+                                        <style>
+                                          <class name="boxed-list"/>
+                                        </style>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkBox">
+                                    <property name="orientation">vertical</property>
+                                    <property name="spacing">2</property>
+                                    <child>
+                                      <object class="GtkLabel" id="score_label">
+                                        <property name="selectable">True</property>
+                                        <style>
+                                          <class name="title-1"/>
+                                          <class name="numeric"/>
+                                        </style>
+                                      </object>
+                                    </child>
+                                    <child>
+                                      <object class="GtkLabel" id="score_caption">
+                                        <property name="wrap">True</property>
+                                        <property name="justify">center</property>
+                                        <style>
+                                          <class name="dim-label"/>
+                                        </style>
+                                      </object>
+                                    </child>
+                                  </object>
+                                </child>
+                                <!-- Phase 3: a "Suggestions" group (layout coach) goes here, after the Score. -->
+                              </object>
+                            </child>
+                            <child>
+                              <object class="AdwPreferencesGroup">
+                                <property name="title" translatable="yes">Recording</property>
+                                <child>
+                                  <object class="AdwSwitchRow" id="record_row">
+                                    <property name="title" translatable="yes">Record Key Presses</property>
+                                    <property name="subtitle" translatable="yes">Stores only how often each key is pressed, never what you type</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="AdwSwitchRow" id="pairs_row">
+                                    <property name="title" translatable="yes">Record Key Pairs</property>
+                                    <property name="subtitle" translatable="yes">Counts which key follows which within a second, by key position. Needed for same-finger and layer-switch figures. Never stores what you type.</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                          </object>
+                        </property>
+                      </object>
+                    </property>
+                  </object>
+                </property>
+              </object>
+            </child>
+          </object>
+        </property>
+      </object>
+    </property>
+  </template>
+</interface>

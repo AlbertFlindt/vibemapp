@@ -1,6 +1,6 @@
 """Render the app window (with the mock service) to a PNG — a dev tool, not a test.
 
-    PYTHONPATH=src python3 tests/ui/screenshot.py OUT.png [--page smart-layers|heatmap|overlay]
+    PYTHONPATH=src python3 tests/ui/screenshot.py OUT.png [--page smart-layers|heatmap|overlay|insights]
         [--dialog add-rule|edit-rule|preferences|device|about|shortcuts]
         [--size 1000x680] [--delay 2500] [--layer 2] [--press 3,15]
     PYTHONPATH=src python3 tests/ui/screenshot.py OUT.png --overlay
@@ -14,6 +14,9 @@ exactly where the layer-shell surfaces would go (the margins the overlay asks
 gtk4-layer-shell for are recorded and replayed), so size, half spacing,
 translucency and halo are visible. No overlay surface is shown.
 ``--real-geometry`` uses the real Voyager geometry instead of the mock's.
+
+``--page insights --record`` also turns key-pair recording on; ``--heatmap-app KEY``
+picks the App filter of the Insights page when that page is shown.
 
 Use ADW_DEBUG_COLOR_SCHEME=prefer-dark / prefer-light to pick the style.
 Renders through GTK itself, so it works without a screenshot tool.
@@ -51,7 +54,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("out")
     parser.add_argument("--page", default="layout",
-                        choices=["layout", "smart-layers", "heatmap", "overlay"])
+                        choices=["layout", "smart-layers", "heatmap", "overlay", "insights"])
     parser.add_argument("--overlay-layers",
                         help="comma-separated layers ticked on the Overlay page, e.g. 1,2")
     parser.add_argument("--dialog")
@@ -65,8 +68,9 @@ def main() -> int:
     parser.add_argument("--kind", choices=["app", "steam-any", "pattern"])
     parser.add_argument("--focus", default="firefox|Lo-fi beats — YouTube — Mozilla Firefox",
                         help="class|title of the simulated focused window")
-    parser.add_argument("--heatmap-app", help="app key to select on the Heatmap page")
-    parser.add_argument("--record", action="store_true", help="turn heatmap recording on")
+    parser.add_argument("--heatmap-app", help="app key to select on the Heatmap or Insights page")
+    parser.add_argument("--record", action="store_true", help="turn heatmap recording on (and key-pair recording too "
+                             "with --page insights)")
     parser.add_argument("--no-smart", action="store_true",
                         help="turn Smart Layers off before the keyboard connects")
     parser.add_argument("--pattern")
@@ -111,12 +115,14 @@ def main() -> int:
         svc = app.service
         if args.record:
             svc.props.heatmap_recording = True
+            if args.page == "insights":
+                svc.props.pair_recording = True
         if args.overlay_layers is not None:
             app.settings.set_value("overlay-layers", GLib.Variant(
                 "ai", [int(v) for v in args.overlay_layers.split(",") if v]))
         win.show_page(args.page)
         if args.heatmap_app:
-            page = win.heatmap_page
+            page = win.insights_page if args.page == "insights" else win.heatmap_page
             page.refresh()
             keys = page._app_keys
             if args.heatmap_app in keys:

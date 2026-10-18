@@ -172,10 +172,13 @@ class Finger(str, Enum):
 @dataclass(frozen=True)
 class KeyPairCount:
     """How often key B was pressed within about a second after key A.
-    Keys are (layer, Oryx key index). Only counts per day are stored."""
+    Keys are (layer, Oryx key index). Only counts per day are stored.
+    ``finger`` is set for same-finger pairs (``ErgoReport.worst_same_finger``):
+    the finger that presses both keys. Additive (1.2)."""
     first: tuple[int, int]
     second: tuple[int, int]
     count: int
+    finger: Finger | None = None
 
 
 @dataclass(frozen=True)
@@ -184,7 +187,9 @@ class ErgoReport:
 
     Shares are 0..1. ``score`` is 0..100 (higher is better); ``penalties``
     holds each part's weighted deduction, keyed like ``backend.ergo.WEIGHTS``.
-    Rates from pairs are 0 when ``pairs`` is 0."""
+    Rates from pairs are 0 when ``pairs`` is 0. Keys in ``worst_same_finger``
+    use the service's own key indices (the same as ``Layout`` bindings and
+    ``key-event``), so the UI can label them from the layout."""
     presses: int                          # presses on keys with a known finger
     pairs: int                            # recorded key pairs
     finger_load: dict[Finger, float]      # share of presses per finger

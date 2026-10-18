@@ -9,7 +9,7 @@ Release history: `CHANGELOG.md` (not loaded; read it when needed).
 
 ## Install (Arch)
 - Runtime: `python python-gobject gtk4 libadwaita glib2`. Build: `meson`.
-  `./check.sh` also needs `desktop-file-utils appstream`.
+  `./check.sh` also needs `desktop-file-utils` (`appstream` optional: validates the metainfo).
 - Optional: `hyprland` (the only focus source), a StatusNotifier tray host
   (e.g. Noctalia, waybar) for the tray icon, Steam for Steam-game rules,
   `gtk4-layer-shell` (required for the overlay; without it the overlay is off).

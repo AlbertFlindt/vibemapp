@@ -23,11 +23,9 @@ How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
 - Overlay with fractional monitor scaling, and the overlay on a Planck (no halves).
 
 ## Next steps
-0. **Typing Insights** (branch `feature/typing-insights`, PR at the end): phase 1 heatmap per app
-   landed; phase 2 (finger map, opt-in key-pair counts, ergo score on a new Insights page) and
-   phase 3 (layout coach) follow. Phase 1 UI tests and screenshots couldn't run in the cloud
-   container (Ubuntu, libadwaita 1.5): run `./check.sh` and `VIBEMAPP_MOCK_HEATMAP_SEED=1 PYTHONPATH=src
-   python3 tests/ui/screenshot.py OUT.png --page heatmap --record --size 1000x1000 --heatmap-app code` on Arch.
+0. **Typing Insights** (branch `feature/typing-insights`, PR at the end): phase 1 heatmap per app and
+   phase 2 (finger map, opt-in key-pair counts, ergo score on the new Insights page, Ctrl+5) landed and
+   ran on Arch. Phase 3 (layout coach on the Insights page) follows.
 1. **Translations.** Add `po/` (`POTFILES`, `LINGUAS`) and meson `i18n.gettext('vibemapp')`.
    Strings are already in `_()`.
 
@@ -52,6 +50,8 @@ How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
   overlay page with `--page overlay --overlay-layers 1,2 --size 1000x1300`): no personal data.
 - **PKGBUILD builds the GitHub tag, not the working tree:** reproducible packages. Tag and push
   before `makepkg`; use `./run-dev.sh` for untagged work.
+- **Distribution, if any, is the AUR** (2026-10-18): no AppImage or Flatpak (GTK4 bundling; the sandbox
+  blocks hidraw, the Hyprland socket and `/proc` for Steam). `appstreamcli` is an optional lint in `check.sh`.
 - **PKGBUILD in `packaging/arch/`:** `makepkg -c/-C` deletes `./src`, which at the repo root was our code.
 - **System Python, PyGObject and libadwaita:** nothing from pip, no Rust toolchain.
 - **Hyprland only as focus source:** it's the user's desktop. `FocusWatcher` is pluggable.
@@ -78,7 +78,7 @@ How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
 - **Dev-run conflict is a warning, not a block:** banner with "Quit Installed App".
 
 ## Known issues / dead ends
-- **Tests:** `./check.sh` passes, 263 tests plus lint and data validation (2026-10-13).
+- **Tests:** `./check.sh` passes, 324 tests plus lint and data validation (2026-10-18).
 - **PyGObject asyncio warning:** PyGObject 3.58.0 on Python 3.14.7 still emits it (2026-10-12).
   Filtered only where unittest runs (check.sh, PKGBUILD `check()`). Drop the filter once fixed upstream.
 - **GSettings dead end:** `Gio.Settings.new_full(schema, None, old_path)` aborts on a fixed-path

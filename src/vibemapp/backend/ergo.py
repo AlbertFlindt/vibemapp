@@ -125,7 +125,7 @@ def report(counts: Mapping[Key, int], pairs: Mapping[Pair, int],
         fa, fb = finger_of(a[1]), finger_of(b[1])
         if fa is not None and fa == fb and a[1] != b[1]:
             same += n
-            same_pairs.append(KeyPairCount(a, b, n))
+            same_pairs.append(KeyPairCount(a, b, n, fa))
     same_rate = same / total_pairs if total_pairs else 0.0
     switch_rate = switches / total_pairs if total_pairs else 0.0
     same_pairs.sort(key=lambda p: (-p.count, p.first, p.second))

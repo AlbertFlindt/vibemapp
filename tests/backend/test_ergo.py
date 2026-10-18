@@ -72,7 +72,9 @@ class ErgoTests(unittest.TestCase):
         self.assertEqual(r.pairs, 4)
         self.assertAlmostEqual(r.same_finger_rate, 0.75)
         self.assertAlmostEqual(r.penalties["same_finger"], 225.0)
-        self.assertEqual(r.worst_same_finger, (KeyPairCount((0, 0), (0, 1), 3),))
+        self.assertEqual(r.worst_same_finger,
+                         (KeyPairCount((0, 0), (0, 1), 3, FINGERS[0]),))
+        self.assertIsNotNone(r.worst_same_finger[0].finger)
         self.assertEqual(r.layer_switch_rate, 0.0)
 
     def test_same_key_and_other_layer_are_not_sfb(self) -> None:
@@ -93,7 +95,7 @@ class ErgoTests(unittest.TestCase):
         pairs[((0, 1), (0, 0))] = 9
         worst = rep({}, pairs).worst_same_finger
         self.assertEqual(len(worst), 5)
-        self.assertEqual(worst[0], KeyPairCount((0, 1), (0, 0), 9))
+        self.assertEqual(worst[0], KeyPairCount((0, 1), (0, 0), 9, FINGERS[0]))
         self.assertEqual([w.second[0] for w in worst[1:]], [1, 2, 3, 4])
 
     def test_score_rounded_to_one_decimal(self) -> None:

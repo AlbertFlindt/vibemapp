@@ -22,6 +22,7 @@ Tests construct it with ``autostart=False`` and drive it through the
 from __future__ import annotations
 
 import datetime as dt
+from dataclasses import replace
 import itertools
 import os
 import random
@@ -634,8 +635,14 @@ class MockKeyboardService(KeyboardService):
             if a[1] < len(MOCK_TO_ORYX) and b[1] < len(MOCK_TO_ORYX):
                 pair = ((a[0], MOCK_TO_ORYX[a[1]]), (b[0], MOCK_TO_ORYX[b[1]]))
                 oryx_pairs[pair] = oryx_pairs.get(pair, 0) + n
-        return ergo.report(oryx_counts, oryx_pairs, geometries.geometry_for(model),
-                           fingers, geometries.HOME_KEYS[model])
+        rep = ergo.report(oryx_counts, oryx_pairs, geometries.geometry_for(model),
+                          fingers, geometries.HOME_KEYS[model])
+        # Report keys in the mock's own indices, as the contract requires.
+        back = {o: m for m, o in enumerate(MOCK_TO_ORYX)}
+        worst = tuple(replace(w, first=(w.first[0], back[w.first[1]]),
+                              second=(w.second[0], back[w.second[1]]))
+                      for w in rep.worst_same_finger)
+        return replace(rep, worst_same_finger=worst)
 
     def reset_key_counts(self) -> None:
         if self._layout is not None:

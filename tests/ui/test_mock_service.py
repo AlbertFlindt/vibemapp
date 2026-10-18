@@ -242,6 +242,27 @@ class MockServiceTests(unittest.TestCase):
         r = self.svc.get_ergo_report(HeatmapPeriod.ALL)
         self.assertEqual((r.presses, r.pairs, r.score), (0, 0, 100.0))
 
+    def test_worst_same_finger_uses_mock_indices(self) -> None:
+        now = [10.0]
+        self.svc._monotonic = lambda: now[0]
+        self.connect_and_load()
+        self.svc.props.heatmap_recording = True
+        self.svc.props.pair_recording = True
+        fingers = geometries.FINGERS[KeyboardModel.VOYAGER]
+        by_finger: dict = {}
+        for mock_i, oryx_i in enumerate(MOCK_TO_ORYX):
+            by_finger.setdefault(fingers[oryx_i], []).append(mock_i)
+        a, b = next(v for v in by_finger.values() if len(v) >= 2)[:2]
+        for t in (20.0, 30.0, 40.0):
+            for index in (a, b):
+                now[0] = t + (0.3 if index == b else 0.0)
+                self.svc.simulate_key(index, True)
+                self.svc.simulate_key(index, False)
+        worst = self.svc.get_ergo_report(HeatmapPeriod.ALL).worst_same_finger
+        self.assertTrue(worst)
+        self.assertEqual({worst[0].first[1], worst[0].second[1]}, {a, b})
+        self.assertEqual(worst[0].finger, fingers[MOCK_TO_ORYX[a]])
+
     def test_mock_to_oryx_permutation(self) -> None:
         self.assertEqual(sorted(MOCK_TO_ORYX), list(range(52)))
         mock = voyager_geometry()

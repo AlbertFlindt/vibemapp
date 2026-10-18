@@ -170,7 +170,7 @@ UI: opt-in status page when off; when on, a heatmap keyboard (sequential ramp re
 light and dark, counts on keys, legend), period toggle, layer filter, totals and top keys,
 pause and reset (confirmation dialog), and an App filter (hidden while no app has counts).
 
-#### 4.4.1 Key pairs and ergo score (backend only so far)
+#### 4.4.1 Key pairs, ergo score and the Insights page
 - **Finger map:** `geometries.FINGERS[model]` (one `Finger` per Oryx index) and `HOME_KEYS[model]`
   for all four boards, from the usual column convention (outer two columns pinky, then ring,
   middle, the rest index; rotated thumb-cluster keys and the Planck's centre bottom row are
@@ -186,7 +186,15 @@ pause and reset (confirmation dialog), and an App filter (hidden while no app ha
   under 1%), reach cost (distance from the finger's home key / finger strength) and layer-switch
   rate. Each part becomes a penalty; `score` = 100 − Σ penalties, clamped to 0..100. Contract:
   `get_ergo_report(period, app)` → `ErgoReport` (None without a finger map).
-- The mock's own Voyager geometry is row-interleaved, so it maps through `MOCK_TO_ORYX` before scoring.
+- The mock's own Voyager geometry is row-interleaved, so it maps through `MOCK_TO_ORYX` before scoring. Report
+  keys (`worst_same_finger`, which carries the `finger`) use the service's own indices, so the mock maps
+  them back.
+- **Insights page** (sidebar, Ctrl+5): its own Period toggle and App filter. The score is shown as its
+  parts, then the total: Finger Load (bar per finger with a capacity line, warning colour above it, and
+  the hand split), Same-Finger Pairs (rate against the 1% target and the five worst pairs, labelled
+  from the layout), Reach, Layer Switches, then Score (each penalty and the total out of 100). A
+  Recording group holds both opt-ins (`pair-recording` insensitive while key presses are off). States:
+  no layout, recording off with no data (opt-in status page), no finger map, no presses yet.
 
 ### 4.5 Tray and background
 Hyprland has no minimise, so with "Show in tray" on and a tray host present, closing the
