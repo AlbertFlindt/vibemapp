@@ -4,7 +4,7 @@ import unittest
 
 from vibemapp.backend import coach, ergo, geometries
 from vibemapp.models import (COACH_MIN_PAIRS, COACH_MIN_PRESSES, CoachHintKind, Finger,
-                             KeyboardModel)
+                             KeyBinding, KeyboardModel)
 
 MODEL = KeyboardModel.VOYAGER
 GEO = geometries.geometry_for(MODEL)
@@ -260,6 +260,109 @@ class SwapTests(unittest.TestCase):
         t = time.perf_counter()
         run(c, p)
         self.assertLess(time.perf_counter() - t, 0.5)
+
+
+def make_layers(default="KC_ENTER", **special):
+    """Layer 0 (and 1) with every key ``default`` except {index: code or KeyBinding}."""
+    out = {}
+    for layer in (0, 1):
+        keys = []
+        for i in range(len(FINGERS)):
+            sp = special.get(f"k{i}")
+            if isinstance(sp, KeyBinding):
+                keys.append(sp)
+            else:
+                keys.append(KeyBinding(i, tap_label="x" if sp or default else "",
+                                       tap_code=sp or default))
+        out[layer] = keys
+    return out
+
+
+class KindFilterTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.counts = base_counts(7000)
+        self.counts[(0, FAR)] = 3000
+        self.pairs = {((0, FAR), (0, SAME)): 200, ((0, HOME_LIST[0]), (0, HOME_LIST[1])): 1000}
+
+    def hints(self, layers, kind):
+        return kinds(coach.hints(self.counts, self.pairs, GEO, FINGERS, HOMES, layers=layers), kind)
+
+    def test_other_keys_still_swap(self) -> None:
+        self.assertTrue(self.hints(make_layers(), CoachHintKind.SWAP))
+        self.assertTrue(self.hints(make_layers(), CoachHintKind.FAR_KEY))
+
+    def test_letter_far_key_not_flagged_or_swapped(self) -> None:
+        layers = make_layers(**{f"k{FAR}": "KC_E"})
+        self.assertEqual(self.hints(layers, CoachHintKind.FAR_KEY), [])
+        for h in self.hints(layers, CoachHintKind.SWAP):
+            self.assertNotIn((0, FAR), h.keys)
+
+    def test_ae_letter_not_flagged(self) -> None:
+        self.assertEqual(self.hints(make_layers(**{f"k{FAR}": "DK_AE"}), CoachHintKind.FAR_KEY), [])
+
+    def test_shift_and_layer_keys_never_swap(self) -> None:
+        for code in ("KC_LSHIFT", "MO", "OSM"):
+            self.assertEqual(self.hints(make_layers(**{f"k{FAR}": code}), CoachHintKind.SWAP), [], code)
+        hold = KeyBinding(FAR, tap_label="Space", tap_code="KC_SPACE", hold_label="L1")
+        self.assertEqual(self.hints(make_layers(**{f"k{FAR}": hold}), CoachHintKind.SWAP), [])
+
+    def test_no_letter_partner(self) -> None:
+        # Every key but the far one is a letter or a modifier: no swap partners.
+        layers = make_layers(default="KC_E")
+        layers[0][FAR] = KeyBinding(FAR, tap_label="x", tap_code="KC_ENTER")
+        self.assertEqual(self.hints(layers, CoachHintKind.SWAP), [])
+        layers = make_layers(default="KC_LSHIFT")
+        layers[0][FAR] = KeyBinding(FAR, tap_label="x", tap_code="KC_ENTER")
+        self.assertEqual(self.hints(layers, CoachHintKind.SWAP), [])
+
+    def test_blank_partner_allowed(self) -> None:
+        # Only the far key and a blank key near home are free; everything else is a letter.
+        layers = make_layers(default="KC_E")
+        layers[0][FAR] = KeyBinding(FAR, tap_label="x", tap_code="KC_ENTER")
+        free = 24                                      # a thumb: the swap the full layer finds
+        layers[0][free] = KeyBinding(free, transparent=True)
+        swaps = self.hints(layers, CoachHintKind.SWAP)
+        self.assertTrue(swaps)
+        for h in swaps:
+            self.assertEqual(h.keys[0], (0, FAR))
+            self.assertEqual(h.keys[1][1], free)
+
+    def test_same_finger_needs_a_non_letter(self) -> None:
+        pairs = {((0, FAR), (0, SAME)): 300, ((0, HOME_LIST[0]), (0, HOME_LIST[0])): 700}
+
+        def same(a, b):
+            layers = make_layers(**{f"k{FAR}": a, f"k{SAME}": b})
+            return kinds(coach.hints(base_counts(), pairs, GEO, FINGERS, HOMES, layers=layers),
+                         CoachHintKind.SAME_FINGER)
+
+        self.assertEqual(same("KC_D", "KC_E"), [])
+        self.assertEqual(same("DK_AE", "KC_E"), [])
+        self.assertEqual(len(same("KC_D", "KC_BSPACE")), 1)
+        self.assertEqual(len(same("KC_ENTER", "KC_E")), 1)
+        self.assertEqual(len(same("KC_LSHIFT", "KC_E")), 1)
+
+    def test_unused_prime_key_never_a_letter(self) -> None:
+        c = base_counts(9000)
+        c[(1, FAR)] = 1000
+        key = HOME_LIST[0]
+
+        def unused(code):
+            layers = make_layers(**{f"k{key}": code})
+            hs = coach.hints(c, {}, GEO, FINGERS, HOMES, {"prime_max": 1000, "max_hints": 100},
+                             layers=layers)
+            return [h for h in hs if h.kind == CoachHintKind.UNUSED_PRIME_KEY
+                    and h.keys == ((1, key),)]
+
+        self.assertEqual(unused("KC_J"), [])
+        self.assertEqual(unused("DK_AE"), [])
+        for code in ("KC_ENTER", "KC_LSHIFT", "MO", "KC_NO"):
+            self.assertEqual(len(unused(code)), 1, code)
+
+    def test_no_binding_means_blank(self) -> None:
+        layers = {0: [KeyBinding(FAR, tap_label="x", tap_code="KC_ENTER")]}
+        swaps = self.hints(layers, CoachHintKind.SWAP)
+        self.assertTrue(swaps)                       # missing keys are free slots
+        self.assertEqual(swaps[0].keys[0], (0, FAR))
 
 
 class OrderTests(unittest.TestCase):

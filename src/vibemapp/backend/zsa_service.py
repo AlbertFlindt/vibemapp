@@ -31,11 +31,11 @@ from typing import Any, Callable
 
 from gi.repository import Gio, GLib
 
-from ..models import (AppRule, CoachHint, Device, ErgoReport, FocusedWindow, HeatmapApp, HeatmapPeriod, Layout, RunningApp,
+from ..models import (AppRule, CoachHint, Device, ErgoReport, LayoutComparison, FocusedWindow, HeatmapApp, HeatmapPeriod, Layout, RunningApp,
                       SteamGame)
 from ..service import KeyboardService
 from . import devices as devmod
-from . import coach, ergo, geometries
+from . import coach, ergo, geometries, layouts
 from ._i18n import _
 from .focus import FocusWatcher, create_focus_watcher
 from .heatmap import HeatmapStore
@@ -677,7 +677,21 @@ class ZsaKeyboardService(KeyboardService):
         geometry = dev.geometry or geometries.geometry_for(dev.model)
         return coach.hints(self._heatmap.layer_counts(period, app),
                            self._heatmap.pairs(period, app), geometry, fingers,
-                           geometries.HOME_KEYS[dev.model])
+                           geometries.HOME_KEYS[dev.model],
+                           layers={l.index: l.keys for l in layout.layers})
+
+    def get_layout_comparisons(self, period: HeatmapPeriod,
+                               app: str | None = None) -> list[LayoutComparison]:
+        dev, layout = self._device, self._layout
+        if dev is None or layout is None or not layout.layers:
+            return []
+        fingers = geometries.FINGERS.get(dev.model)
+        if fingers is None:
+            return []
+        geometry = dev.geometry or geometries.geometry_for(dev.model)
+        return layouts.compare(layout.layers[0].keys, self._heatmap.layer_counts(period, app),
+                               self._heatmap.pairs(period, app), geometry, fingers,
+                               geometries.HOME_KEYS[dev.model])
 
     def _heatmap_app(self) -> tuple[str | None, str | None]:
         """(app key, display name) of the focused app, for per-app counts."""

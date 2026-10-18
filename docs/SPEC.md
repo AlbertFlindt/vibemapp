@@ -196,15 +196,27 @@ pause and reset (confirmation dialog), and an App filter (hidden while no app ha
   Recording group holds both opt-ins (`pair-recording` insensitive while key presses are off). States:
   no layout, recording off with no data (opt-in status page), no finger map, no presses yet.
 - **Layout coach** (`backend/coach.py`, pure; tunables in `THRESHOLDS`): rule-based hints, each with
-  its numbers: a heavily used far key, an unused prime key (home row or thumb, on a layer in real
-  use; `geometries.prime_keys`), one hand doing much more work, the worst same-finger pairs (a pair
-  and its reverse merged), and up to three key swaps on one layer with the predicted score change,
+  its numbers: a heavily used far key (never a letter), an unused prime key that isn't a letter (home row or thumb, on a layer in real
+  use; `geometries.prime_keys`), one hand doing much more work, the worst same-finger pairs with at least
+  one non-letter key (a pair and its reverse merged), and up to three key swaps on one layer with the predicted score change (only non-letter keys
+  without a hold action that aren't modifiers or layer keys: Backspace, Enter, punctuation),
   rescored through `ergo.report`. Nothing below `COACH_MIN_PRESSES` = 2,000 presses; same-finger
   hints need `COACH_MIN_PAIRS` = 500 pairs; every rule has its own minimums. At most 8 hints: swaps,
   hand imbalance, same-finger, far keys, unused prime keys. Contract: `get_coach_hints(period, app)`
   → `list[CoachHint]` (`CoachHintKind`, keys in the service's own indices). The coach only suggests
   changes to make in Oryx; it never writes to the keyboard. UI: a Suggestions group on the Insights
   page after Score, with notes for too few presses or pairs.
+- **Key kinds** (`backend/keykinds.py`, pure): blank, layer key, modifier (incl. mod-taps and OSM),
+  letter (one alphabetic character, incl. language variants and Æ Ø Å; home-row mods stay letters),
+  hold, other. From `KeyBinding.tap_code` (additive, filled by `oryx_api`), the label only as a fallback.
+- **Alternative layouts** (`backend/layouts.py`, pure): the user won't move single letters, so letters
+  are compared as whole layouts instead. The base layer's 30-key letter block is found by QWERTY letter
+  keycodes (the `;` slot right of L, `, . /` right of M; none found → no comparison). QWERTY, Colemak,
+  Colemak-DH, Workman and Dvorak (its `'` on the `/` slot) are simulated by moving the block's layer-0
+  presses and pairs with their character, then scored with `ergo.report`. Non-ASCII letters (Æ on the
+  `;` slot) stay put; a letter a layout wants there goes to that layout's `;` slot. Contract:
+  `get_layout_comparisons(period, app)` → `list[LayoutComparison]`, best first, same 2,000-press gate.
+  UI: an Alternative Layouts group after Suggestions (score, delta, the parts that change most).
 
 ### 4.5 Tray and background
 Hyprland has no minimise, so with "Show in tray" on and a tray host present, closing the

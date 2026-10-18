@@ -11,8 +11,12 @@ SAME_FINGER also needs ``COACH_MIN_PAIRS`` pairs.
 
 Rules (all limits in ``THRESHOLDS``):
 
-* SWAP: two keys on one layer trade places. The candidate heavy keys (the most
-  pressed ones) are tried against every lighter key of their layer; a cheap
+* SWAP: two keys on one layer trade places. Only keys of kind ``OTHER`` (see
+  ``keykinds``: no letters, modifiers, layer keys or keys with a hold action)
+  swap, and the lighter partner may also be a blank or transparent key (a "move
+  here"). Letters are compared as whole layouts in ``layouts`` instead. The
+  candidate heavy keys (the most pressed ones) are tried against every lighter
+  partner of their layer; a cheap
   count-only score picks the best ``swap_rescore`` candidates, and those are
   rescored with ``ergo.report`` after swapping the two keys' counts and
   remapping the pairs. ``score_delta`` = score after - score before, each
@@ -20,23 +24,30 @@ Rules (all limits in ``THRESHOLDS``):
   cumulative), the chosen swaps share no key, best gain first.
 * HAND_IMBALANCE: the busier hand does more than ``imbalance_share``.
 * SAME_FINGER: the most frequent same-finger pairs (a pair and its reverse
-  count as one; the more frequent direction gives the key order).
-* FAR_KEY: a key with a high share, enough presses and a long reach.
+  count as one; the more frequent direction gives the key order). At least one
+  key must not be a letter: letter-letter pairs are left to the layout comparison.
+* FAR_KEY: a key with a high share, enough presses and a long reach; never a
+  letter.
 * UNUSED_PRIME_KEY: a home-row or thumb key that is barely used on a layer
-  that takes a real share of all presses.
+  that takes a real share of all presses; never a letter (modifiers, layer, hold,
+  blank and other keys qualify).
 
 Order: SWAP, HAND_IMBALANCE, SAME_FINGER, FAR_KEY, UNUSED_PRIME_KEY (concrete
 fixes with a measured gain first), inside a kind the strongest first, ties by
 key index. The list is cut to ``max_hints``.
+
+``layers`` (layer index -> its ``KeyBinding`` list, Oryx key indices) says what
+each key is. Without it every key counts as ``OTHER`` (no letter protection).
 """
 
 from __future__ import annotations
 
-from typing import Mapping, Sequence
+from typing import Iterable, Mapping, Sequence
 
 from ..models import (COACH_MIN_PAIRS, COACH_MIN_PRESSES, CoachHint, CoachHintKind,
-                      Finger, KeyGeometry)
+                      Finger, KeyBinding, KeyGeometry)
 from . import ergo, geometries
+from .keykinds import KeyKind, classify
 
 THRESHOLDS: dict[str, float] = {
     # Total hints returned.
@@ -80,8 +91,17 @@ _KIND_ORDER = {CoachHintKind.SWAP: 0, CoachHintKind.HAND_IMBALANCE: 1,
 def hints(counts: Mapping[Key, int], pairs: Mapping[Pair, int],
           geometry: Sequence[KeyGeometry], fingers: Sequence[Finger],
           home_keys: Mapping[Finger, int],
-          thresholds: Mapping[str, float] | None = None) -> list[CoachHint]:
+          thresholds: Mapping[str, float] | None = None,
+          layers: Mapping[int, Iterable[KeyBinding]] | None = None) -> list[CoachHint]:
     t = {**THRESHOLDS, **(thresholds or {})}
+    kinds: dict[int, dict[int, KeyKind]] = (
+        {} if layers is None else {l: {b.index: classify(b) for b in keys}
+                                   for l, keys in layers.items()})
+
+    def kind_of(layer: int, index: int) -> KeyKind:
+        if layers is None:
+            return KeyKind.OTHER
+        return kinds.get(layer, {}).get(index, KeyKind.BLANK)
     base = ergo.report(counts, pairs, geometry, fingers, home_keys)
     presses = base.presses
     if presses < COACH_MIN_PRESSES:
@@ -99,7 +119,7 @@ def hints(counts: Mapping[Key, int], pairs: Mapping[Pair, int],
     for (layer, _i), n in cnt.items():
         layer_presses[layer] = layer_presses.get(layer, 0) + n
 
-    swaps = _swaps(cnt, pairs, geometry, fingers, home_keys, base.score, t)
+    swaps = _swaps(cnt, pairs, geometry, fingers, home_keys, base.score, t, kind_of)
     out: list[tuple[tuple, CoachHint]] = []
     for rank, h in enumerate(swaps):
         out.append(((_KIND_ORDER[h.kind], rank), h))
@@ -119,6 +139,8 @@ def hints(counts: Mapping[Key, int], pairs: Mapping[Pair, int],
             if n <= 0 or fa is None or fa != (fingers[b[1]] if has_finger(b[1]) else None) \
                     or a[1] == b[1]:
                 continue
+            if kind_of(*a) == KeyKind.LETTER and kind_of(*b) == KeyKind.LETTER:
+                continue                    # letter-letter: see the layout comparison
             m = merged.setdefault((min(a, b), max(a, b)), [0, a, b, 0, fa])
             m[0] += n
             if n > m[3]:
@@ -132,6 +154,8 @@ def hints(counts: Mapping[Key, int], pairs: Mapping[Pair, int],
 
     far = []
     for key, n in cnt.items():
+        if kind_of(*key) == KeyKind.LETTER:
+            continue
         reach = reach_of(key[1])
         share = n / presses
         if (n >= t["far_min_presses"] and share >= t["far_min_share"]
@@ -150,6 +174,8 @@ def hints(counts: Mapping[Key, int], pairs: Mapping[Pair, int],
         if lp / presses < t["prime_layer_min_share"]:
             continue
         for index in sorted(prime):
+            if kind_of(layer, index) == KeyKind.LETTER:
+                continue
             n = cnt.get((layer, index), 0)
             if n / presses <= t["prime_max_share"]:
                 unused.append((-lp, n, layer, index))
@@ -168,7 +194,7 @@ def hints(counts: Mapping[Key, int], pairs: Mapping[Pair, int],
 def _swaps(cnt: Mapping[Key, int], pairs: Mapping[Pair, int],
            geometry: Sequence[KeyGeometry], fingers: Sequence[Finger],
            home_keys: Mapping[Finger, int], before: float,
-           t: Mapping[str, float]) -> list[CoachHint]:
+           t: Mapping[str, float], kind_of) -> list[CoachHint]:
     presses = sum(cnt.values())
     reach = [ergo.key_reach(i, geometry, fingers, home_keys) for i in range(len(fingers))]
     kind = [ergo._kind(f) for f in fingers]            # noqa: SLF001
@@ -188,14 +214,15 @@ def _swaps(cnt: Mapping[Key, int], pairs: Mapping[Pair, int],
                 + w_reach * rsum / presses)
 
     base_pen = count_penalty(load, left_n, reach_sum)
-    heavy = sorted((k for k, n in cnt.items() if n / presses >= t["swap_min_share"]),
+    heavy = sorted((k for k, n in cnt.items() if n / presses >= t["swap_min_share"]
+                    and kind_of(*k) == KeyKind.OTHER),
                    key=lambda k: (-cnt[k], k))[:int(t["swap_heavy"])]
     cands: list[tuple[float, Key, Key]] = []
     for hk in heavy:
         layer, hi = hk
         ch, fh = cnt[hk], fingers[hi]
         for ji in range(len(fingers)):
-            if ji == hi:
+            if ji == hi or kind_of(layer, ji) not in (KeyKind.OTHER, KeyKind.BLANK):
                 continue
             cj = cnt.get((layer, ji), 0)
             if cj >= ch:
