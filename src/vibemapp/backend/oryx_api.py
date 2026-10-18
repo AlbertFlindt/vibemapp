@@ -120,6 +120,7 @@ _MOD_TAPS: dict[str, str] = {
 }
 
 _LAYER_CODES = {"MO", "TG", "TO", "OSL", "TT", "DF", "LT", "LM", "PDF"}
+LAYER_CODES = frozenset(_LAYER_CODES)
 
 _GLYPHS: dict[str, str] = {
     "AUDIO_MUTE": "audio-volume-muted-symbolic", "AUDIO_VOL_UP": "audio-volume-high-symbolic",
@@ -269,7 +270,8 @@ def key_binding_from_json(index: int, key: Any) -> KeyBinding:
     elif isinstance(emoji, str) and emoji.strip():
         tap_label, glyph = emoji.strip(), None
     return KeyBinding(index=index, tap_label=tap_label, hold_label=hold_label(hold),
-                      glyph=glyph, color=color)
+                      glyph=glyph, color=color,
+                      tap_code=code if isinstance(code, str) and code else None)
 
 
 def parse_layout(data: dict[str, Any], model: KeyboardModel | None = None) -> Layout:

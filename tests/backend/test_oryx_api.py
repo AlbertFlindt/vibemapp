@@ -89,6 +89,21 @@ class LabelTests(unittest.TestCase):
         self.assertEqual((b.transparent, b.tap_label), (False, "Macro"))
 
 
+class TapCodeTests(unittest.TestCase):
+    def test_tap_code(self) -> None:
+        self.assertEqual(key_binding_from_json(0, _key("KC_A")).tap_code, "KC_A")
+        self.assertEqual(key_binding_from_json(0, _key("DK_AE")).tap_code, "DK_AE")
+        self.assertEqual(key_binding_from_json(0, _key("KC_A", customLabel="x")).tap_code, "KC_A")
+        self.assertIsNone(key_binding_from_json(0, None).tap_code)
+        self.assertIsNone(key_binding_from_json(0, _key("KC_TRANSPARENT")).tap_code)
+        self.assertIsNone(key_binding_from_json(0, {"tap": None, "customLabel": "M"}).tap_code)
+
+    def test_parse_layout_has_tap_codes(self) -> None:
+        main = parse_layout({"hashId": "x", "revision": {"layers": [
+            {"title": "M", "position": 0, "keys": [_key("KC_A"), None]}]}}).layers[0]
+        self.assertEqual([b.tap_code for b in main.keys], ["KC_A", None])
+
+
 class ParseTests(unittest.TestCase):
     def test_parse_layout(self) -> None:
         layout = parse_layout(SAMPLE)

@@ -31,9 +31,9 @@ from typing import Callable
 
 from gi.repository import Gio, GLib
 
-from .models import (AppRule, Device, ErgoReport, FocusedWindow, HeatmapApp, HeatmapPeriod, RuleMatch, SteamGame, KeyBinding, KeyboardModel, KeyGeometry,
+from .models import (AppRule, Device, ErgoReport, LayoutComparison, FocusedWindow, HeatmapApp, HeatmapPeriod, RuleMatch, SteamGame, KeyBinding, KeyboardModel, KeyGeometry,
                      Layer, Layout, RunningApp)
-from .backend import coach, ergo, geometries
+from .backend import coach, ergo, geometries, layouts
 from .service import KeyboardService
 from .ui.i18n import _
 from .ui.rules_model import OWN_APP_CLASS, is_own_app_class, target_layer
@@ -97,6 +97,37 @@ MOCK_TO_ORYX: tuple[int, ...] = tuple(_mock_to_oryx_index(i) for i in range(52))
 _ORYX_TO_MOCK: dict[int, int] = {o: m for m, o in enumerate(MOCK_TO_ORYX)}
 
 
+# Oryx keycodes of the mock's tap labels (letters and digits are derived).
+_MOCK_CODES: dict[str, str] = {
+    "Esc": "KC_ESCAPE", "Tab": "KC_TAB", "⌫": "KC_BSPACE", "Shift": "KC_LSHIFT",
+    "Space": "KC_SPACE", "Enter": "KC_ENTER", "-": "KC_MINUS", "\\": "KC_BSLASH",
+    ";": "KC_SCOLON", "'": "KC_QUOTE", ",": "KC_COMMA", ".": "KC_DOT", "/": "KC_SLASH",
+    "`": "KC_GRAVE", "Æ": "DK_AE", "Ø": "DK_OSTR", "Å": "DK_ARNG",
+    "!": "KC_EXLM", "@": "KC_AT", "#": "KC_HASH", "$": "KC_DLR", "%": "KC_PERC",
+    "^": "KC_CIRC", "&": "KC_AMPR", "*": "KC_ASTR", "(": "KC_LPRN", ")": "KC_RPRN",
+    "{": "KC_LCBR", "}": "KC_RCBR", "[": "KC_LBRACKET", "]": "KC_RBRACKET",
+    "|": "KC_PIPE", "~": "KC_TILD", "+": "KC_PLUS", "PgUp": "KC_PGUP", "PgDn": "KC_PGDN",
+    "Home": "KC_HOME", "End": "KC_END", "↑": "KC_UP", "↓": "KC_DOWN", "←": "KC_LEFT",
+    "→": "KC_RIGHT", "Vol−": "KC_AUDIO_VOL_DOWN", "Vol+": "KC_AUDIO_VOL_UP",
+    "Mute": "KC_AUDIO_MUTE", "Prev": "KC_MEDIA_PREV_TRACK", "Play": "KC_MEDIA_PLAY_PAUSE",
+    "Next": "KC_MEDIA_NEXT_TRACK", "Reset": "QK_BOOT", "Undo": "PC_UNDO", "Cut": "PC_CUT",
+    "Copy": "PC_COPY", "Paste": "PC_PASTE", "Ctrl": "KC_LCTRL", "Alt": "KC_LALT",
+    "Super": "KC_LGUI",
+}
+
+
+def _mock_code(label: str) -> str | None:
+    if not label:
+        return "KC_NO"
+    if label in _MOCK_CODES:
+        return _MOCK_CODES[label]
+    if len(label) == 1 and label.isascii() and (label.isalpha() or label.isdigit()):
+        return "KC_" + label.upper()
+    if label[0] == "F" and label[1:].isdigit():
+        return "KC_" + label
+    return None
+
+
 def _layer_keys(rows: list[list[object]], thumbs: list[object],
                 color: str | None = None,
                 blank_transparent: bool = False) -> tuple[KeyBinding, ...]:
@@ -111,13 +142,15 @@ def _layer_keys(rows: list[list[object]], thumbs: list[object],
         if entry is None or (blank_transparent and entry == ""):
             out.append(KeyBinding(idx, transparent=True))
         elif isinstance(entry, dict):
-            out.append(KeyBinding(idx, **entry))
+            out.append(KeyBinding(idx, **{"tap_code": _mock_code(entry.get("tap_label", "")),
+                                          **entry}))
         elif isinstance(entry, tuple):
             out.append(KeyBinding(idx, tap_label=entry[0], hold_label=entry[1],
-                                  color=color))
+                                  color=color, tap_code=_mock_code(entry[0])))
         else:
             out.append(KeyBinding(idx, tap_label=str(entry),
-                                  color=color if entry else None))
+                                  color=color if entry else None,
+                                  tap_code=_mock_code(str(entry))))
 
     for row in rows:
         for entry in row:
@@ -133,7 +166,7 @@ def voyager_layout() -> Layout:
         [["Esc", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-"],
          ["Tab", "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "\\"],
          ["⌫", ("A", "Ctrl"), ("S", "Alt"), ("D", "Super"), ("F", "Shift"), "G",
-          "H", ("J", "Shift"), ("K", "Super"), ("L", "Alt"), (";", "Ctrl"), "'"],
+          "H", ("J", "Shift"), ("K", "Super"), ("L", "Alt"), ("Æ", "Ctrl"), "Ø"],
          ["Shift", "Z", "X", "C", "V", "B", "N", "M", ",", ".", "/", "Shift"]],
         [("Space", "L1"), ("Esc", "L3"), ("Enter", "L2"), "⌫"])
     symbols = _layer_keys(
@@ -209,6 +242,24 @@ _SEED_GAME = "steam:1245620"
 _GAME_KEYS = {"W": 9.0, "A": 7.0, "S": 7.0, "D": 7.0, "E": 4.0, "Q": 3.0, "R": 3.0, "F": 3.0,
               "Space": 6.0, "Shift": 5.0, "Tab": 3.0, "Ctrl": 3.0, "1": 3.0, "2": 3.0,
               "3": 3.0, "4": 3.0, "5": 3.0, "Esc": 2.0}
+
+
+# English letter frequencies (per mille, the usual corpus tables); Æ and Ø are rare.
+# Scaled so E weighs 9, as before.
+_ENGLISH_LETTERS: dict[str, float] = {
+    "E": 127, "T": 91, "A": 82, "O": 75, "I": 70, "N": 67, "S": 63, "H": 61, "R": 60,
+    "D": 43, "L": 40, "C": 28, "U": 28, "M": 24, "W": 24, "F": 22, "G": 20, "Y": 20,
+    "P": 19, "B": 15, "V": 10, "K": 8, "J": 2, "X": 2, "Q": 1, "Z": 1, "Æ": 2, "Ø": 2}
+_LETTER_SCALE = 9 / 127
+# Common English bigrams (relative counts, from the usual corpus tables).
+_ENGLISH_BIGRAMS: dict[str, int] = {
+    "th": 356, "he": 307, "in": 243, "er": 205, "an": 199, "re": 185, "on": 176, "at": 149,
+    "en": 145, "nd": 135, "ti": 134, "es": 134, "or": 128, "te": 120, "of": 117, "ed": 117,
+    "is": 113, "it": 112, "al": 109, "ar": 107, "st": 105, "to": 104, "nt": 104, "ng": 95,
+    "se": 93, "ha": 93, "as": 87, "ou": 87, "io": 83, "le": 83, "ve": 83, "co": 79, "me": 79,
+    "de": 76, "hi": 76, "ri": 73, "ro": 73, "ic": 70, "ne": 69, "ea": 69, "ra": 69, "ce": 65,
+    "li": 62, "ch": 60, "ll": 58, "be": 58, "ma": 57, "si": 55, "om": 55, "ur": 54,
+}
 
 
 def _is_letter(label: str) -> bool:
@@ -483,8 +534,8 @@ class MockKeyboardService(KeyboardService):
         split_rng = random.Random(11)    # separate, so the totals are unchanged
         counts = self._counts.setdefault(layout.id, {})
         base = layout.layers[0].keys
-        hot = {"E": 9, "T": 7, "A": 7, "O": 6, "I": 6, "N": 6, "S": 6, "R": 5, "H": 5,
-               "L": 4, "D": 4, "C": 3, "U": 3, "M": 3, "Space": 14, "⌫": 6, "Enter": 4}
+        hot = {c: f * _LETTER_SCALE for c, f in _ENGLISH_LETTERS.items()}
+        hot.update({"Space": 14, "⌫": 6, "Enter": 4})
         today = self._today()
         for day in range(30):
             date = (today - dt.timedelta(days=day)).isoformat()
@@ -514,11 +565,17 @@ class MockKeyboardService(KeyboardService):
         for (day, layer, key, app), n in sorted(self._app_counts.get(layout.id, {}).items()):
             per.setdefault((day, app), []).append(((layer, key), n))
         pairs = self._pair_counts.setdefault(layout.id, {})
-        # A few common bigrams typed with one finger (E then D, D then E, U then M),
-        # so the layout coach has same-finger pairs to show.
+        # Letter pairs follow common English bigrams (so same-finger pairs and the layout
+        # comparison behave like real typing); the rest is drawn from the key counts.
         base = {b.tap_label: b.index for b in layout.layers[0].keys if b.tap_label}
-        habit = {(0, base[a]): (0, base[b]) for a, b in (("E", "D"), ("D", "E"), ("U", "M"))
-                 if a in base and b in base}
+        bspc = next(((0, b.index) for b in layout.layers[0].keys if b.tap_label == "⌫"), None)
+        follow: dict[Key, tuple[list[Key], list[int]]] = {}
+        for bg, w in _ENGLISH_BIGRAMS.items():
+            a, b = bg[0].upper(), bg[1].upper()
+            if a in base and b in base:
+                ks, ws = follow.setdefault((0, base[a]), ([], []))
+                ks.append((0, base[b]))
+                ws.append(w)
 
         def finger(k: Key) -> object:
             return fingers[MOCK_TO_ORYX[k[1]]] if k[1] < len(MOCK_TO_ORYX) else None
@@ -534,8 +591,12 @@ class MockKeyboardService(KeyboardService):
             for first in rng.choices(keys, cum_weights=cum, k=cum[-1] // 2):
                 lkeys, lcum = by_layer[first[0]]
                 for _try in range(3):
-                    if first in habit and rng.random() < 0.05:
-                        second = habit[first]
+                    if first in follow and bspc is not None and rng.random() < 0.06:
+                        second = bspc                                # a typo, then ⌫
+                        break
+                    if first in follow and rng.random() < 0.8:
+                        ks, ws = follow[first]
+                        second = rng.choices(ks, weights=ws)[0]      # an English bigram
                         break
                     if rng.random() < 0.05:
                         second = rng.choices(keys, cum_weights=cum)[0]      # layer switch
@@ -663,13 +724,26 @@ class MockKeyboardService(KeyboardService):
                       for w in rep.worst_same_finger)
         return replace(rep, worst_same_finger=worst)
 
+    def _oryx_bindings(self, layer: Layer) -> list[KeyBinding]:
+        """The layer's bindings re-indexed to Oryx key order, like the counts."""
+        return [replace(b, index=MOCK_TO_ORYX[b.index]) for b in layer.keys
+                if b.index < len(MOCK_TO_ORYX)]
+
     def get_coach_hints(self, period: HeatmapPeriod,
                         app: str | None = None) -> list[CoachHint]:
         inputs = self._oryx_inputs(period, app)
         if inputs is None:
             return []
+        layers = {l.index: self._oryx_bindings(l) for l in self._layout.layers}
         return [replace(h, keys=tuple(self._to_mock_key(k) for k in h.keys))
-                for h in coach.hints(*inputs)]
+                for h in coach.hints(*inputs, layers=layers)]
+
+    def get_layout_comparisons(self, period: HeatmapPeriod,
+                               app: str | None = None) -> list[LayoutComparison]:
+        inputs = self._oryx_inputs(period, app)
+        if inputs is None or not self._layout.layers:
+            return []
+        return layouts.compare(self._oryx_bindings(self._layout.layers[0]), *inputs)
 
     def reset_key_counts(self) -> None:
         if self._layout is not None:

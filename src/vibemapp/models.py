@@ -55,6 +55,10 @@ class KeyBinding:
     glyph: str | None = None      # optional symbolic icon name instead of tap_label
     color: str | None = None      # optional "#rrggbb" key colour from Oryx
     transparent: bool = False     # falls through to the layer below (Oryx ▽)
+    # Oryx/QMK keycode of the tap action ("KC_A", "DK_AE", "KC_LSHIFT", "MO"),
+    # None when unknown or transparent. Additive (1.2): the coach uses it to tell
+    # letters, modifiers and layer keys apart.
+    tap_code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -221,7 +225,12 @@ class CoachHintKind(str, Enum):
     * SAME_FINGER: keys = (first, second); ``finger`` set. numbers: count,
       rate (of all pairs).
     * SWAP: keys = (a, b), two keys on the same layer whose bindings would trade
-      places. numbers: score_before, score_after; ``score_delta`` set.
+      places. numbers: score_before, score_after; ``score_delta`` set. Only
+      non-letter keys without a hold action that aren't modifiers or layer keys
+      (Backspace, Enter, punctuation…): letters are compared as whole layouts
+      instead (``LayoutComparison``).
+    FAR_KEY and UNUSED_PRIME_KEY never name a letter either, and SAME_FINGER
+    needs at least one non-letter key (letter pairs belong to the layout comparison).
     """
     FAR_KEY = "far-key"
     UNUSED_PRIME_KEY = "unused-prime-key"
@@ -243,6 +252,20 @@ class CoachHint:
     score_delta: float | None = None      # predicted score change (SWAP), > 0 is better
 
 
+@dataclass(frozen=True)
+class LayoutComparison:
+    """Your recorded typing scored as if the letters sat on a well-known layout
+    (additive, 1.2). Only the base layer's letter block moves (the 26 Latin
+    letters and the four punctuation keys beside them); every other key and
+    letter (Æ, Ø, Å, …) stays where it is. ``name`` is a proper noun ("Colemak-DH"),
+    not translated. ``current`` is True for the layout the base layer already
+    uses. ``score_delta`` = ``report.score`` - the current score (> 0 is better)."""
+    name: str
+    report: ErgoReport
+    score_delta: float
+    current: bool = False
+
+
 # Sentinel for set_fallback_layer(): leave the layer untouched when no rule matches.
 FALLBACK_KEEP: None = None
 
@@ -250,6 +273,6 @@ FALLBACK_KEEP: None = None
 __all__ = [
     "KeyboardModel", "KeyGeometry", "Device", "KeyBinding", "Layer", "Layout",
     "AppRule", "RuleMatch", "FocusedWindow", "SteamGame", "RunningApp", "HeatmapPeriod", "HeatmapApp", "Finger", "KeyPairCount",
-    "ErgoReport", "COACH_MIN_PRESSES", "COACH_MIN_PAIRS", "CoachHintKind", "CoachHint",
+    "ErgoReport", "COACH_MIN_PRESSES", "COACH_MIN_PAIRS", "CoachHintKind", "CoachHint", "LayoutComparison",
     "FALLBACK_KEEP", "field",
 ]

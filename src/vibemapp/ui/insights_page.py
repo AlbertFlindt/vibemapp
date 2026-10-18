@@ -12,7 +12,8 @@ from gi.repository import Adw, GLib, GObject, Gtk  # noqa: E402
 
 from ..backend import ergo  # noqa: E402
 from ..models import (COACH_MIN_PAIRS, COACH_MIN_PRESSES, CoachHint, CoachHintKind,  # noqa: E402
-                      ErgoReport, Finger, HeatmapApp, HeatmapPeriod, KeyPairCount, Layout)
+                      ErgoReport, Finger, HeatmapApp, HeatmapPeriod, KeyPairCount, Layout,
+                      LayoutComparison)
 from ..service import KeyboardService  # noqa: E402
 from . import heat  # noqa: E402
 from .controller import DeviceController  # noqa: E402
@@ -176,6 +177,48 @@ def hint_text(hint: CoachHint, layout: Layout | None) -> tuple[str, str]:
                 after=format_number(n.get("score_after", 0.0))))
 
 
+def format_delta(delta: float) -> str:
+    """``+14.4``, ``−2.0``, ``0.0`` (a change that rounds to nothing carries no sign)."""
+    if round(delta, 1) == 0:
+        return format_number(0.0)
+    return ("+" if delta > 0 else MINUS) + format_number(abs(delta))
+
+
+def _part(key: str, report: ErgoReport) -> tuple[str, str] | None:
+    """One ergo part of a report as (name, short value), None when it can't be measured."""
+    if key == "same_finger":
+        return (_("Same-finger"), format_percent(report.same_finger_rate, 1)) if report.pairs else None
+    if key == "layer_switch":
+        return (_("Layer switches"), format_percent(report.layer_switch_rate, 1)) if report.pairs else None
+    if key == "reach":
+        return _("Reach"), format_number(report.reach_cost, 2)
+    if key == "hand_imbalance":
+        return _("Left hand"), format_percent(report.left_share)
+    busiest = max(report.finger_load.values(), default=0.0)
+    return _("Busiest finger"), format_percent(busiest)
+
+
+def comparison_subtitle(item: LayoutComparison, baseline: ErgoReport | None) -> str:
+    """The parts that change most against ``baseline`` as ``Same-finger 3.2% → 1.4% · Reach
+    1.09 → 0.82``; for the current layout (or without a baseline) its own main parts."""
+    if item.current or baseline is None:
+        own = [_part(k, item.report) for k in ("same_finger", "reach")]
+        return " · ".join(_("{part} {value}").format(part=p[0], value=p[1]) for p in own if p)
+    changes = sorted(
+        ((abs(item.report.penalties.get(k, 0.0) - baseline.penalties.get(k, 0.0)), k)
+         for k in ergo.PENALTY_KEYS), reverse=True)
+    parts = []
+    for size, key in changes:
+        before, after = _part(key, baseline), _part(key, item.report)
+        if size < 0.05 or before is None or after is None or before[1] == after[1]:
+            continue
+        parts.append(_("{part} {before} → {after}").format(part=before[0], before=before[1],
+                                                           after=after[1]))
+        if len(parts) == 2:
+            break
+    return " · ".join(parts) if parts else _("Little change")
+
+
 def _clear(listbox: Gtk.ListBox) -> None:
     child = listbox.get_first_child()
     while child is not None:
@@ -202,6 +245,7 @@ class InsightsPage(Adw.Bin):
     switch_label: Gtk.Label = Gtk.Template.Child()
     penalty_list: Gtk.ListBox = Gtk.Template.Child()
     coach_list: Gtk.ListBox = Gtk.Template.Child()
+    layouts_list: Gtk.ListBox = Gtk.Template.Child()
     score_label: Gtk.Label = Gtk.Template.Child()
     score_caption: Gtk.Label = Gtk.Template.Child()
     record_row: Adw.SwitchRow = Gtk.Template.Child()
@@ -342,6 +386,7 @@ class InsightsPage(Adw.Bin):
             None if report.pairs else _("Turn on Record Key Pairs to measure this"))
         self._fill_score(report)
         self._fill_coach(report, layout)
+        self._fill_layouts(report)
 
     def _fill_fingers(self, report: ErgoReport) -> None:
         order = list(Finger)
@@ -464,3 +509,45 @@ class InsightsPage(Adw.Bin):
         row = Adw.ActionRow(title=text, use_markup=False, title_lines=0)
         row.add_css_class("dim-label")
         self.coach_list.append(row)
+
+    def _fill_layouts(self, report: ErgoReport) -> None:
+        _clear(self.layouts_list)
+        assert self.service is not None
+        if report.presses < COACH_MIN_PRESSES:
+            self._layouts_note(_("Layout comparisons appear after {min} key presses "
+                                 "({n} so far)").format(min=heat.format_count(COACH_MIN_PRESSES),
+                                                        n=heat.format_count(report.presses)))
+            return
+        items = self.service.get_layout_comparisons(self.period(), self.app_filter())
+        if not items:
+            self._layouts_note(_("Your base layer has no recognisable A–Z letter block"))
+            return
+        baseline = next((i.report for i in items if i.current), None)
+        for item in items:
+            row = Adw.ActionRow(title=item.name, use_markup=False,
+                                subtitle=comparison_subtitle(item, baseline))
+            score = Gtk.Label(label=format_number(item.report.score), valign=Gtk.Align.CENTER)
+            score.add_css_class("numeric")
+            score.add_css_class("heading")
+            tag = Gtk.Label(valign=Gtk.Align.CENTER, xalign=1.0, width_chars=6)
+            tag.add_css_class("numeric")
+            if item.current:
+                tag.set_label(_("Current"))
+                tag.add_css_class("dim-label")
+            else:
+                tag.set_label(format_delta(item.score_delta))
+                tag.set_tooltip_text(_("Score change against your current layout"))
+                if round(item.score_delta, 1) > 0:
+                    tag.add_css_class("success")
+                elif round(item.score_delta, 1) < 0:
+                    tag.add_css_class("warning")
+                else:
+                    tag.add_css_class("dim-label")
+            row.add_suffix(score)
+            row.add_suffix(tag)
+            self.layouts_list.append(row)
+
+    def _layouts_note(self, text: str) -> None:
+        row = Adw.ActionRow(title=text, use_markup=False, title_lines=0)
+        row.add_css_class("dim-label")
+        self.layouts_list.append(row)

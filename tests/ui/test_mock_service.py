@@ -6,6 +6,7 @@ import unittest
 from gi.repository import GLib
 
 from vibemapp.backend import geometries
+from vibemapp.backend.keykinds import KeyKind, classify
 from vibemapp.mock_service import (MOCK_TO_ORYX, MockKeyboardService, voyager_layout,
                                     voyager_geometry)
 from vibemapp.models import AppRule, CoachHintKind, Finger, HeatmapPeriod, KeyboardModel, RuleMatch
@@ -280,13 +281,47 @@ class MockServiceTests(unittest.TestCase):
         self.assertTrue({CoachHintKind.FAR_KEY, CoachHintKind.UNUSED_PRIME_KEY,
                          CoachHintKind.SAME_FINGER, CoachHintKind.SWAP} <= kinds, kinds)
         same = next(h for h in hints if h.kind == CoachHintKind.SAME_FINGER)
-        self.assertEqual({labels[k] for k in same.keys}, {"E", "D"})
+        self.assertEqual({labels[k] for k in same.keys}, {"A", "⌫"})      # never letter-letter
         fingers = geometries.FINGERS[KeyboardModel.VOYAGER]
         self.assertTrue(all(fingers[MOCK_TO_ORYX[k[1]]] == same.finger for k in same.keys))
         swap = next(h for h in hints if h.kind == CoachHintKind.SWAP)
         self.assertGreater(swap.score_delta, 0)
         far = next(h for h in hints if h.kind == CoachHintKind.FAR_KEY)
         self.assertEqual(labels[far.keys[0]], "\u232b")
+
+    def test_coach_never_names_letters_or_modifiers(self) -> None:
+        self.svc._seed_heatmap = True
+        self.connect_and_load()
+        layers = {layer.index: {b.index: b for b in layer.keys}
+                  for layer in self.svc.get_layout().layers}
+        for app in (None, "firefox", "kitty"):
+            for h in self.svc.get_coach_hints(HeatmapPeriod.ALL, app):
+                if h.kind in (CoachHintKind.SWAP, CoachHintKind.FAR_KEY):
+                    for layer, key in h.keys:
+                        b = layers[layer][key]
+                        self.assertEqual(classify(b), KeyKind.OTHER, (h.kind, b.tap_label))
+
+    def test_mock_has_tap_codes_and_danish_ae(self) -> None:
+        base = voyager_layout().layers[0].keys
+        codes = {b.tap_label: b.tap_code for b in base if b.tap_label}
+        self.assertEqual((codes["A"], codes["Æ"], codes["Ø"]), ("KC_A", "DK_AE", "DK_OSTR"))
+        self.assertEqual((codes["Shift"], codes["⌫"]), ("KC_LSHIFT", "KC_BSPACE"))
+        self.assertTrue(all(b.tap_code is None for b in base if b.transparent))
+
+    def test_layout_comparisons(self) -> None:
+        self.assertEqual(self.svc.get_layout_comparisons(HeatmapPeriod.WEEK), [])    # no layout
+        self.svc._seed_heatmap = True
+        self.connect_and_load()
+        res = self.svc.get_layout_comparisons(HeatmapPeriod.WEEK)
+        self.assertEqual({r.name for r in res},
+                         {"QWERTY", "Colemak", "Colemak-DH", "Workman", "Dvorak"})
+        report = self.svc.get_ergo_report(HeatmapPeriod.WEEK)
+        cur = next(r for r in res if r.current)
+        self.assertEqual((cur.name, cur.score_delta, cur.report.score), ("QWERTY", 0.0, report.score))
+        scores = [r.report.score for r in res]
+        self.assertEqual(scores, sorted(scores, reverse=True))
+        self.assertEqual(self.svc.get_layout_comparisons(HeatmapPeriod.WEEK, "nope"), [])
+        self.assertTrue(self.svc.get_layout_comparisons(HeatmapPeriod.WEEK, "firefox"))
 
     def test_mock_to_oryx_permutation(self) -> None:
         self.assertEqual(sorted(MOCK_TO_ORYX), list(range(52)))
@@ -304,7 +339,7 @@ class MockServiceTests(unittest.TestCase):
         for label, finger in (("A", Finger.L_PINKY), ("S", Finger.L_RING),
                               ("D", Finger.L_MIDDLE), ("F", Finger.L_INDEX),
                               ("J", Finger.R_INDEX), ("K", Finger.R_MIDDLE),
-                              ("L", Finger.R_RING), (";", Finger.R_PINKY)):
+                              ("L", Finger.R_RING), ("Æ", Finger.R_PINKY)):
             self.assertEqual(MOCK_TO_ORYX[base[label]], homes[finger], label)
         keys = voyager_layout().layers[0].keys
         for i in (48, 49, 50, 51):                    # thumb cluster: Space, Esc, Enter, ⌫
@@ -323,7 +358,7 @@ class MockServiceTests(unittest.TestCase):
             total = self.svc.get_ergo_report(period)
             self.assertEqual(total.presses, sum(self.svc.get_key_counts(period).values()))
             self.assertGreater(total.pairs, 0)
-            self.assertLess(total.same_finger_rate, 0.04)
+            self.assertLess(total.same_finger_rate, 0.08)       # English bigrams on QWERTY: 4-7%
             self.assertGreater(total.same_finger_rate, 0.01)
             self.assertGreater(total.layer_switch_rate, 0.0)
             self.assertLessEqual(len(total.worst_same_finger), 5)
