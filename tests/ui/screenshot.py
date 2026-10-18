@@ -65,6 +65,7 @@ def main() -> int:
     parser.add_argument("--kind", choices=["app", "steam-any", "pattern"])
     parser.add_argument("--focus", default="firefox|Lo-fi beats — YouTube — Mozilla Firefox",
                         help="class|title of the simulated focused window")
+    parser.add_argument("--heatmap-app", help="app key to select on the Heatmap page")
     parser.add_argument("--record", action="store_true", help="turn heatmap recording on")
     parser.add_argument("--no-smart", action="store_true",
                         help="turn Smart Layers off before the keyboard connects")
@@ -114,6 +115,14 @@ def main() -> int:
             app.settings.set_value("overlay-layers", GLib.Variant(
                 "ai", [int(v) for v in args.overlay_layers.split(",") if v]))
         win.show_page(args.page)
+        if args.heatmap_app:
+            page = win.heatmap_page
+            page.refresh()
+            keys = page._app_keys
+            if args.heatmap_app in keys:
+                page.app_dropdown.set_selected(keys.index(args.heatmap_app) + 1)
+            else:
+                print(f"heatmap app {args.heatmap_app!r} not in {keys}")
         mock = hasattr(svc, "simulate_focus")
         if mock:
             svc.simulate_focus(*args.focus.split("|", 1))

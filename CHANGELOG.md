@@ -2,6 +2,14 @@
 
 All notable changes to Vibemapp. Each version is a tag and a GitHub release.
 
+## Unreleased
+
+### Added
+- **Heatmap per app:** an App filter on the Heatmap page, next to Period and Layer. While
+  heatmap recording is on, each key press is also counted for the focused app (its window
+  class, or the game's name for Steam games; never window titles). Counts recorded before
+  this version show under All Apps.
+
 ## 1.1.4 (2026-10-13)
 
 ### Added

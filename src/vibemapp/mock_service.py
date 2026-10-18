@@ -28,7 +28,7 @@ from typing import Callable
 
 from gi.repository import Gio, GLib
 
-from .models import (AppRule, Device, FocusedWindow, HeatmapPeriod, RuleMatch, SteamGame, KeyBinding, KeyboardModel, KeyGeometry,
+from .models import (AppRule, Device, FocusedWindow, HeatmapApp, HeatmapPeriod, RuleMatch, SteamGame, KeyBinding, KeyboardModel, KeyGeometry,
                      Layer, Layout, RunningApp)
 from .service import KeyboardService
 from .ui.i18n import _
@@ -182,6 +182,24 @@ def steam_app_id_for(app_class: str) -> str | None:
     return _NATIVE_STEAM_CLASSES.get(app_class)
 
 
+_SEED_GAME = "steam:1245620"
+_GAME_KEYS = {"W": 9.0, "A": 7.0, "S": 7.0, "D": 7.0, "E": 4.0, "Q": 3.0, "R": 3.0, "F": 3.0,
+              "Space": 6.0, "Shift": 5.0, "Tab": 3.0, "Ctrl": 3.0, "1": 3.0, "2": 3.0,
+              "3": 3.0, "4": 3.0, "5": 3.0, "Esc": 2.0}
+
+
+def _is_letter(label: str) -> bool:
+    return len(label) == 1 and label.isalpha()
+
+
+# (app key, weight profile(tap label, layer) -> relative share of presses)
+_SEED_APPS: tuple[tuple[str, Callable[[str, int], float]], ...] = (
+    ("firefox", lambda label, layer: (2.2 if _is_letter(label) else 0.8) / (1 + layer)),
+    ("code", lambda label, layer: (1.0 if _is_letter(label) else 1.2) * (1.0 + 2.5 * (layer > 0))),
+    ("kitty", lambda label, layer: (0.7 if _is_letter(label) else 1.0) * (1.0 + 1.0 * (layer > 0))),
+    (_SEED_GAME, lambda label, layer: _GAME_KEYS.get(label, 0.05) / (1 + layer) * 2.5),
+)
+
 _FOCUS_SCRIPT: tuple[tuple[str, str], ...] = (
     ("kitty", "~/Projects/vibemapp — fish"),
     ("firefox", "GNOME Human Interface Guidelines — Mozilla Firefox"),
@@ -221,6 +239,9 @@ class MockKeyboardService(KeyboardService):
         self._last_sent: int | None = None
         # layout id -> {(iso day, layer, key index): presses}
         self._counts: dict[str, dict[tuple[str, int, int], int]] = {}
+        # layout id -> {(iso day, layer, key index, app key): presses}; sums to _counts
+        self._app_counts: dict[str, dict[tuple[str, int, int, str], int]] = {}
+        self._app_names: dict[str, str] = {}
         self._counts_pending = 0
         self._seed_heatmap = _env_flag("VIBEMAPP_MOCK_HEATMAP_SEED", False)
         seed = [] if _env_flag("VIBEMAPP_MOCK_NO_RULES", False) else demo_rules()
@@ -374,7 +395,23 @@ class MockKeyboardService(KeyboardService):
         counts = self._counts.setdefault(self._layout.id, {})
         key = (self._today().isoformat(), self._active_layer, index)
         counts[key] = counts.get(key, 0) + 1
+        app, name = self._heatmap_app()
+        if app:
+            akey = (*key, app)
+            acounts = self._app_counts.setdefault(self._layout.id, {})
+            acounts[akey] = acounts.get(akey, 0) + 1
+            if name != app:
+                self._app_names[app] = name
         self._schedule_counts_changed()
+
+    def _heatmap_app(self) -> tuple[str | None, str]:
+        window = self.get_focused_window()
+        if window is None:
+            return None, ""
+        if window.steam_app_id:
+            key = f"steam:{window.steam_app_id}"
+            return key, window.steam_game_name or key
+        return window.app_class, window.app_class
 
     def _schedule_counts_changed(self) -> None:
         if self._counts_pending:
@@ -390,6 +427,7 @@ class MockKeyboardService(KeyboardService):
     def _seed_counts(self, layout: Layout) -> None:
         """Plausible typing history: home row and thumbs hot, edges cold."""
         rng = random.Random(7)
+        split_rng = random.Random(11)    # separate, so the totals are unchanged
         counts = self._counts.setdefault(layout.id, {})
         base = layout.layers[0].keys
         hot = {"E": 9, "T": 7, "A": 7, "O": 6, "I": 6, "N": 6, "S": 6, "R": 5, "H": 5,
@@ -403,17 +441,39 @@ class MockKeyboardService(KeyboardService):
                 n = int(weight * volume * rng.uniform(20, 40))
                 if n:
                     counts[(date, 0, binding.index)] = n
+                    self._split_seed(layout, date, 0, binding.tap_label, binding.index, n, split_rng)
             for layer in layout.layers[1:]:
                 for binding in layer.keys:
                     if binding.tap_label or binding.glyph:
                         n = int(volume * rng.uniform(0, 25) * (4 - layer.index) / 3)
                         if n:
                             counts[(date, layer.index, binding.index)] = n
+                            self._split_seed(layout, date, layer.index, binding.tap_label,
+                                             binding.index, n, split_rng)
 
-    def get_key_counts(self, period: HeatmapPeriod,
-                       layer: int | None = None) -> dict[int, int]:
-        if self._layout is None:
-            return {}
+    def _split_seed(self, layout: Layout, date: str, layer: int, label: str,
+                    index: int, n: int, rng: random.Random) -> None:
+        """Split a seeded (day, layer, key) total over the demo apps, summing to ``n``."""
+        day_no = (self._today() - dt.date.fromisoformat(date)).days
+        weights = []
+        for app, profile in _SEED_APPS:
+            w = profile(label, layer) * rng.uniform(0.7, 1.3)
+            if app == _SEED_GAME and day_no % 3 != 0:
+                w = 0.0                        # the game is only played every third day
+            weights.append(w)
+        total = sum(weights)
+        if total <= 0:
+            weights, total = [1.0] + [0.0] * (len(weights) - 1), 1.0
+        shares = [int(n * w / total) for w in weights]
+        shares[weights.index(max(weights))] += n - sum(shares)
+        acounts = self._app_counts.setdefault(layout.id, {})
+        for (app, _p), share in zip(_SEED_APPS, shares):
+            if share:
+                acounts[(date, layer, index, app)] = share
+        self._app_names[_SEED_GAME] = next(
+            g.name for g in MOCK_STEAM_GAMES if g.app_id == _SEED_GAME.split(":")[1])
+
+    def _period_first(self, period: HeatmapPeriod) -> str:
         today = self._today()
         if period == HeatmapPeriod.TODAY:
             first = today
@@ -421,16 +481,41 @@ class MockKeyboardService(KeyboardService):
             first = today - dt.timedelta(days=6)
         else:
             first = dt.date.min
-        first_iso = first.isoformat()
+        return first.isoformat()
+
+    def get_key_counts(self, period: HeatmapPeriod,
+                       layer: int | None = None,
+                       app: str | None = None) -> dict[int, int]:
+        if self._layout is None:
+            return {}
+        first_iso = self._period_first(period)
         out: dict[int, int] = {}
-        for (day, layer_index, key), n in self._counts.get(self._layout.id, {}).items():
-            if day >= first_iso and (layer is None or layer == layer_index):
+        if app is None:
+            for (day, layer_index, key), n in self._counts.get(self._layout.id, {}).items():
+                if day >= first_iso and (layer is None or layer == layer_index):
+                    out[key] = out.get(key, 0) + n
+            return out
+        for (day, layer_index, key, a), n in self._app_counts.get(self._layout.id, {}).items():
+            if a == app and day >= first_iso and (layer is None or layer == layer_index):
                 out[key] = out.get(key, 0) + n
         return out
+
+    def list_heatmap_apps(self, period: HeatmapPeriod) -> list[HeatmapApp]:
+        if self._layout is None:
+            return []
+        first_iso = self._period_first(period)
+        totals: dict[str, int] = {}
+        for (day, _l, _k, app), n in self._app_counts.get(self._layout.id, {}).items():
+            if day >= first_iso and n > 0:
+                totals[app] = totals.get(app, 0) + n
+        apps = [HeatmapApp(k, self._app_names.get(k, k), n) for k, n in totals.items()]
+        apps.sort(key=lambda a: (-a.presses, a.name.casefold(), a.key))
+        return apps
 
     def reset_key_counts(self) -> None:
         if self._layout is not None:
             self._counts.pop(self._layout.id, None)
+            self._app_counts.pop(self._layout.id, None)
             self.emit("key-counts-changed")
 
     def simulate_monitor(self, connector: str) -> None:

@@ -177,6 +177,37 @@ class MockServiceTests(unittest.TestCase):
         self.svc.reset_key_counts()
         self.assertEqual(self.svc.get_key_counts(HeatmapPeriod.ALL), {})
 
+    def test_heatmap_apps(self) -> None:
+        self.connect_and_load()
+        self.svc.props.heatmap_recording = True
+        self.svc.simulate_focus("firefox", "page")
+        self.svc.simulate_key(3, True)
+        self.svc.simulate_focus("steam_app_1245620", "ELDEN RING")
+        self.svc.simulate_key(4, True)
+        self.svc.simulate_key(4, True)
+        apps = self.svc.list_heatmap_apps(HeatmapPeriod.ALL)
+        self.assertEqual([(a.key, a.name, a.presses) for a in apps],
+                         [("steam:1245620", "ELDEN RING", 2), ("firefox", "firefox", 1)])
+        self.assertEqual(self.svc.get_key_counts(HeatmapPeriod.ALL, app="firefox"), {3: 1})
+        self.assertEqual(self.svc.get_key_counts(HeatmapPeriod.ALL), {3: 1, 4: 2})
+        self.svc.reset_key_counts()
+        self.assertEqual(self.svc.list_heatmap_apps(HeatmapPeriod.ALL), [])
+
+    def test_heatmap_seed_apps(self) -> None:
+        self.svc._seed_heatmap = True
+        self.connect_and_load()
+        for period in HeatmapPeriod:
+            apps = self.svc.list_heatmap_apps(period)
+            self.assertGreaterEqual(len(apps), 3)
+            total: dict[int, int] = {}
+            for a in apps:
+                for k, n in self.svc.get_key_counts(period, app=a.key).items():
+                    total[k] = total.get(k, 0) + n
+            self.assertEqual(total, self.svc.get_key_counts(period))
+            self.assertEqual(sum(a.presses for a in apps), sum(total.values()))
+        names = {a.key: a.name for a in self.svc.list_heatmap_apps(HeatmapPeriod.ALL)}
+        self.assertEqual(names["steam:1245620"], "ELDEN RING")
+
     def test_heatmap_periods(self) -> None:
         import datetime as dt
         self.connect_and_load()

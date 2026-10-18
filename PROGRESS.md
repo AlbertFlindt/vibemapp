@@ -23,6 +23,11 @@ How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
 - Overlay with fractional monitor scaling, and the overlay on a Planck (no halves).
 
 ## Next steps
+0. **Typing Insights** (branch `feature/typing-insights`, PR at the end): phase 1 heatmap per app
+   landed; phase 2 (finger map, opt-in key-pair counts, ergo score on a new Insights page) and
+   phase 3 (layout coach) follow. Phase 1 UI tests and screenshots couldn't run in the cloud
+   container (Ubuntu, libadwaita 1.5): run `./check.sh` and `VIBEMAPP_MOCK_HEATMAP_SEED=1 PYTHONPATH=src
+   python3 tests/ui/screenshot.py OUT.png --page heatmap --record --size 1000x1000 --heatmap-app code` on Arch.
 1. **Translations.** Add `po/` (`POTFILES`, `LINGUAS`) and meson `i18n.gettext('vibemapp')`.
    Strings are already in `_()`.
 
@@ -58,6 +63,9 @@ How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
 - **Auto-connect is a service property:** the UI binds it to GSettings, so there's one policy.
 - **Renamed to Vibemapp with full migration:** the user asked for a complete rename.
 - **Heatmap is opt-in and stores counts only:** privacy; typing can't be reconstructed.
+- **Per-app heatmap counts are part of the heatmap opt-in** (window class or Steam game, never
+  titles); `days` stays the all-apps total so old files load unchanged.
+- **Ergo score and coach get their own Insights sidebar page**; the Heatmap page only gains the App filter.
 - **Close hides to the tray:** Hyprland has no minimise.
 - **Steam detection also reads the process environment:** a class regex misses native games.
 - **Single-game Steam picker removed:** too Steam-focused. "All Steam Games" stays.

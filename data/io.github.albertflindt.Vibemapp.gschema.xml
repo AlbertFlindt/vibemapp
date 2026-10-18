@@ -24,7 +24,7 @@
     <key name="heatmap-recording" type="b">
       <default>false</default>
       <summary>Record key heatmap</summary>
-      <description>Count key presses per key for the heatmap. Only per-key counts are stored, never what is typed.</description>
+      <description>Count key presses per key for the heatmap, also per focused app (window class only, never window titles). Only per-key counts are stored, never what is typed.</description>
     </key>
     <key name="migrated-from-keymappforlinux" type="b">
       <default>false</default>

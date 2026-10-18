@@ -31,7 +31,7 @@ from typing import Any, Callable
 
 from gi.repository import Gio, GLib
 
-from ..models import (AppRule, Device, FocusedWindow, HeatmapPeriod, Layout, RunningApp,
+from ..models import (AppRule, Device, FocusedWindow, HeatmapApp, HeatmapPeriod, Layout, RunningApp,
                       SteamGame)
 from ..service import KeyboardService
 from . import devices as devmod
@@ -451,7 +451,8 @@ class ZsaKeyboardService(KeyboardService):
                     self._pressed.discard(index)
                 self._engine.key_activity(bool(self._pressed))
                 if pressed and self.props.heatmap_recording:
-                    self._heatmap.record(self._active_layer, index)
+                    app, app_name = self._heatmap_app()
+                    self._heatmap.record(self._active_layer, index, app, app_name)
                     self._schedule_counts_changed()
                 self.emit("key-event", index, pressed)
         elif ev.code == Evt.TOGGLE_SMART_LAYER:
@@ -623,8 +624,22 @@ class ZsaKeyboardService(KeyboardService):
     # --- heatmap ------------------------------------------------------------------
 
     def get_key_counts(self, period: HeatmapPeriod,
-                       layer: int | None = None) -> dict[int, int]:
-        return self._heatmap.counts(period, layer)
+                       layer: int | None = None,
+                       app: str | None = None) -> dict[int, int]:
+        return self._heatmap.counts(period, layer, app)
+
+    def list_heatmap_apps(self, period: HeatmapPeriod) -> list[HeatmapApp]:
+        return self._heatmap.apps(period)
+
+    def _heatmap_app(self) -> tuple[str | None, str | None]:
+        """(app key, display name) of the focused app, for per-app counts."""
+        window = self._focused_window
+        if window is None:
+            return None, None
+        if window.steam_app_id:
+            key = f"steam:{window.steam_app_id}"
+            return key, window.steam_game_name or key
+        return (window.app_class or None), None
 
     def reset_key_counts(self) -> None:
         try:

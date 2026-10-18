@@ -138,11 +138,24 @@ class HeatmapPeriod(str, Enum):
     ALL = "all"
 
 
+@dataclass(frozen=True)
+class HeatmapApp:
+    """An app with recorded key presses (additive, 1.2: heatmap per app).
+
+    ``key`` is what ``get_key_counts(app=...)`` takes: the window class, or
+    ``steam:<app id>`` for a Steam game. ``name`` is for display (the Steam
+    game's name, else the window class). ``presses`` is the total in the
+    queried period."""
+    key: str
+    name: str
+    presses: int
+
+
 # Sentinel for set_fallback_layer(): leave the layer untouched when no rule matches.
 FALLBACK_KEEP: None = None
 
 
 __all__ = [
     "KeyboardModel", "KeyGeometry", "Device", "KeyBinding", "Layer", "Layout",
-    "AppRule", "RuleMatch", "FocusedWindow", "SteamGame", "RunningApp", "HeatmapPeriod", "FALLBACK_KEEP", "field",
+    "AppRule", "RuleMatch", "FocusedWindow", "SteamGame", "RunningApp", "HeatmapPeriod", "HeatmapApp", "FALLBACK_KEEP", "field",
 ]

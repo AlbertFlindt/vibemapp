@@ -10,7 +10,7 @@ from vibemapp.backend.heatmap import HeatmapStore
 from vibemapp.backend.oryx import OryxConnection
 from vibemapp.backend.oryx_api import LayoutCache, LayoutRepository
 from vibemapp.backend.zsa_service import ZsaKeyboardService
-from vibemapp.models import HeatmapPeriod
+from vibemapp.models import FocusedWindow, HeatmapApp, HeatmapPeriod
 
 from ._util import FakeFirmware, drain, spin
 from .test_devices import RAW_DESC, make_node
@@ -71,8 +71,9 @@ class StoreTests(unittest.TestCase):
         path = os.path.join(self.tmp.name, "Bre9W.json")
         with open(path) as f:
             data = json.load(f)
-        self.assertEqual(data, {"version": 1, "layout_id": "Bre9W",
-                                "days": {"2026-10-10": {"0": {"1": 1}, "2": {"3": 1}}}})
+        self.assertEqual(data, {"version": 2, "layout_id": "Bre9W",
+                                "days": {"2026-10-10": {"0": {"1": 1}, "2": {"3": 1}}},
+                                "app_days": {}, "app_names": {}})
         self.assertEqual([n for n in os.listdir(self.tmp.name) if n.endswith(".tmp")], [])
         other = HeatmapStore(self.tmp.name, self.clock)
         other.set_layout("Bre9W")
@@ -109,6 +110,110 @@ class StoreTests(unittest.TestCase):
         s2.set_layout("x")
         self.assertEqual(s2.counts(HeatmapPeriod.ALL), {})
         self.assertTrue(os.path.exists(path + ".corrupt"))
+
+
+class AppStoreTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.clock = Clock(dt.date(2026, 10, 10))
+        self.store = HeatmapStore(self.tmp.name, self.clock)
+        self.store.set_layout("Bre9W")
+        self.path = os.path.join(self.tmp.name, "Bre9W.json")
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def reload(self) -> HeatmapStore:
+        other = HeatmapStore(self.tmp.name, self.clock)
+        other.set_layout("Bre9W")
+        return other
+
+    def test_v1_file_loads_without_apps_then_upgrades(self) -> None:
+        with open(self.path, "w") as f:
+            json.dump({"version": 1, "layout_id": "Bre9W",
+                       "days": {"2026-10-09": {"0": {"4": 5}}}}, f)
+        s = self.reload()
+        self.assertEqual(s.counts(HeatmapPeriod.ALL), {4: 5})
+        self.assertEqual(s.counts(HeatmapPeriod.ALL, app=None), {4: 5})
+        self.assertEqual(s.apps(HeatmapPeriod.ALL), [])
+        s.record(0, 4, "firefox")
+        s.flush()
+        with open(self.path) as f:
+            data = json.load(f)
+        self.assertEqual(data["version"], 2)
+        self.assertEqual(data["days"], {"2026-10-09": {"0": {"4": 5}},
+                                        "2026-10-10": {"0": {"4": 1}}})
+        self.assertEqual(data["app_days"], {"2026-10-10": {"firefox": {"0": {"4": 1}}}})
+
+    def test_per_app_counts(self) -> None:
+        s = self.store
+        s.record(0, 1, "firefox")
+        s.record(0, 1, "firefox")
+        s.record(1, 2, "kitty")
+        s.record(0, 3)                                   # no app: total only
+        self.assertEqual(s.counts(HeatmapPeriod.ALL, app="firefox"), {1: 2})
+        self.assertEqual(s.counts(HeatmapPeriod.ALL, layer=1, app="kitty"), {2: 1})
+        self.assertEqual(s.counts(HeatmapPeriod.ALL, layer=0, app="kitty"), {})
+        self.assertEqual(s.counts(HeatmapPeriod.ALL), {1: 2, 2: 1, 3: 1})
+        self.assertEqual(s.counts(HeatmapPeriod.ALL, app="nope"), {})
+        self.assertEqual(s.apps(HeatmapPeriod.ALL),
+                         [HeatmapApp("firefox", "firefox", 2), HeatmapApp("kitty", "kitty", 1)])
+
+    def test_apps_sorted_by_presses_then_name(self) -> None:
+        for app, n in (("b", 2), ("a", 2), ("c", 5)):
+            for _ in range(n):
+                self.store.record(0, 1, app)
+        self.assertEqual([a.key for a in self.store.apps(HeatmapPeriod.ALL)], ["c", "a", "b"])
+
+    def test_steam_name_roundtrip(self) -> None:
+        self.store.record(0, 1, "steam:1245620", "Elden Ring")
+        self.store.record(0, 1, "firefox", "firefox")     # name == key: not stored
+        self.store.flush()
+        with open(self.path) as f:
+            self.assertEqual(json.load(f)["app_names"], {"steam:1245620": "Elden Ring"})
+        apps = self.reload().apps(HeatmapPeriod.ALL)
+        self.assertEqual(apps, [HeatmapApp("steam:1245620", "Elden Ring", 1),
+                                HeatmapApp("firefox", "firefox", 1)])
+
+    def test_period_filtering(self) -> None:
+        self.store.record(0, 1, "old")
+        self.clock.advance(10)
+        self.store.record(0, 2, "new")
+        self.assertEqual([a.key for a in self.store.apps(HeatmapPeriod.TODAY)], ["new"])
+        self.assertEqual([a.key for a in self.store.apps(HeatmapPeriod.WEEK)], ["new"])
+        self.assertEqual(len(self.store.apps(HeatmapPeriod.ALL)), 2)
+        self.assertEqual(self.store.counts(HeatmapPeriod.WEEK, app="old"), {})
+        self.assertEqual(self.store.counts(HeatmapPeriod.ALL, app="old"), {1: 1})
+
+    def test_garbage_app_entries_skipped(self) -> None:
+        with open(self.path, "w") as f:
+            json.dump({"days": {"2026-10-10": {"0": {"1": 3}}},
+                       "app_days": {"2026-10-10": {"ok": {"0": {"1": 2, "x": 1, "2": -4}},
+                                                   "bad": [1], "": {"0": {"1": 1}},
+                                                   "worse": {"0": "no"}, "n": 7},
+                                    "nodate": {"ok": {"0": {"1": 9}}}, "2026-10-11": 5,
+                                    "future": 1},
+                       "app_names": {"ok": "Okay", "bad": 5, "": "x", "z": ""},
+                       "future_key": {"a": 1}}, f)
+        s = self.reload()
+        self.assertEqual(s.apps(HeatmapPeriod.ALL), [HeatmapApp("ok", "Okay", 2)])
+        self.assertEqual(s.counts(HeatmapPeriod.ALL), {1: 3})
+        for junk in ("x", ["a"], 5, None):
+            with open(self.path, "w") as f:
+                json.dump({"days": {}, "app_days": junk, "app_names": junk}, f)
+            self.assertEqual(self.reload().apps(HeatmapPeriod.ALL), [])
+
+    def test_app_key_sanitised(self) -> None:
+        self.store.record(0, 1, "x" * 500)
+        self.assertEqual(len(self.store.apps(HeatmapPeriod.ALL)[0].key), 200)
+
+    def test_reset_clears_apps(self) -> None:
+        self.store.record(0, 1, "firefox", "Fox")
+        self.store.flush()
+        self.store.reset()
+        self.assertEqual(self.store.apps(HeatmapPeriod.ALL), [])
+        self.assertEqual(self.store.counts(HeatmapPeriod.ALL, app="firefox"), {})
+        self.assertEqual(self.store.to_json()["app_names"], {})
 
 
 class ServiceHeatmapTests(unittest.TestCase):
@@ -182,6 +287,32 @@ class ServiceHeatmapTests(unittest.TestCase):
         self.svc.reset_key_counts()
         self.assertEqual(self.changes - before, 1)
         self.assertEqual(self.svc.get_key_counts(HeatmapPeriod.ALL), {})
+
+    def test_records_focused_app(self) -> None:
+        self.svc.props.heatmap_recording = True
+        self.assertTrue(spin(lambda: self.svc.get_connected_device() is not None))
+        self.svc._focused_window = None                   # nothing focused: total only
+        self.press(5, 0)
+        self.assertTrue(spin(lambda: self.svc.get_key_counts(HeatmapPeriod.ALL) == {24: 1}))
+        self.assertEqual(self.svc.list_heatmap_apps(HeatmapPeriod.ALL), [])
+        self.svc._update_focus("firefox", "a page")
+        self.press(5, 0, 2)
+        self.assertTrue(spin(lambda: self.svc.get_key_counts(HeatmapPeriod.ALL) == {24: 3}))
+        self.svc._focused_window = FocusedWindow("steam_app_1245620", "ER", 1, "1245620",
+                                                 "Elden Ring")
+        self.press(0, 1)
+        self.assertTrue(spin(lambda: self.svc.get_key_counts(HeatmapPeriod.ALL) == {24: 3, 0: 1}))
+        self.svc._focused_window = FocusedWindow("steam_app_9", "G", 1, "9")   # name unknown
+        self.press(0, 1)
+        self.assertTrue(spin(lambda: self.svc.get_key_counts(HeatmapPeriod.ALL) == {24: 3, 0: 2}))
+        self.assertEqual(self.svc.get_key_counts(HeatmapPeriod.ALL, app="firefox"), {24: 2})
+        self.assertEqual(self.svc.get_key_counts(HeatmapPeriod.ALL, app="steam:1245620"), {0: 1})
+        self.assertEqual(self.svc.list_heatmap_apps(HeatmapPeriod.ALL),
+                         [HeatmapApp("firefox", "firefox", 2),
+                          HeatmapApp("steam:1245620", "Elden Ring", 1),
+                          HeatmapApp("steam:9", "steam:9", 1)])
+        self.svc.reset_key_counts()
+        self.assertEqual(self.svc.list_heatmap_apps(HeatmapPeriod.ALL), [])
 
     def test_throttle_interval(self) -> None:
         self.svc.HEATMAP_THROTTLE_MS = 300

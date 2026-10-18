@@ -59,7 +59,7 @@
                     <property name="title" translatable="yes">See Which Keys You Use</property>
                     <property name="description" translatable="yes">Vibemapp can count how often you press each key, per layer, to show a heatmap of your layout.
 
-Only per-key press counts are stored, never what you type. Counts stay on this computer.</property>
+Only per-key press counts and the focused app's name are stored, never window titles or what you type. Counts stay on this computer.</property>
                     <property name="child">
                       <object class="GtkButton" id="start_button">
                         <property name="label" translatable="yes">_Start Recording</property>
@@ -91,9 +91,11 @@ Only per-key press counts are stored, never what you type. Counts stay on this c
                         <property name="margin-start">18</property>
                         <property name="margin-end">18</property>
                         <child>
-                          <object class="GtkBox" id="filter_box">
+                          <object class="AdwWrapBox" id="filter_box">
                             <property name="halign">center</property>
-                            <property name="spacing">12</property>
+                            <property name="align">0.5</property>
+                            <property name="child-spacing">12</property>
+                            <property name="line-spacing">12</property>
                             <child>
                               <object class="AdwToggleGroup" id="period_group">
                                 <property name="can-shrink">True</property>
@@ -126,6 +128,15 @@ Only per-key press counts are stored, never what you type. Counts stay on this c
                                 <property name="tooltip-text" translatable="yes">Layer</property>
                                 <accessibility>
                                   <property name="label" translatable="yes">Layer</property>
+                                </accessibility>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkDropDown" id="app_dropdown">
+                                <property name="visible">False</property>
+                                <property name="tooltip-text" translatable="yes">App</property>
+                                <accessibility>
+                                  <property name="label" translatable="yes">App</property>
                                 </accessibility>
                               </object>
                             </child>

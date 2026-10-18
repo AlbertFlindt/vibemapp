@@ -19,7 +19,7 @@ from typing import Callable
 
 from gi.repository import Gio, GObject
 
-from .models import (AppRule, Device, FocusedWindow, HeatmapPeriod, Layout,
+from .models import (AppRule, Device, FocusedWindow, HeatmapApp, HeatmapPeriod, Layout,
                      RunningApp, SteamGame)
 
 
@@ -70,7 +70,9 @@ class KeyboardService(GObject.Object):
     # Heatmap recording is opt-in. When True, every key *press* on the connected
     # keyboard increments a per-(day, layer, key index) counter for the current
     # layout. Only counts are stored: never key order or timestamps finer than
-    # a calendar day. Recording continues while the window is closed.
+    # a calendar day. Since 1.2 each count is also kept per focused app (window
+    # class, or ``steam:<app id>`` for Steam games; never window titles).
+    # Recording continues while the window is closed.
     heatmap_recording = GObject.Property(type=bool, default=False,
                                          nick="heatmap-recording")
 
@@ -160,16 +162,24 @@ class KeyboardService(GObject.Object):
     # --- heatmap -------------------------------------------------------
 
     def get_key_counts(self, period: HeatmapPeriod,
-                       layer: int | None = None) -> dict[int, int]:
+                       layer: int | None = None,
+                       app: str | None = None) -> dict[int, int]:
         """Press counts per key index for the current layout.
 
         ``layer`` None sums all layers; otherwise only presses made while that
-        layer was the active layer. Keys with no presses may be omitted.
-        Returns {} when no layout is loaded."""
+        layer was the active layer. ``app`` None means all apps (including
+        presses recorded before 1.2 or with no focused app); otherwise a
+        ``HeatmapApp.key`` (additive, 1.2). Keys with no presses may be
+        omitted. Returns {} when no layout is loaded."""
         raise NotImplementedError
 
+    def list_heatmap_apps(self, period: HeatmapPeriod) -> list[HeatmapApp]:
+        """Apps with presses in ``period`` for the current layout, most presses
+        first. Additive (1.2): the default knows of no apps."""
+        return []
+
     def reset_key_counts(self) -> None:
-        """Delete all recorded counts for the current layout."""
+        """Delete all recorded counts for the current layout, per-app counts included."""
         raise NotImplementedError
 
     def shutdown(self) -> None:

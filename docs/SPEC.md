@@ -160,11 +160,15 @@ docstring for sizing and half-spacing rules), `ui/overlay_page.py`/`.ui`.
 ### 4.4 Heatmap
 Opt-in (`heatmap-recording`, default off). Stores only per-(local day, layer, key index)
 counts per layout in `$XDG_DATA_HOME/vibemapp/heatmap/<layout_id>.json`, flushed at most every
-~30 s and on shutdown. Contract: `heatmap_recording`, `get_key_counts(period, layer)`,
-`reset_key_counts()`, `key-counts-changed`, `HeatmapPeriod` (Today / 7 days / All time).
+~30 s and on shutdown. File version 2 adds, beside the unchanged `days` totals, `app_days`
+(the same counts per focused app: window class, or `steam:<app id>`) and `app_names` (Steam game
+names). Version 1 files load as All Apps only. Window titles are never stored. Contract:
+`heatmap_recording`, `get_key_counts(period, layer, app)`, `list_heatmap_apps(period)`
+(`HeatmapApp`), `reset_key_counts()` (clears per-app data too), `key-counts-changed`,
+`HeatmapPeriod` (Today / 7 days / All time).
 UI: opt-in status page when off; when on, a heatmap keyboard (sequential ramp readable in
 light and dark, counts on keys, legend), period toggle, layer filter, totals and top keys,
-pause and reset (confirmation dialog).
+pause and reset (confirmation dialog), and an App filter (hidden while no app has counts).
 
 ### 4.5 Tray and background
 Hyprland has no minimise, so with "Show in tray" on and a tray host present, closing the
