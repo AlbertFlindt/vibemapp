@@ -32,6 +32,12 @@
         </child>
         <child>
           <object class="AdwShortcutsItem">
+            <property name="title" translatable="yes">Show Insights</property>
+            <property name="accelerator">&lt;Ctrl&gt;5</property>
+          </object>
+        </child>
+        <child>
+          <object class="AdwShortcutsItem">
             <property name="title" translatable="yes">Keyboard Information</property>
             <property name="accelerator">&lt;Ctrl&gt;i</property>
           </object>

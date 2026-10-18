@@ -8,7 +8,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib, Gtk  # noqa: E402
 
-from ..models import HeatmapPeriod, Layout  # noqa: E402
+from ..models import HeatmapApp, HeatmapPeriod, Layout  # noqa: E402
 from ..service import KeyboardService  # noqa: E402
 from . import heat  # noqa: E402
 from .controller import DeviceController  # noqa: E402
@@ -33,6 +33,7 @@ class HeatmapPage(Adw.Bin):
     stack: Gtk.Stack = Gtk.Template.Child()
     period_group: Adw.ToggleGroup = Gtk.Template.Child()
     layer_dropdown: Gtk.DropDown = Gtk.Template.Child()
+    app_dropdown: Gtk.DropDown = Gtk.Template.Child()
     keyboard_view: KeyboardView = Gtk.Template.Child()
     legend: HeatLegend = Gtk.Template.Child()
     total_label: Gtk.Label = Gtk.Template.Child()
@@ -46,6 +47,10 @@ class HeatmapPage(Adw.Bin):
         self._layout: Layout | None = None
         self._handlers: list[tuple[object, int]] = []
         self._layer_handler = 0
+        # Keys of the apps listed in app_dropdown (item 0 is All Apps).
+        self._app_keys: list[str] = []
+        self._app_handler = self.app_dropdown.connect(
+            "notify::selected", lambda *_a: self.refresh())
         self._refresh_source = 0
         self.period_group.connect("notify::active-name", lambda *_a: self.refresh())
 
@@ -93,6 +98,29 @@ class HeatmapPage(Adw.Bin):
         if selected in (0, Gtk.INVALID_LIST_POSITION):
             return None
         return int(selected) - 1
+
+    def app_filter(self) -> str | None:
+        """Key of the selected app, None for All Apps."""
+        selected = self.app_dropdown.get_selected()
+        if selected in (0, Gtk.INVALID_LIST_POSITION) or selected > len(self._app_keys):
+            return None
+        return self._app_keys[int(selected) - 1]
+
+    def _set_apps(self, apps: list[HeatmapApp]) -> None:
+        """Rebuild the app list, keeping the selection by key if it is still there."""
+        keys = [app.key for app in apps]
+        self.app_dropdown.set_visible(bool(apps))
+        if keys == self._app_keys and (not keys or self.app_dropdown.get_model() is not None):
+            return
+        wanted = self.app_filter()
+        self.app_dropdown.handler_block(self._app_handler)
+        try:
+            self._app_keys = keys
+            self.app_dropdown.set_model(
+                Gtk.StringList.new([_("All Apps")] + [app.name for app in apps]))
+            self.app_dropdown.set_selected(keys.index(wanted) + 1 if wanted in keys else 0)
+        finally:
+            self.app_dropdown.handler_unblock(self._app_handler)
 
     def _queue_refresh(self) -> None:
         # Coalesce bursts of key-counts-changed.
@@ -144,8 +172,9 @@ class HeatmapPage(Adw.Bin):
         self._show("heatmap")
         self.paused_banner.set_revealed(not recording)
 
+        self._set_apps(self.service.list_heatmap_apps(self.period()))
         layer = self.layer_filter()
-        counts = self.service.get_key_counts(self.period(), layer)
+        counts = self.service.get_key_counts(self.period(), layer, self.app_filter())
         self.keyboard_view.set_layer(self._label_layer(layer), animate=False)
         self.keyboard_view.set_heat(counts)
         maximum = self.keyboard_view.heat_max
@@ -220,8 +249,8 @@ class HeatmapPage(Adw.Bin):
             return
         dialog = Adw.AlertDialog(
             heading=_("Reset Heatmap?"),
-            body=_("All recorded key presses for this layout will be deleted. "
-                   "This can't be undone."))
+            body=_("All recorded key presses for this layout, including per-app counts, "
+                   "will be deleted. This can't be undone."))
         dialog.add_response("cancel", _("_Cancel"))
         dialog.add_response("reset", _("_Reset"))
         dialog.set_response_appearance("reset", Adw.ResponseAppearance.DESTRUCTIVE)

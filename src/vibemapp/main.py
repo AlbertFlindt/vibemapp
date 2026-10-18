@@ -98,6 +98,8 @@ class Application(Adw.Application):
         # property; persist it both ways.
         self.settings.bind("heatmap-recording", self.service, "heatmap-recording",
                            Gio.SettingsBindFlags.DEFAULT)
+        self.settings.bind("pair-recording", self.service, "pair-recording",
+                           Gio.SettingsBindFlags.DEFAULT)
         self.service.props.smart_layers_enabled = self.settings.get_boolean(
             "smart-layers-on-startup")
         self.controller = DeviceController(self.service, self.settings)
@@ -260,6 +262,7 @@ class Application(Adw.Application):
                 ("win.page::smart-layers", ["<Control>2"]),
                 ("win.page::heatmap", ["<Control>3"]),
                 ("win.page::overlay", ["<Control>4"]),
+                ("win.page::insights", ["<Control>5"]),
                 ("win.previous-layer", ["<Control>Page_Up"]),
                 ("win.next-layer", ["<Control>Page_Down"]),
                 ("win.request-layer", ["<Control>Return"]),

@@ -23,6 +23,9 @@ How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
 - Overlay with fractional monitor scaling, and the overlay on a Planck (no halves).
 
 ## Next steps
+0. **Typing Insights** (branch `feature/typing-insights`, PR open against main): heatmap per app,
+   finger map, opt-in key pairs, ergo score on the Insights page (Ctrl+5) and the layout coach
+   (Suggestions) are done. Not verified on hardware yet: real pair counts and coach hints on the Voyager.
 1. **Translations.** Add `po/` (`POTFILES`, `LINGUAS`) and meson `i18n.gettext('vibemapp')`.
    Strings are already in `_()`.
 
@@ -43,10 +46,13 @@ How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
 - **Overlay size is % of the real keyboard size** (same look on every monitor), default 80;
   half spacing is a 0–100 % value, not a toggle.
 - **Screenshots come from the mock service** (`data/screenshots/`, `tests/ui/screenshot.py` and
-  `tray_menu_shot.py`; heatmap with `VIBEMAPP_MOCK_HEATMAP_SEED=1 --record --size 1000x1000`;
+  `tray_menu_shot.py`; heatmap with `VIBEMAPP_MOCK_HEATMAP_SEED=1 --record --size 1000x1000`; insights the same with
+  `--page insights --size 1000x2400`;
   overlay page with `--page overlay --overlay-layers 1,2 --size 1000x1300`): no personal data.
 - **PKGBUILD builds the GitHub tag, not the working tree:** reproducible packages. Tag and push
   before `makepkg`; use `./run-dev.sh` for untagged work.
+- **Distribution, if any, is the AUR** (2026-10-18): no AppImage or Flatpak (GTK4 bundling; the sandbox
+  blocks hidraw, the Hyprland socket and `/proc` for Steam). `appstreamcli` is an optional lint in `check.sh`.
 - **PKGBUILD in `packaging/arch/`:** `makepkg -c/-C` deletes `./src`, which at the repo root was our code.
 - **System Python, PyGObject and libadwaita:** nothing from pip, no Rust toolchain.
 - **Hyprland only as focus source:** it's the user's desktop. `FocusWatcher` is pluggable.
@@ -58,6 +64,11 @@ How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
 - **Auto-connect is a service property:** the UI binds it to GSettings, so there's one policy.
 - **Renamed to Vibemapp with full migration:** the user asked for a complete rename.
 - **Heatmap is opt-in and stores counts only:** privacy; typing can't be reconstructed.
+- **Per-app heatmap counts are part of the heatmap opt-in** (window class or Steam game, never
+  titles); `days` stays the all-apps total so old files load unchanged.
+- **Ergo score and coach get their own Insights sidebar page**; the Heatmap page only gains the App filter.
+- **The coach only suggests** (changes to make in Oryx) and never writes to the keyboard; hints are
+  rule-based with their numbers, and the UI writes the text from `CoachHint.kind` and `numbers`.
 - **Close hides to the tray:** Hyprland has no minimise.
 - **Steam detection also reads the process environment:** a class regex misses native games.
 - **Single-game Steam picker removed:** too Steam-focused. "All Steam Games" stays.
@@ -70,7 +81,7 @@ How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
 - **Dev-run conflict is a warning, not a block:** banner with "Quit Installed App".
 
 ## Known issues / dead ends
-- **Tests:** `./check.sh` passes, 263 tests plus lint and data validation (2026-10-13).
+- **Tests:** `./check.sh` passes, 359 tests plus lint and data validation (2026-10-18).
 - **PyGObject asyncio warning:** PyGObject 3.58.0 on Python 3.14.7 still emits it (2026-10-12).
   Filtered only where unittest runs (check.sh, PKGBUILD `check()`). Drop the filter once fixed upstream.
 - **GSettings dead end:** `Gio.Settings.new_full(schema, None, old_path)` aborts on a fixed-path

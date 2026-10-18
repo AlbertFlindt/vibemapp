@@ -18,7 +18,7 @@
       <li>Optional window title patterns for finer-grained rules</li>
       <li>See every layer of your Oryx layout, following the keyboard live</li>
       <li>Watch key presses as you type, with tooltips for every key</li>
-      <li>Optional key heatmap: see which keys you use most, per layer and period. Only per-key press counts are stored, never what you type</li>
+      <li>Optional key heatmap: see which keys you use most, per layer, app and period. Only per-key press counts are stored, never what you type</li>
       <li>Runs quietly in the tray or in the background</li>
     </ul>
     <p>

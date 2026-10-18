@@ -138,11 +138,118 @@ class HeatmapPeriod(str, Enum):
     ALL = "all"
 
 
+@dataclass(frozen=True)
+class HeatmapApp:
+    """An app with recorded key presses (additive, 1.2: heatmap per app).
+
+    ``key`` is what ``get_key_counts(app=...)`` takes: the window class, or
+    ``steam:<app id>`` for a Steam game. ``name`` is for display (the Steam
+    game's name, else the window class). ``presses`` is the total in the
+    queried period."""
+    key: str
+    name: str
+    presses: int
+
+
+class Finger(str, Enum):
+    """Finger that presses a key (additive, 1.2: ergo score). Left to right."""
+    L_PINKY = "l-pinky"
+    L_RING = "l-ring"
+    L_MIDDLE = "l-middle"
+    L_INDEX = "l-index"
+    L_THUMB = "l-thumb"
+    R_THUMB = "r-thumb"
+    R_INDEX = "r-index"
+    R_MIDDLE = "r-middle"
+    R_RING = "r-ring"
+    R_PINKY = "r-pinky"
+
+    @property
+    def is_left(self) -> bool:
+        return self.value.startswith("l-")
+
+
+@dataclass(frozen=True)
+class KeyPairCount:
+    """How often key B was pressed within about a second after key A.
+    Keys are (layer, Oryx key index). Only counts per day are stored.
+    ``finger`` is set for same-finger pairs (``ErgoReport.worst_same_finger``):
+    the finger that presses both keys. Additive (1.2)."""
+    first: tuple[int, int]
+    second: tuple[int, int]
+    count: int
+    finger: Finger | None = None
+
+
+@dataclass(frozen=True)
+class ErgoReport:
+    """Ergonomic score of the recorded typing, as its parts (additive, 1.2).
+
+    Shares are 0..1. ``score`` is 0..100 (higher is better); ``penalties``
+    holds each part's weighted deduction, keyed like ``backend.ergo.WEIGHTS``.
+    Rates from pairs are 0 when ``pairs`` is 0. Keys in ``worst_same_finger``
+    use the service's own key indices (the same as ``Layout`` bindings and
+    ``key-event``), so the UI can label them from the layout."""
+    presses: int                          # presses on keys with a known finger
+    pairs: int                            # recorded key pairs
+    finger_load: dict[Finger, float]      # share of presses per finger
+    left_share: float                     # share of presses made by the left hand
+    same_finger_rate: float               # same finger, different key / pairs
+    worst_same_finger: tuple[KeyPairCount, ...]   # most frequent, at most 5
+    reach_cost: float                     # mean strength-weighted distance from home, key units
+    layer_switch_rate: float              # pairs whose layers differ / pairs
+    score: float
+    penalties: dict[str, float] = field(default_factory=dict)
+
+
+# The layout coach shows no hints below these totals for the queried period;
+# hints built from key pairs also need COACH_MIN_PAIRS pairs.
+COACH_MIN_PRESSES = 2000
+COACH_MIN_PAIRS = 500
+
+
+class CoachHintKind(str, Enum):
+    """What a layout-coach hint is about (additive, 1.2). ``CoachHint.keys``
+    and ``numbers`` per kind:
+
+    * FAR_KEY: keys = (key,); ``finger`` set. numbers: presses, share (of all
+      presses), reach (strength-weighted distance from its finger's home key, key units).
+    * UNUSED_PRIME_KEY: keys = (key,), a home-row or thumb key on a layer in
+      real use; ``finger`` set. numbers: presses, share; ``thumb`` 1.0 for a
+      thumb key, else 0.0.
+    * HAND_IMBALANCE: keys = (). numbers: left_share, right_share.
+    * SAME_FINGER: keys = (first, second); ``finger`` set. numbers: count,
+      rate (of all pairs).
+    * SWAP: keys = (a, b), two keys on the same layer whose bindings would trade
+      places. numbers: score_before, score_after; ``score_delta`` set.
+    """
+    FAR_KEY = "far-key"
+    UNUSED_PRIME_KEY = "unused-prime-key"
+    HAND_IMBALANCE = "hand-imbalance"
+    SAME_FINGER = "same-finger"
+    SWAP = "swap"
+
+
+@dataclass(frozen=True)
+class CoachHint:
+    """One rule-based layout-coach hint with the numbers behind it (additive,
+    1.2). Keys are (layer, key index) in the service's own key indices, like
+    ``ErgoReport.worst_same_finger``. The UI writes the text from ``kind`` and
+    ``numbers``. The coach only suggests; it never writes to the keyboard."""
+    kind: CoachHintKind
+    keys: tuple[tuple[int, int], ...] = ()
+    numbers: dict[str, float] = field(default_factory=dict)
+    finger: Finger | None = None
+    score_delta: float | None = None      # predicted score change (SWAP), > 0 is better
+
+
 # Sentinel for set_fallback_layer(): leave the layer untouched when no rule matches.
 FALLBACK_KEEP: None = None
 
 
 __all__ = [
     "KeyboardModel", "KeyGeometry", "Device", "KeyBinding", "Layer", "Layout",
-    "AppRule", "RuleMatch", "FocusedWindow", "SteamGame", "RunningApp", "HeatmapPeriod", "FALLBACK_KEEP", "field",
+    "AppRule", "RuleMatch", "FocusedWindow", "SteamGame", "RunningApp", "HeatmapPeriod", "HeatmapApp", "Finger", "KeyPairCount",
+    "ErgoReport", "COACH_MIN_PRESSES", "COACH_MIN_PAIRS", "CoachHintKind", "CoachHint",
+    "FALLBACK_KEEP", "field",
 ]

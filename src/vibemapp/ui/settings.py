@@ -29,6 +29,7 @@ _DEFAULTS: dict[str, object] = {
     "window-maximized": False,
     "show-in-tray": True,
     "heatmap-recording": False,
+    "pair-recording": False,
     "migrated-from-keymappforlinux": True,
     "obsolete-keys-version": 0,
     "overlay-mode": "selected",
