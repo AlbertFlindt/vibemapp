@@ -11,7 +11,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib, GObject, Gtk  # noqa: E402
 
 from ..backend import ergo  # noqa: E402
-from ..models import (COACH_MIN_PAIRS, COACH_MIN_PRESSES, CoachHint, CoachHintKind,  # noqa: E402
+from ..models import (COMPARISON_MIN_PRESSES,  # noqa: E402
                       ErgoReport, Finger, HeatmapApp, HeatmapPeriod, KeyPairCount, Layout,
                       LayoutComparison)
 from ..service import KeyboardService  # noqa: E402
@@ -82,15 +82,6 @@ def key_label(layout: Layout | None, layer: int, index: int) -> str:
     return _("Key {index}").format(index=index)
 
 
-COACH_ICONS = {
-    CoachHintKind.FAR_KEY: "go-jump-symbolic",
-    CoachHintKind.UNUSED_PRIME_KEY: "starred-symbolic",
-    CoachHintKind.HAND_IMBALANCE: "view-dual-symbolic",
-    CoachHintKind.SAME_FINGER: "media-playlist-shuffle-symbolic",
-    CoachHintKind.SWAP: "object-flip-horizontal-symbolic",
-}
-
-
 def key_name(layout: Layout | None, layer: int, index: int) -> str:
     """``key_label`` for running text: glyph labels spelled out (⌫ → Backspace) and single
     punctuation marks quoted (“,”), so they read in a title."""
@@ -104,77 +95,6 @@ def key_name(layout: Layout | None, layer: int, index: int) -> str:
     if len(label) == 1 and not label.isalnum():
         return _("“{key}”").format(key=label)
     return label
-
-
-def _is_free_slot(layout: Layout | None, layer: int, index: int) -> bool:
-    """True when the key has no tap or hold label on its own layer (nothing bound, or
-    only a glyph or a transparent key)."""
-    source = next((l for l in layout.layers if l.index == layer), None) if layout else None
-    binding = next((k for k in source.keys if k.index == index), None) if source else None
-    return binding is None or is_transparent(binding) or not binding_label(binding).strip()
-
-
-def hint_text(hint: CoachHint, layout: Layout | None) -> tuple[str, str]:
-    """(title, subtitle) of a coach hint, written from its kind and numbers."""
-    def key(position: int) -> str:
-        layer, index = hint.keys[position]
-        return key_name(layout, layer, index)
-
-    n = hint.numbers
-    kind = hint.kind
-    if kind == CoachHintKind.FAR_KEY:
-        if hint.finger is not None:
-            # Translators: the finger is e.g. "right pinky"
-            detail = _("{share} of presses, {reach} key widths from the {finger}'s home key")
-        else:
-            detail = _("{share} of presses, {reach} key widths from its finger's home key")
-        return (_("Move {key} Closer").format(key=key(0)),
-                detail.format(share=format_percent(n.get("share", 0.0), 1),
-                              reach=format_number(n.get("reach", 0.0)),
-                              finger=finger_name(hint.finger).lower() if hint.finger else ""))
-    if kind == CoachHintKind.UNUSED_PRIME_KEY:
-        thumb = n.get("thumb", 0.0) >= 1
-        presses = int(n.get("presses", 0))
-        where = _("a prime spot under your thumb") if thumb else _("a prime spot on the home row")
-        layer, index = hint.keys[0]
-        if _is_free_slot(layout, layer, index):
-            layer_name = _("Layer {index}").format(index=layer)
-            title = (_("Use the Free Thumb Key on {layer}") if thumb
-                     else _("Use the Free Home Key on {layer}")).format(layer=layer_name)
-        else:
-            title = (_("Use the Thumb Key {key}") if thumb else _("Use the Home Key {key}")
-                     ).format(key=key(0))
-        if presses == 0:
-            detail = _("Never pressed, {where}").format(where=where)
-        else:
-            times = ngettext("{n} time", "{n} times", presses).format(
-                n=heat.format_count(presses))
-            detail = _("Pressed {times} ({share}), {where}").format(
-                times=times, share=format_percent(n.get("share", 0.0), 1), where=where)
-        if hint.finger is not None:
-            detail = _("{finger} · {detail}").format(finger=finger_name(hint.finger),
-                                                      detail=detail)
-        return title, detail
-    if kind == CoachHintKind.HAND_IMBALANCE:
-        left, right = n.get("left_share", 0.0), n.get("right_share", 0.0)
-        title = _("Your Left Hand Does More") if left >= right else _("Your Right Hand Does More")
-        return (title, _("{left_hand} {left} · {right_hand} {right}").format(
-            left_hand=_("Left Hand"), left=format_percent(left),
-            right_hand=_("Right Hand"), right=format_percent(right)))
-    if kind == CoachHintKind.SAME_FINGER:
-        count = int(n.get("count", 0))
-        times = ngettext("{n} time", "{n} times", count).format(n=heat.format_count(count))
-        detail = _("{times}, {rate} of key pairs").format(
-            times=times, rate=format_percent(n.get("rate", 0.0), 1))
-        if hint.finger is not None:
-            detail = _("{finger} · {detail}").format(finger=finger_name(hint.finger),
-                                                      detail=detail)
-        return (_("Split {first} → {second}").format(first=key(0), second=key(1)), detail)
-    # SWAP
-    return (_("Swap {first} and {second}").format(first=key(0), second=key(1)),
-            _("Score {before} → {after}").format(
-                before=format_number(n.get("score_before", 0.0)),
-                after=format_number(n.get("score_after", 0.0))))
 
 
 def format_delta(delta: float) -> str:
@@ -244,7 +164,6 @@ class InsightsPage(Adw.Bin):
     reach_label: Gtk.Label = Gtk.Template.Child()
     switch_label: Gtk.Label = Gtk.Template.Child()
     penalty_list: Gtk.ListBox = Gtk.Template.Child()
-    coach_list: Gtk.ListBox = Gtk.Template.Child()
     layouts_list: Gtk.ListBox = Gtk.Template.Child()
     score_label: Gtk.Label = Gtk.Template.Child()
     score_caption: Gtk.Label = Gtk.Template.Child()
@@ -385,7 +304,6 @@ class InsightsPage(Adw.Bin):
         self.switch_label.set_tooltip_text(
             None if report.pairs else _("Turn on Record Key Pairs to measure this"))
         self._fill_score(report)
-        self._fill_coach(report, layout)
         self._fill_layouts(report)
 
     def _fill_fingers(self, report: ErgoReport) -> None:
@@ -473,49 +391,12 @@ class InsightsPage(Adw.Bin):
             caption = _("Based on {presses}").format(presses=presses)
         self.score_caption.set_label(caption)
 
-    def _fill_coach(self, report: ErgoReport, layout: Layout | None) -> None:
-        _clear(self.coach_list)
-        assert self.service is not None
-        if report.presses < COACH_MIN_PRESSES:
-            self._coach_note(_("Suggestions appear after {min} key presses ({n} so far)").format(
-                min=heat.format_count(COACH_MIN_PRESSES), n=heat.format_count(report.presses)))
-            return
-        hints = self.service.get_coach_hints(self.period(), self.app_filter())
-        pairs_on = bool(self.service.props.pair_recording)
-        if not hints:
-            note = _("No suggestions: your layout fits how you type")
-            if not pairs_on:
-                note = _("{note}. Turn on Record Key Pairs for same-finger suggestions.").format(
-                    note=note)
-            self._coach_note(note)
-        for hint in hints:
-            title, subtitle = hint_text(hint, layout)
-            row = Adw.ActionRow(title=title, subtitle=subtitle, use_markup=False)
-            row.add_prefix(Gtk.Image.new_from_icon_name(COACH_ICONS[hint.kind]))
-            if hint.score_delta is not None:
-                delta = Gtk.Label(label="+" + format_number(hint.score_delta),
-                                  valign=Gtk.Align.CENTER)
-                delta.add_css_class("numeric")
-                delta.add_css_class("success")
-                delta.set_tooltip_text(_("Predicted score change"))
-                row.add_suffix(delta)
-            self.coach_list.append(row)
-        if pairs_on and report.pairs < COACH_MIN_PAIRS:
-            self._coach_note(_("Same-finger suggestions appear after {min} key pairs "
-                               "({n} so far)").format(min=heat.format_count(COACH_MIN_PAIRS),
-                                                      n=heat.format_count(report.pairs)))
-
-    def _coach_note(self, text: str) -> None:
-        row = Adw.ActionRow(title=text, use_markup=False, title_lines=0)
-        row.add_css_class("dim-label")
-        self.coach_list.append(row)
-
     def _fill_layouts(self, report: ErgoReport) -> None:
         _clear(self.layouts_list)
         assert self.service is not None
-        if report.presses < COACH_MIN_PRESSES:
+        if report.presses < COMPARISON_MIN_PRESSES:
             self._layouts_note(_("Layout comparisons appear after {min} key presses "
-                                 "({n} so far)").format(min=heat.format_count(COACH_MIN_PRESSES),
+                                 "({n} so far)").format(min=heat.format_count(COMPARISON_MIN_PRESSES),
                                                         n=heat.format_count(report.presses)))
             return
         items = self.service.get_layout_comparisons(self.period(), self.app_filter())

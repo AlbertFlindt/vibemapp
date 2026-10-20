@@ -33,7 +33,7 @@ from gi.repository import Gio, GLib
 
 from .models import (AppRule, Device, ErgoReport, LayoutComparison, FocusedWindow, HeatmapApp, HeatmapPeriod, RuleMatch, SteamGame, KeyBinding, KeyboardModel, KeyGeometry,
                      Layer, Layout, RunningApp)
-from .backend import coach, ergo, geometries, layouts
+from .backend import ergo, geometries, layouts
 from .service import KeyboardService
 from .ui.i18n import _
 from .ui.rules_model import OWN_APP_CLASS, is_own_app_class, target_layer
@@ -568,7 +568,6 @@ class MockKeyboardService(KeyboardService):
         # Letter pairs follow common English bigrams (so same-finger pairs and the layout
         # comparison behave like real typing); the rest is drawn from the key counts.
         base = {b.tap_label: b.index for b in layout.layers[0].keys if b.tap_label}
-        bspc = next(((0, b.index) for b in layout.layers[0].keys if b.tap_label == "⌫"), None)
         follow: dict[Key, tuple[list[Key], list[int]]] = {}
         for bg, w in _ENGLISH_BIGRAMS.items():
             a, b = bg[0].upper(), bg[1].upper()
@@ -591,9 +590,6 @@ class MockKeyboardService(KeyboardService):
             for first in rng.choices(keys, cum_weights=cum, k=cum[-1] // 2):
                 lkeys, lcum = by_layer[first[0]]
                 for _try in range(3):
-                    if first in follow and bspc is not None and rng.random() < 0.06:
-                        second = bspc                                # a typo, then ⌫
-                        break
                     if first in follow and rng.random() < 0.8:
                         ks, ws = follow[first]
                         second = rng.choices(ks, weights=ws)[0]      # an English bigram
@@ -728,15 +724,6 @@ class MockKeyboardService(KeyboardService):
         """The layer's bindings re-indexed to Oryx key order, like the counts."""
         return [replace(b, index=MOCK_TO_ORYX[b.index]) for b in layer.keys
                 if b.index < len(MOCK_TO_ORYX)]
-
-    def get_coach_hints(self, period: HeatmapPeriod,
-                        app: str | None = None) -> list[CoachHint]:
-        inputs = self._oryx_inputs(period, app)
-        if inputs is None:
-            return []
-        layers = {l.index: self._oryx_bindings(l) for l in self._layout.layers}
-        return [replace(h, keys=tuple(self._to_mock_key(k) for k in h.keys))
-                for h in coach.hints(*inputs, layers=layers)]
 
     def get_layout_comparisons(self, period: HeatmapPeriod,
                                app: str | None = None) -> list[LayoutComparison]:

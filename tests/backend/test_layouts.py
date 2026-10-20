@@ -4,7 +4,7 @@ import time
 import unittest
 
 from vibemapp.backend import ergo, geometries, layouts
-from vibemapp.models import COACH_MIN_PRESSES, KeyBinding, KeyboardModel
+from vibemapp.models import COMPARISON_MIN_PRESSES, KeyBinding, KeyboardModel
 
 MODEL = KeyboardModel.VOYAGER
 GEO = geometries.geometry_for(MODEL)
@@ -125,9 +125,9 @@ class CompareTests(unittest.TestCase):
 
     def test_gates(self) -> None:
         self.assertEqual(self.run_cmp({}), [])
-        small = typing({"e": COACH_MIN_PRESSES - 1})
+        small = typing({"e": COMPARISON_MIN_PRESSES - 1})
         self.assertEqual(self.run_cmp(small), [])
-        self.assertTrue(self.run_cmp(typing({"e": COACH_MIN_PRESSES})))
+        self.assertTrue(self.run_cmp(typing({"e": COMPARISON_MIN_PRESSES})))
         self.assertEqual(self.run_cmp(typing(ENGLISH), b=bindings(skip="z")), [])
 
     def test_result_shape(self) -> None:

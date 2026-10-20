@@ -12,7 +12,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, GObject, Gtk  # noqa: E402
 
-from vibemapp.models import (CoachHint, CoachHintKind, ErgoReport, Finger, HeatmapApp, HeatmapPeriod,  # noqa: E402
+from vibemapp.models import (ErgoReport, Finger, HeatmapApp, HeatmapPeriod,  # noqa: E402
                              KeyBinding, KeyGeometry, KeyPairCount, Layer, Layout, LayoutComparison)
 from vibemapp.service import KeyboardService  # noqa: E402
 from vibemapp.ui import insights_page  # noqa: E402
@@ -48,7 +48,6 @@ class FakeService(KeyboardService):
         self.has_layout = True
         self.counts = {0: 3}
         self.calls: list[tuple] = []
-        self.hints: list[CoachHint] = []
         self.comparisons: list[LayoutComparison] = []
         self.layout_calls: list[tuple] = []
 
@@ -60,9 +59,6 @@ class FakeService(KeyboardService):
 
     def get_key_counts(self, period, layer=None, app=None) -> dict[int, int]:
         return dict(self.counts)
-
-    def get_coach_hints(self, period, app=None) -> list[CoachHint]:
-        return list(self.hints)
 
     def get_layout_comparisons(self, period, app=None) -> list[LayoutComparison]:
         self.layout_calls.append((period, app))
@@ -203,73 +199,6 @@ class InsightsPageTests(unittest.TestCase):
                           "Layer Switches"])
         self.assertEqual(self.page.score_label.get_label(),
                          "{} / 100".format(insights_page.format_number(82.0)))
-
-    def test_coach_rows_for_each_kind(self) -> None:
-        K = CoachHintKind
-        self.service.hints = [
-            CoachHint(K.FAR_KEY, ((0, 0),), {"presses": 80, "share": 0.08, "reach": 2.4},
-                      Finger.R_PINKY),
-            CoachHint(K.UNUSED_PRIME_KEY, ((0, 3),), {"presses": 3, "share": 0.001, "thumb": 0.0}),
-            CoachHint(K.UNUSED_PRIME_KEY, ((1, 0),), {"presses": 1, "share": 0.0, "thumb": 1.0}),
-            CoachHint(K.UNUSED_PRIME_KEY, ((1, 3),), {"presses": 0, "share": 0.0, "thumb": 0.0},
-                      Finger.L_RING),
-            CoachHint(K.HAND_IMBALANCE, (), {"left_share": 0.62, "right_share": 0.38}),
-            CoachHint(K.SAME_FINGER, ((0, 2), (0, 3)), {"count": 42, "rate": 0.012},
-                      Finger.L_MIDDLE),
-            CoachHint(K.SWAP, ((0, 0), (0, 1)), {"score_before": 64.7, "score_after": 66.1},
-                      score_delta=1.4),
-        ]
-        self.page.refresh()
-        rows = labels(self.page.coach_list)
-        self.assertEqual([t for t, _s in rows], [
-            "Move A Closer", "Use the Home Key F", "Use the Thumb Key \u201c!\u201d",
-            "Use the Free Home Key on Layer 1",
-            "Your Left Hand Does More", "Split D → F", "Swap A and S"])
-        self.assertIn(insights_page.format_percent(0.08, 1) + " of presses", rows[0][1])
-        self.assertIn(insights_page.format_number(2.4) + " key widths from the right pinky's home key",
-                      rows[0][1])
-        self.assertIn("3 times", rows[1][1])
-        self.assertIn("thumb", rows[2][1])
-        self.assertIn("1 time", rows[2][1])
-        self.assertEqual(rows[3][1], "Left ring · Never pressed, a prime spot on the home row")
-        self.assertIn("62%", rows[4][1])
-        self.assertIn("38%", rows[4][1])
-        self.assertTrue(rows[5][1].startswith("Left middle · 42 times"))
-        self.assertIn(insights_page.format_number(66.1), rows[6][1])
-
-    def test_coach_empty_states(self) -> None:
-        self.service.report = report(presses=1234)
-        self.page.refresh()
-        rows = labels(self.page.coach_list)
-        self.assertEqual(len(rows), 1)
-        self.assertIn("2,000", rows[0][0])
-        self.assertIn("1,234", rows[0][0])
-        self.service.report = report(presses=5000)
-        self.page.refresh()
-        text = labels(self.page.coach_list)[0][0]
-        self.assertIn("No suggestions", text)
-        self.assertIn("Record Key Pairs", text)         # pairs are off
-        self.service.props.pair_recording = True
-        self.page.refresh()
-        self.assertNotIn("Record Key Pairs", labels(self.page.coach_list)[0][0])
-
-    def test_pair_minimum_note_with_and_without_hints(self) -> None:
-        self.service.props.pair_recording = True
-        self.service.report = report(presses=5000, pairs=123)
-        self.page.refresh()
-        rows = labels(self.page.coach_list)
-        self.assertEqual(len(rows), 2)                      # no-hints note + pairs note
-        self.assertIn("500 key pairs", rows[-1][0])
-        self.assertIn("123", rows[-1][0])
-        self.service.hints = [CoachHint(CoachHintKind.HAND_IMBALANCE, (),
-                                        {"left_share": 0.6, "right_share": 0.4})]
-        self.page.refresh()
-        rows = labels(self.page.coach_list)
-        self.assertEqual(len(rows), 2)                      # hint + pairs note
-        self.assertIn("500 key pairs", rows[-1][0])
-        self.service.report = report(presses=5000, pairs=900)
-        self.page.refresh()
-        self.assertEqual(len(labels(self.page.coach_list)), 1)
 
     def _comparisons(self) -> list[LayoutComparison]:
         base = report()

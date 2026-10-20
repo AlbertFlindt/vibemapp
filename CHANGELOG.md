@@ -13,9 +13,6 @@ All notable changes to Vibemapp. Each version is a tag and a GitHub release.
   finger and hand, same-finger pairs (target under 1%) with the worst pairs, reach and layer
   switches, then the total. Key-pair counting is a separate opt-in next to the heatmap one;
   it stores only which key position follows which, never what you type.
-- **Suggestions:** rule-based hints with their numbers, such as moving a far, busy key,
-  using a free home-row or thumb key, or swapping two non-letter keys with the predicted score
-  change. Letters, modifiers and layer keys are never moved. Shown after 2,000 key presses.
 - **Alternative Layouts:** your typing scored on QWERTY, Colemak, Colemak-DH, Workman and
   Dvorak. Letters outside A–Z (Æ, Ø, Å…) and all other keys stay where they are. Vibemapp
   only suggests; it never changes your keyboard's layout.

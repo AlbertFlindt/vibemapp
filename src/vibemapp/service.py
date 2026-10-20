@@ -19,7 +19,7 @@ from typing import Callable
 
 from gi.repository import Gio, GObject
 
-from .models import (AppRule, CoachHint, Device, ErgoReport, LayoutComparison, FocusedWindow, HeatmapApp, HeatmapPeriod, Layout,
+from .models import (AppRule, Device, ErgoReport, LayoutComparison, FocusedWindow, HeatmapApp, HeatmapPeriod, Layout,
                      RunningApp, SteamGame)
 
 
@@ -191,19 +191,11 @@ class KeyboardService(GObject.Object):
         Additive (1.2): the default has no report."""
         return None
 
-    def get_coach_hints(self, period: HeatmapPeriod,
-                        app: str | None = None) -> list[CoachHint]:
-        """Layout-coach hints for the current layout's recorded presses and
-        pairs, most useful first; [] below ``COACH_MIN_PRESSES`` presses, without
-        a layout or without a finger map. Pure suggestions: never writes to the
-        keyboard. Additive (1.2): the default has no hints."""
-        return []
-
     def get_layout_comparisons(self, period: HeatmapPeriod,
                                app: str | None = None) -> list[LayoutComparison]:
         """The recorded presses and pairs scored on well-known letter layouts
         (QWERTY, Colemak, Colemak-DH, Workman, Dvorak), best score first; [] below
-        ``COACH_MIN_PRESSES`` presses, without a layout or finger map, or when the
+        ``COMPARISON_MIN_PRESSES`` presses, without a layout or finger map, or when the
         base layer has no recognisable letter block. Pure suggestions: never
         writes to the keyboard. Additive (1.2): the default has none."""
         return []

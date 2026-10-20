@@ -120,7 +120,6 @@ _MOD_TAPS: dict[str, str] = {
 }
 
 _LAYER_CODES = {"MO", "TG", "TO", "OSL", "TT", "DF", "LT", "LM", "PDF"}
-LAYER_CODES = frozenset(_LAYER_CODES)
 
 _GLYPHS: dict[str, str] = {
     "AUDIO_MUTE": "audio-volume-muted-symbolic", "AUDIO_VOL_UP": "audio-volume-high-symbolic",

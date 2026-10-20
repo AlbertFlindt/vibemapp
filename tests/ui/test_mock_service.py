@@ -6,10 +6,9 @@ import unittest
 from gi.repository import GLib
 
 from vibemapp.backend import geometries
-from vibemapp.backend.keykinds import KeyKind, classify
 from vibemapp.mock_service import (MOCK_TO_ORYX, MockKeyboardService, voyager_layout,
                                     voyager_geometry)
-from vibemapp.models import AppRule, CoachHintKind, Finger, HeatmapPeriod, KeyboardModel, RuleMatch
+from vibemapp.models import AppRule, Finger, HeatmapPeriod, KeyboardModel, RuleMatch
 from vibemapp.service import KeyboardService
 
 
@@ -263,43 +262,6 @@ class MockServiceTests(unittest.TestCase):
         self.assertTrue(worst)
         self.assertEqual({worst[0].first[1], worst[0].second[1]}, {a, b})
         self.assertEqual(worst[0].finger, fingers[MOCK_TO_ORYX[a]])
-
-    def test_coach_hints_seeded_in_mock_indices(self) -> None:
-        self.assertEqual(self.svc.get_coach_hints(HeatmapPeriod.WEEK), [])      # no layout
-        self.svc._seed_heatmap = True
-        self.connect_and_load()
-        labels = {(layer.index, b.index): b.tap_label
-                  for layer in self.svc.get_layout().layers for b in layer.keys}
-        for app in (None, "code"):
-            hints = self.svc.get_coach_hints(HeatmapPeriod.WEEK, app)
-            self.assertTrue(hints, app)
-            for h in hints:
-                for key in h.keys:
-                    self.assertIn(key, labels)
-        hints = self.svc.get_coach_hints(HeatmapPeriod.WEEK)
-        kinds = {h.kind for h in hints}
-        self.assertTrue({CoachHintKind.FAR_KEY, CoachHintKind.UNUSED_PRIME_KEY,
-                         CoachHintKind.SAME_FINGER, CoachHintKind.SWAP} <= kinds, kinds)
-        same = next(h for h in hints if h.kind == CoachHintKind.SAME_FINGER)
-        self.assertEqual({labels[k] for k in same.keys}, {"A", "⌫"})      # never letter-letter
-        fingers = geometries.FINGERS[KeyboardModel.VOYAGER]
-        self.assertTrue(all(fingers[MOCK_TO_ORYX[k[1]]] == same.finger for k in same.keys))
-        swap = next(h for h in hints if h.kind == CoachHintKind.SWAP)
-        self.assertGreater(swap.score_delta, 0)
-        far = next(h for h in hints if h.kind == CoachHintKind.FAR_KEY)
-        self.assertEqual(labels[far.keys[0]], "\u232b")
-
-    def test_coach_never_names_letters_or_modifiers(self) -> None:
-        self.svc._seed_heatmap = True
-        self.connect_and_load()
-        layers = {layer.index: {b.index: b for b in layer.keys}
-                  for layer in self.svc.get_layout().layers}
-        for app in (None, "firefox", "kitty"):
-            for h in self.svc.get_coach_hints(HeatmapPeriod.ALL, app):
-                if h.kind in (CoachHintKind.SWAP, CoachHintKind.FAR_KEY):
-                    for layer, key in h.keys:
-                        b = layers[layer][key]
-                        self.assertEqual(classify(b), KeyKind.OTHER, (h.kind, b.tap_label))
 
     def test_mock_has_tap_codes_and_danish_ae(self) -> None:
         base = voyager_layout().layers[0].keys
