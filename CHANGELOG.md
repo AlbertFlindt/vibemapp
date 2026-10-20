@@ -2,7 +2,7 @@
 
 All notable changes to Vibemapp. Each version is a tag and a GitHub release.
 
-## Unreleased
+## 1.2.0 (2026-10-20)
 
 ### Added
 - **Heatmap per app:** an App filter on the Heatmap page, next to Period and Layer. While

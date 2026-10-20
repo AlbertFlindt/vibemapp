@@ -19,6 +19,7 @@
       <li>See every layer of your Oryx layout, following the keyboard live</li>
       <li>Watch key presses as you type, with tooltips for every key</li>
       <li>Optional key heatmap: see which keys you use most, per layer, app and period. Only per-key press counts are stored, never what you type</li>
+      <li>Optional typing insights: an ergonomic score of your typing per finger and hand, and how well-known layouts such as Colemak-DH would fit it</li>
       <li>Runs quietly in the tray or in the background</li>
     </ul>
     <p>
@@ -40,19 +41,23 @@
   <screenshots>
     <screenshot type="default">
       <caption>Your Oryx layout with the active layer</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.1.4/data/screenshots/layout.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.2.0/data/screenshots/layout.png</image>
     </screenshot>
     <screenshot>
       <caption>Smart Layers switches layers per app</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.1.4/data/screenshots/smart-layers.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.2.0/data/screenshots/smart-layers.png</image>
     </screenshot>
     <screenshot>
       <caption>An opt-in heatmap of your key presses</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.1.4/data/screenshots/heatmap.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.2.0/data/screenshots/heatmap.png</image>
     </screenshot>
     <screenshot>
       <caption>Overlay settings: which layers show it, where and how large</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.1.4/data/screenshots/overlay.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.2.0/data/screenshots/overlay.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Insights: an ergonomic score of your typing and alternative layouts</caption>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.2.0/data/screenshots/insights.png</image>
     </screenshot>
   </screenshots>
   <branding>
@@ -69,6 +74,11 @@
     <keyword>layer</keyword>
   </keywords>
   <releases>
+    <release version="1.2.0" date="2026-10-20">
+      <description>
+        <p>The heatmap can be filtered by app. A new Insights page scores your typing per finger and hand, shows same-finger pairs, reach and layer switches, and compares well-known layouts such as Colemak-DH against your current one. Key-pair counting is a separate opt-in and never stores what you type.</p>
+      </description>
+    </release>
     <release version="1.1.4" date="2026-10-13">
       <description>
         <p>The overlay fades in and out again, with a Fade Duration setting on the Overlay page (200 ms by default, 0 for instant).</p>

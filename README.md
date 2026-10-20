@@ -44,10 +44,22 @@ page says what to install, and the rest of Vibemapp works as usual.
 
 ### Heatmap
 
-Opt-in key-press counts per key and layer, for today, the last 7 days or all time. Only
+Opt-in key-press counts per key, layer and app, for today, the last 7 days or all time. Only
 counts are stored, never what you typed.
 
 ![Heatmap of key presses over the last 7 days, with the top keys](data/screenshots/heatmap.png)
+
+### Insights
+
+An ergonomic score of your typing, from the heatmap counts: load per finger and hand,
+same-finger pairs, reach and layer switches. Alternative Layouts scores the same typing on
+QWERTY, Colemak, Colemak-DH, Workman and Dvorak, keeping letters such as Æ, Ø and Å in place.
+Key-pair counting is a separate opt-in; only which key position follows which is stored.
+Vibemapp only shows the numbers; it never changes your keyboard's layout.
+
+<p align="center">
+  <img src="data/screenshots/insights.png" alt="Insights page with finger load, same-finger pairs, the score and alternative layouts" width="600">
+</p>
 
 ### Tray Icon
 

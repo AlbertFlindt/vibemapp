@@ -1,6 +1,6 @@
 # Progress / handoff
 
-**Last updated:** 2026-10-13. **Released:** 1.1.4 (overlay fade owned by Vibemapp, Fade Duration setting; 1.1.3 overlay hides without stealing focus or flashing the old layer; 1.1.2 title changes keep a hand-picked layer; 1.1.1 waits for held keys; 1.1.0 added the overlay).
+**Last updated:** 2026-10-20. **Released:** 1.2.0 (heatmap per app, Insights page with ergo score and Alternative Layouts; 1.1.4 overlay fade owned by Vibemapp, Fade Duration setting; 1.1.3 overlay hides without stealing focus or flashing the old layer; 1.1.2 title changes keep a hand-picked layer; 1.1.1 waits for held keys; 1.1.0 added the overlay).
 How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
 
 ## Current state
@@ -14,6 +14,7 @@ How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
 - Overlay: click-through, key highlighting, follow-focused and fixed monitor, physical size on
   both monitors, half spacing, SUPER+O `--toggle-overlay` bind with the installed package.
 - Heatmap: counts land on the right keys (user-confirmed 2026-10-13).
+- Heatmap per app and Insights recording (user-confirmed 2026-10-18).
 - Tray (Noctalia), migration from `keymappforlinux`, dev app ID.
 
 **Not verified:**
@@ -23,9 +24,6 @@ How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
 - Overlay with fractional monitor scaling, and the overlay on a Planck (no halves).
 
 ## Next steps
-0. **Typing Insights** is merged (PR #1) and ran on the Voyager (2026-10-18: per-app counts and the
-   Claude app seen), then Alternative Layouts (PR #2). The rule-based coach (Suggestions) was removed
-   on 2026-10-20 (`feature/remove-suggestions`). Then release 1.2.0 when the user says so.
 1. **Translations.** Add `po/` (`POTFILES`, `LINGUAS`) and meson `i18n.gettext('vibemapp')`.
    Strings are already in `_()`.
 
