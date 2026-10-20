@@ -56,8 +56,8 @@ class KeyBinding:
     color: str | None = None      # optional "#rrggbb" key colour from Oryx
     transparent: bool = False     # falls through to the layer below (Oryx ▽)
     # Oryx/QMK keycode of the tap action ("KC_A", "DK_AE", "KC_LSHIFT", "MO"),
-    # None when unknown or transparent. Additive (1.2): the coach uses it to tell
-    # letters, modifiers and layer keys apart.
+    # None when unknown or transparent. Additive (1.2): the layout comparison uses
+    # it to find the letters.
     tap_code: str | None = None
 
 
@@ -206,50 +206,8 @@ class ErgoReport:
     penalties: dict[str, float] = field(default_factory=dict)
 
 
-# The layout coach shows no hints below these totals for the queried period;
-# hints built from key pairs also need COACH_MIN_PAIRS pairs.
-COACH_MIN_PRESSES = 2000
-COACH_MIN_PAIRS = 500
-
-
-class CoachHintKind(str, Enum):
-    """What a layout-coach hint is about (additive, 1.2). ``CoachHint.keys``
-    and ``numbers`` per kind:
-
-    * FAR_KEY: keys = (key,); ``finger`` set. numbers: presses, share (of all
-      presses), reach (strength-weighted distance from its finger's home key, key units).
-    * UNUSED_PRIME_KEY: keys = (key,), a home-row or thumb key on a layer in
-      real use; ``finger`` set. numbers: presses, share; ``thumb`` 1.0 for a
-      thumb key, else 0.0.
-    * HAND_IMBALANCE: keys = (). numbers: left_share, right_share.
-    * SAME_FINGER: keys = (first, second); ``finger`` set. numbers: count,
-      rate (of all pairs).
-    * SWAP: keys = (a, b), two keys on the same layer whose bindings would trade
-      places. numbers: score_before, score_after; ``score_delta`` set. Only
-      non-letter keys without a hold action that aren't modifiers or layer keys
-      (Backspace, Enter, punctuation…): letters are compared as whole layouts
-      instead (``LayoutComparison``).
-    FAR_KEY and UNUSED_PRIME_KEY never name a letter either, and SAME_FINGER
-    needs at least one non-letter key (letter pairs belong to the layout comparison).
-    """
-    FAR_KEY = "far-key"
-    UNUSED_PRIME_KEY = "unused-prime-key"
-    HAND_IMBALANCE = "hand-imbalance"
-    SAME_FINGER = "same-finger"
-    SWAP = "swap"
-
-
-@dataclass(frozen=True)
-class CoachHint:
-    """One rule-based layout-coach hint with the numbers behind it (additive,
-    1.2). Keys are (layer, key index) in the service's own key indices, like
-    ``ErgoReport.worst_same_finger``. The UI writes the text from ``kind`` and
-    ``numbers``. The coach only suggests; it never writes to the keyboard."""
-    kind: CoachHintKind
-    keys: tuple[tuple[int, int], ...] = ()
-    numbers: dict[str, float] = field(default_factory=dict)
-    finger: Finger | None = None
-    score_delta: float | None = None      # predicted score change (SWAP), > 0 is better
+# Layout comparisons need at least this many presses in the queried period.
+COMPARISON_MIN_PRESSES = 2000
 
 
 @dataclass(frozen=True)
@@ -273,6 +231,6 @@ FALLBACK_KEEP: None = None
 __all__ = [
     "KeyboardModel", "KeyGeometry", "Device", "KeyBinding", "Layer", "Layout",
     "AppRule", "RuleMatch", "FocusedWindow", "SteamGame", "RunningApp", "HeatmapPeriod", "HeatmapApp", "Finger", "KeyPairCount",
-    "ErgoReport", "COACH_MIN_PRESSES", "COACH_MIN_PAIRS", "CoachHintKind", "CoachHint", "LayoutComparison",
+    "ErgoReport", "COMPARISON_MIN_PRESSES", "LayoutComparison",
     "FALLBACK_KEEP", "field",
 ]

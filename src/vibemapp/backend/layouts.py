@@ -1,4 +1,4 @@
-"""Layout comparison (SPEC: layout coach). Pure, no GTK, no I/O.
+"""Layout comparison (SPEC: alternative layouts). Pure, no GTK, no I/O.
 
 Scores the recorded typing as if the base layer's letters sat on a well-known
 layout, using ``ergo.report`` on counts and pairs whose base-layer block keys
@@ -43,7 +43,7 @@ from __future__ import annotations
 
 from typing import Iterable, Mapping, Sequence
 
-from ..models import (COACH_MIN_PRESSES, ErgoReport, Finger, KeyBinding, KeyGeometry,
+from ..models import (COMPARISON_MIN_PRESSES, ErgoReport, Finger, KeyBinding, KeyGeometry,
                       LayoutComparison)
 from . import ergo, keykinds
 
@@ -161,10 +161,10 @@ def compare(bindings: Sequence[KeyBinding], counts: Mapping[Key, int],
             fingers: Sequence[Finger], home_keys: Mapping[Finger, int]
             ) -> list[LayoutComparison]:
     """``bindings``: layer 0 in Oryx key indices. Best score first, ties in the
-    order of ``LAYOUTS``; [] below ``COACH_MIN_PRESSES`` presses or when the
+    order of ``LAYOUTS``; [] below ``COMPARISON_MIN_PRESSES`` presses or when the
     letter block isn't recognisable."""
     base = ergo.report(counts, pairs, geometry, fingers, home_keys)
-    if base.presses < COACH_MIN_PRESSES:
+    if base.presses < COMPARISON_MIN_PRESSES:
         return []
     slots = find_block(bindings, geometry)
     if slots is None:

@@ -279,28 +279,9 @@ def geometry_for(model: KeyboardModel) -> tuple[KeyGeometry, ...]:
     return GEOMETRIES.get(model, ())
 
 
-def prime_keys(geometry: Sequence[KeyGeometry], fingers: Sequence[Finger],
-               home_keys: Mapping[Finger, int]) -> frozenset[int]:
-    """Oryx indices of the "prime" keys: every thumb key, plus the keys of the home
-    row (centre within half a key unit of their finger's home key, vertically).
-    Pure, so tests can pass a toy board."""
-    out: set[int] = set()
-    for i, f in enumerate(fingers[:len(geometry)]):
-        if f in (Finger.L_THUMB, Finger.R_THUMB):
-            out.add(i)
-            continue
-        home = home_keys.get(f)
-        if home is None or not 0 <= home < len(geometry):
-            continue
-        if abs((geometry[i].y + geometry[i].h / 2)
-               - (geometry[home].y + geometry[home].h / 2)) <= 0.5:
-            out.add(i)
-    return frozenset(out)
-
-
 def matrix_to_index(model: KeyboardModel, row: int, col: int) -> int | None:
     """Oryx key index for a matrix position reported in KEYDOWN/KEYUP events."""
     return MATRIX_TO_INDEX.get(model, {}).get((row, col))
 
 
-__all__ = ["prime_keys", "FINGERS", "HOME_KEYS", "GEOMETRIES", "MATRIX_TO_INDEX", "KEY_COUNTS", "geometry_for", "matrix_to_index"]
+__all__ = ["FINGERS", "HOME_KEYS", "GEOMETRIES", "MATRIX_TO_INDEX", "KEY_COUNTS", "geometry_for", "matrix_to_index"]

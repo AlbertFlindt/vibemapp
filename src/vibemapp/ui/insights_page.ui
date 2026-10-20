@@ -292,23 +292,6 @@ Only counts are stored, never what you type. They stay on this computer.</proper
                                     </child>
                                   </object>
                                 </child>
-                                <child>
-                                  <object class="AdwPreferencesGroup">
-                                    <property name="title" translatable="yes">Suggestions</property>
-                                    <property name="description" translatable="yes">Ideas to try in Oryx, worked out from your typing. Vibemapp never changes your keyboard's layout.</property>
-                                    <child>
-                                      <object class="GtkListBox" id="coach_list">
-                                        <property name="selection-mode">none</property>
-                                        <accessibility>
-                                          <property name="label" translatable="yes">Layout suggestions</property>
-                                        </accessibility>
-                                        <style>
-                                          <class name="boxed-list"/>
-                                        </style>
-                                      </object>
-                                    </child>
-                                  </object>
-                                </child>
                               </object>
                             </child>
                             <child>
