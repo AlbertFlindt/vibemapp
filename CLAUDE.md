@@ -9,17 +9,9 @@ How it works, by feature: `docs/SPEC.md` (not loaded; read the feature's section
 and update it with the change). Release history: `CHANGELOG.md` (not loaded).
 
 ## Install (Arch)
-- Runtime: `python python-gobject gtk4 libadwaita glib2`. Build: `meson`.
-  `./check.sh` also needs `desktop-file-utils` (`appstream` optional: validates the metainfo).
-- Optional: `hyprland` (the only focus source), a StatusNotifier tray host
-  (e.g. Noctalia, waybar) for the tray icon, Steam for Steam-game rules,
-  `gtk4-layer-shell` (required for the overlay; without it the overlay is off).
-- Keyboard: ZSA board with Oryx firmware (raw HID). Nothing from pip.
 - `cd packaging/arch && makepkg -si` (PKGBUILD builds the `v$pkgver` tag from GitHub, so
   commit, tag and push first; use `./run-dev.sh` for untagged changes. Replaces the old
   `keymappforlinux` package), then replug the keyboard (udev `uaccess` rules).
-- Autostart goes in `~/.config/hypr/autostart.lua`:
-  `hl.on("hyprland.start", function () hl.exec_cmd("vibemapp --background") end)`
 
 ## Commands
 - **Health check (lint + all tests): `./check.sh`**. Run it before every commit.
@@ -30,27 +22,13 @@ and update it with the change). Release history: `CHANGELOG.md` (not loaded).
   instances drive Smart Layers, so use `VIBEMAPP_MOCK=1` or quit the installed one. The dev
   window shows a banner with a "Quit Installed App" button while it runs (`ui/instance_check.py`).
 - Single test module: `PYTHONPATH=src python3 -m unittest tests.backend.test_steam`
-- Staged install: `meson setup build --prefix=/usr && meson install -C build --destdir /tmp/stage`
-- Screenshot (GTK renders it; no grim or screenshot portal):
-  `PYTHONPATH=src python3 tests/ui/screenshot.py OUT.png [--page smart-layers|heatmap|overlay] [--dialog add-rule|preferences|…]`
-  Tray menu (private dbus-daemon, real dbusmenu layout): `PYTHONPATH=src python3 tests/ui/tray_menu_shot.py OUT.png [--state ready|no-keyboard|smart-off] [--window-visible]`.
-  Overlay over a checkerboard/busy backdrop: `PYTHONPATH=src python3 tests/ui/screenshot.py OUT.png --overlay [--backdrop busy] [--half-spacing 40] [--size 1920x1080 --width-mm 530] [--layer 1] [--press 3,15] [--anchor top-right]`.
-  Key tooltips (no pointer moves): `PYTHONPATH=src python3 tests/ui/tooltip_shot.py PREFIX [--layer N] KEY…`
+- Screenshots: the `screenshots` skill (`.claude/skills/screenshots/`). No grim or screenshot portal.
 - Lint is byte-compile plus data validation inside `check.sh`. No ruff, flake8 or mypy installed.
 
 ## Architecture
 - `src/vibemapp/models.py` + `service.py`: **the contract**. The UI only talks to a
   `KeyboardService` (`backend/zsa_service.py` real, `mock_service.py` fake). All its
   signals are emitted on the GLib main loop.
-- `backend/`: `devices` (sysfs hidraw), `oryx` (raw-HID protocol), `oryx_api`
-  (GraphQL layout + cache), `focus/hyprland` (IPC sockets), `smart_layers` (rules
-  engine + JSON), `steam`, `heatmap`, `migration`, `geometries`.
-- `tray/`: StatusNotifierItem + dbusmenu over Gio D-Bus (no GTK).
-- `ui/`: libadwaita pages and dialogs. `.ui` files are GtkBuilder XML loaded from the
-  package dir. App lifecycle, tray and signals live in `main.py`. Overlay: `overlay.py`
-  (layer-shell surfaces), `overlay_state.py` (pure logic, unit-tested), `overlay_page.py`;
-  `view_binder.py` wires key/layer signals into any `KeyboardView`.
-- `data/`: desktop, metainfo, gschema, icons, `udev/50-zsa.rules`.
 
 ## Gotchas and constraints
 - **Never flash firmware or write EEPROM.** `oryx.ALLOWED_COMMANDS` allows only fw

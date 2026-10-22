@@ -1,7 +1,6 @@
 ---
 name: release
-description: Cut a Vibemapp release (version bump, tag, push, GitHub release). Use when asked to release or bump the version.
-disable-model-invocation: true
+description: Cut a Vibemapp release (version bump, tag, push, GitHub release). Use only when the owner asks for a release or a version bump.
 ---
 Release Vibemapp version $ARGUMENTS (X.Y.Z).
 
