@@ -10,3 +10,4 @@ build-dev/
 packaging/arch/src/
 packaging/arch/pkg/
 packaging/arch/vibemapp/
+CLAUDE.local.md

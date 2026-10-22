@@ -1,7 +1,7 @@
 # Progress / handoff
 
-**Last updated:** 2026-10-20. **Released:** 1.2.0 (heatmap per app, Insights page with ergo score and Alternative Layouts; 1.1.4 overlay fade owned by Vibemapp, Fade Duration setting; 1.1.3 overlay hides without stealing focus or flashing the old layer; 1.1.2 title changes keep a hand-picked layer; 1.1.1 waits for held keys; 1.1.0 added the overlay).
-How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
+**Last updated:** 2026-10-22. **Latest release:** 1.2.0 (details in `CHANGELOG.md`).
+How things work: `docs/SPEC.md`.
 
 ## Current state
 
@@ -13,8 +13,8 @@ How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
 - Transparent keys in the layout view.
 - Overlay: click-through, key highlighting, follow-focused and fixed monitor, physical size on
   both monitors, half spacing, SUPER+O `--toggle-overlay` bind with the installed package.
-- Heatmap: counts land on the right keys (user-confirmed 2026-10-13).
-- Heatmap per app and Insights recording (user-confirmed 2026-10-18).
+- Heatmap: counts land on the right keys (2026-10-13).
+- Heatmap per app and Insights recording (2026-10-18).
 - Tray (Noctalia), migration from `keymappforlinux`, dev app ID.
 
 **Not verified:**
@@ -30,8 +30,7 @@ How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
 ## Workflow
 - Agree on the design before coding. UX and backend work are split by file; every change
   is reviewed, passes `./check.sh` and comes with screenshots.
-- Releases: GitHub release with the CHANGELOG section, a metainfo `<release>`, tag-pinned
-  screenshot URLs (steps in CLAUDE.md).
+- Releases: the `/release` skill.
 
 ## Decisions
 - **Vibemapp owns the overlay's behaviour, not the compositor:** e.g. the fade is our own
@@ -79,15 +78,10 @@ How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
 - **Dev-run conflict is a warning, not a block:** banner with "Quit Installed App".
 
 ## Known issues / dead ends
-- **Tests:** `./check.sh` passes, 353 tests plus lint and data validation (2026-10-20).
-- **PyGObject asyncio warning:** PyGObject 3.58.0 on Python 3.14.7 still emits it (2026-10-12).
-  Filtered only where unittest runs (check.sh, PKGBUILD `check()`). Drop the filter once fixed upstream.
 - **GSettings dead end:** `Gio.Settings.new_full(schema, None, old_path)` aborts on a fixed-path
   schema. Migration and obsolete-key cleanup use a relocatable copy (`ui/settings.py` `_relocatable_schema()`).
 - **Overlay must never unmap to hide:** Hyprland then moves keyboard focus off other layer-shell
   panels (found with Noctalia's session menu). It parks on BACKGROUND instead (`ui/overlay.py`).
-- **gtk4-layer-shell load order:** must load before libwayland, so `_preload.py` comes first in every
-  entry point. Imported later, `is_supported()` is quietly False.
 - **Test-teardown dead end:** `Gio.TestDBus` stalled 30 s on teardown. Tray tests use a private `dbus-daemon`.
 - **Screenshots:** no grim or screenshot portal. GTK renders pages, `tray_menu_shot.py` draws the real
   dbusmenu layout, `tooltip_shot.py` calls `do_query_tooltip` (synthetic pointer warps stall on Hyprland),
@@ -95,5 +89,3 @@ How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
 - **Dev and installed side by side:** with the real keyboard both drive Smart Layers. The warning banner
   lives in the window, so a dev run in the tray with no window doesn't warn. Accepted for a dev tool.
 - **No `.Devel` desktop file or icon:** fine on Hyprland and Noctalia; GNOME Shell wouldn't match it.
-- **User's GTK theme warnings:** `~/.config/gtk-4.0/gtk.css` (adw-gtk3 symlink) imports missing
-  `libadwaita*.css`, so every GTK4 app prints two import warnings. Not ours; harmless.

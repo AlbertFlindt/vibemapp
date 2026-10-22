@@ -4,8 +4,9 @@ GNOME/libadwaita clone of ZSA Keymapp for Arch Linux (Python + PyGObject). Headl
 feature: **Smart Layers** — switch the ZSA keyboard's layer when the focused app
 changes (Hyprland only). Also: live layout view, click-through layout overlay
 (gtk4-layer-shell), opt-in key heatmap, tray icon.
-How it works, by feature: @docs/SPEC.md. Handoff state, decisions, dead ends: @PROGRESS.md.
-Release history: `CHANGELOG.md` (not loaded; read it when needed).
+Handoff state, decisions, dead ends: @PROGRESS.md.
+How it works, by feature: `docs/SPEC.md` (not loaded; read the feature's section before changing it,
+and update it with the change). Release history: `CHANGELOG.md` (not loaded).
 
 ## Install (Arch)
 - Runtime: `python python-gobject gtk4 libadwaita glib2`. Build: `meson`.
@@ -30,7 +31,7 @@ Release history: `CHANGELOG.md` (not loaded; read it when needed).
   window shows a banner with a "Quit Installed App" button while it runs (`ui/instance_check.py`).
 - Single test module: `PYTHONPATH=src python3 -m unittest tests.backend.test_steam`
 - Staged install: `meson setup build --prefix=/usr && meson install -C build --destdir /tmp/stage`
-- Screenshot (no grim on this machine; GTK renders it):
+- Screenshot (GTK renders it; no grim or screenshot portal):
   `PYTHONPATH=src python3 tests/ui/screenshot.py OUT.png [--page smart-layers|heatmap|overlay] [--dialog add-rule|preferences|…]`
   Tray menu (private dbus-daemon, real dbusmenu layout): `PYTHONPATH=src python3 tests/ui/tray_menu_shot.py OUT.png [--state ready|no-keyboard|smart-off] [--window-visible]`.
   Overlay over a checkerboard/busy backdrop: `PYTHONPATH=src python3 tests/ui/screenshot.py OUT.png --overlay [--backdrop busy] [--half-spacing 40] [--size 1920x1080 --width-mm 530] [--layer 1] [--press 3,15] [--anchor top-right]`.
@@ -83,10 +84,4 @@ Release history: `CHANGELOG.md` (not loaded; read it when needed).
   user-visible strings in `_()` (gettext domain `vibemapp`).
 - The PKGBUILD lives in `packaging/arch/` on purpose. `makepkg -c/-C` runs `rm -rf ./src`,
   which would wipe our source tree if the PKGBUILD sat at the repo root.
-- Release bump touches: `meson.build` version, `packaging/arch/PKGBUILD` pkgver,
-  `ui/resources.py` dev fallback, a metainfo `<release>` entry and a `CHANGELOG.md` section.
-  Metainfo screenshot URLs point at the tag (`.../vibemapp/vX.Y.Z/data/screenshots/`), so bump them too.
-  Then commit, `git tag vX.Y.Z`, `git push origin main --tags`, and publish a GitHub release
-  with that version's changelog section (write NOTES.md in the scratchpad, not the repo):
-  `gh release create vX.Y.Z --title "Vibemapp X.Y.Z" --notes-file NOTES.md`.
-  Repo: https://github.com/AlbertFlindt/vibemapp
+- Releases: run the `/release X.Y.Z` skill (`.claude/skills/release/`). Repo: https://github.com/AlbertFlindt/vibemapp
