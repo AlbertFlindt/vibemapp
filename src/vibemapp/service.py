@@ -1,6 +1,6 @@
 """KeyboardService — the backend/frontend contract.
 
-Owned by the PM. The UI talks *only* to an instance of a ``KeyboardService``
+The UI talks *only* to an instance of a ``KeyboardService``
 subclass (``backend.zsa_service.ZsaKeyboardService`` in production,
 ``mock_service.MockKeyboardService`` for UI development with VIBEMAPP_MOCK=1).
 

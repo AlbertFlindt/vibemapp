@@ -1,7 +1,7 @@
 """Shared data models — part of the backend/frontend contract.
 
-Owned by the PM. Do not change field names or semantics without going through
-the PM; both the backend and the UI depend on these.
+Do not change field names or semantics lightly: both the backend and the UI
+depend on these.
 
 All geometry is expressed in *key units* (1.0 == width of a standard 1u key).
 Key ``index`` values follow the Oryx key-index order for the given model, so

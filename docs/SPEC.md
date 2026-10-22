@@ -198,7 +198,7 @@ pause and reset (confirmation dialog), and an App filter (hidden while no app ha
 - **Letters** (`backend/keykinds.py`, pure): a key is a letter when its tap resolves to one alphabetic
   character (incl. language variants and Æ Ø Å; home-row mods stay letters), from `KeyBinding.tap_code`
   (additive, filled by `oryx_api`), the label only as a fallback.
-- **Alternative layouts** (`backend/layouts.py`, pure): the user won't move single letters, so the
+- **Alternative layouts** (`backend/layouts.py`, pure): single letters are never moved, so the
   letters are compared as whole layouts. The base layer's 30-key letter block is found by QWERTY letter
   keycodes (the `;` slot right of L, `, . /` right of M; none found → no comparison). QWERTY, Colemak,
   Colemak-DH, Workman and Dvorak (its `'` on the `/` slot) are simulated by moving the block's layer-0

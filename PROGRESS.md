@@ -28,16 +28,15 @@ How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
    Strings are already in `_()`.
 
 ## Workflow
-- The user likes a PM + subagents setup (UX expert, backend expert): propose the design and
-  agree on it before coding, give each agent its own files, and the PM reviews, runs
-  `./check.sh` and shows screenshots.
+- Agree on the design before coding. UX and backend work are split by file; every change
+  is reviewed, passes `./check.sh` and comes with screenshots.
 - Releases: GitHub release with the CHANGELOG section, a metainfo `<release>`, tag-pinned
   screenshot URLs (steps in CLAUDE.md).
 
 ## Decisions
 - **Vibemapp owns the overlay's behaviour, not the compositor:** e.g. the fade is our own
   animation with a setting, rather than Hyprland's layer animations.
-- **Overlay requires gtk4-layer-shell, no fallback window:** the user keeps the app lean with
+- **Overlay requires gtk4-layer-shell, no fallback window:** the app stays lean with
   optional packages, as long as the UI says what to install.
 - **Overlay settings live on their own sidebar page**, not in Preferences: it has many tweaks.
 - **Overlay shows whenever a selected layer is active**, not only while a layer key is held.
@@ -53,19 +52,19 @@ How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
   blocks hidraw, the Hyprland socket and `/proc` for Steam). `appstreamcli` is an optional lint in `check.sh`.
 - **PKGBUILD in `packaging/arch/`:** `makepkg -c/-C` deletes `./src`, which at the repo root was our code.
 - **System Python, PyGObject and libadwaita:** nothing from pip, no Rust toolchain.
-- **Hyprland only as focus source:** it's the user's desktop. `FocusWatcher` is pluggable.
-- **No flashing or EEPROM writes:** the user chose it; the command allow-list enforces it.
+- **Hyprland only as focus source:** it's the target desktop. `FocusWatcher` is pluggable.
+- **No flashing or EEPROM writes:** by design; the command allow-list enforces it.
 - **`uaccess` udev rules instead of ZSA's `plugdev` group:** no group membership needed.
 - **Restore layer 0 on exit:** otherwise the keyboard stays on the last app's layer.
 - **Fallback layer defaults to "Don't change":** least surprising for a new layout.
 - **Ignore our own window's focus:** opening Vibemapp to edit rules shouldn't reset the layer.
 - **Auto-connect is a service property:** the UI binds it to GSettings, so there's one policy.
-- **Renamed to Vibemapp with full migration:** the user asked for a complete rename.
+- **Renamed to Vibemapp with full migration:** a complete rename, nothing left under the old name.
 - **Heatmap is opt-in and stores counts only:** privacy; typing can't be reconstructed.
 - **Per-app heatmap counts are part of the heatmap opt-in** (window class or Steam game, never
   titles); `days` stays the all-apps total so old files load unchanged.
 - **Ergo score gets its own Insights sidebar page**; the Heatmap page only gains the App filter.
-- **No rule-based coach** (user, 2026-10-20: "not feeling it" after trying it on the Voyager). It
+- **No rule-based coach** (dropped 2026-10-20 after trying it on a Voyager). It
   suggested odd swaps (O↔Æ, Shift↔U); even restricted to non-letter keys it wasn't useful. Letters are
   compared as whole well-known layouts instead (Alternative Layouts), with Æ Ø Å kept in place.
 - **Close hides to the tray:** Hyprland has no minimise.
@@ -74,8 +73,8 @@ How things work: `docs/SPEC.md`. What changed per release: `CHANGELOG.md`.
 - **Transparent keys fall through to the base layer only** (`transparency.BASE_ONLY`): set-layer is
   `layer_move` (only target and base active), and LT/MO layers are reached from the base. A full
   stack walk showed misleading blanks. Switch in `KeyboardView.set_layer` if that changes.
-- **Always open on the Layout page:** the user asked for it; `last-page` was removed.
-- **Tray menu** (user-approved): status header / Show|Hide Vibemapp / Smart Layers / Show Overlay
+- **Always open on the Layout page:** `last-page` was removed.
+- **Tray menu**: status header / Show|Hide Vibemapp / Smart Layers / Show Overlay
   / Preferences / Quit. No mnemonics.
 - **Dev-run conflict is a warning, not a block:** banner with "Quit Installed App".
 
