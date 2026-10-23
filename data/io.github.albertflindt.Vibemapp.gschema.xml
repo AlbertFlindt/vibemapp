@@ -11,6 +11,11 @@
       <summary>Enable Smart Layers on startup</summary>
       <description>Turn on automatic layer switching when the app starts.</description>
     </key>
+    <key name="notify-layer-changes" type="b">
+      <default>false</default>
+      <summary>Notify on layer changes</summary>
+      <description>Show a desktop notification when Smart Layers switches the keyboard to another layer.</description>
+    </key>
     <key name="auto-connect" type="b">
       <default>true</default>
       <summary>Connect automatically</summary>

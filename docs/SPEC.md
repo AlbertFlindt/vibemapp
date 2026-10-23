@@ -117,6 +117,11 @@ exists but can't be opened.
 - Paused when disabled or disconnected; re-evaluates on enable/connect. Restores layer 0 on
   quit, SIGTERM or disconnect if Smart Layers moved it. Firmware keys TOGGLE_SMART_LAYER and
   TRIGGER_SMART_LAYER toggle the feature and force a re-evaluation.
+- **Notifications** (opt-in, `notify-layer-changes`, off by default): `ui/layer_notifier.py`
+  listens to `rule-applied` and sends one notification with the fixed id `layer-changed`
+  (each replaces the last), low priority. Title: the layer ("Layer 2 · Media"); body:
+  "Switched for Firefox" (focused app or Steam game name) or "No rule for Firefox, using the
+  fallback layer". Skipped when the layer doesn't actually change or our window is active.
 - **Steam detection:** class `steam_app_<id>` (Proton) or `SteamAppId`/`SteamGameId` in
   `/proc/<pid>/environ` (native). The `steam` client is never a game. Names come from
   `appmanifest_<id>.acf` in every library in `libraryfolders.vdf`; Proton, runtimes and
@@ -216,8 +221,8 @@ Menu: status header (keyboard and layer) / Show|Hide Vibemapp / Smart Layers / S
 Preferences / Quit. Re-registers if the watcher restarts.
 
 ### 4.6 Preferences
-`Adw.PreferencesDialog`: run in background, show in tray, Smart Layers on startup,
-auto-connect, plus the Hyprland Lua autostart hint
+`Adw.PreferencesDialog`: run in background, show in tray, notify on layer changes (Smart
+Layers group), Smart Layers on startup, auto-connect, plus the Hyprland Lua autostart hint
 (`hl.on("hyprland.start", function () hl.exec_cmd("vibemapp --background") end)`).
 
 ## 5. Rename and migration

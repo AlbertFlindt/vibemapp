@@ -23,6 +23,7 @@ log = logging.getLogger(__name__)
 _DEFAULTS: dict[str, object] = {
     "run-in-background": False,
     "smart-layers-on-startup": True,
+    "notify-layer-changes": False,
     "auto-connect": True,
     "window-width": 960,
     "window-height": 660,

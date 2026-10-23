@@ -29,6 +29,18 @@
         </child>
         <child>
           <object class="AdwPreferencesGroup">
+            <property name="title" translatable="yes">Smart Layers</property>
+            <child>
+              <object class="AdwSwitchRow" id="notify_layer_row">
+                <property name="title" translatable="yes">_Notify on Layer Changes</property>
+                <property name="use-underline">True</property>
+                <property name="subtitle" translatable="yes">Show a notification when Smart Layers switches the layer</property>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="AdwPreferencesGroup">
             <property name="title" translatable="yes">Startup</property>
             <child>
               <object class="AdwSwitchRow" id="smart_layers_row">
