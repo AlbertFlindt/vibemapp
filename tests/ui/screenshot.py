@@ -1,7 +1,7 @@
 """Render the app window (with the mock service) to a PNG — a dev tool, not a test.
 
     PYTHONPATH=src python3 tests/ui/screenshot.py OUT.png [--page smart-layers|heatmap|overlay|insights]
-        [--dialog add-rule|edit-rule|preferences|device|about|shortcuts]
+        [--dialog add-rule|edit-rule|preferences|device|about|shortcuts] [--silent-layers 3]
         [--size 1000x680] [--delay 2500] [--layer 2] [--press 3,15]
     PYTHONPATH=src python3 tests/ui/screenshot.py OUT.png --overlay
         [--backdrop checker|busy] [--half-spacing 0] [--anchor bottom]
@@ -74,6 +74,9 @@ def main() -> int:
     parser.add_argument("--no-smart", action="store_true",
                         help="turn Smart Layers off before the keyboard connects")
     parser.add_argument("--pattern")
+    parser.add_argument("--silent-layers",
+                        help="with --dialog preferences: open Silent Layers with these "
+                             "comma-separated layers ticked, e.g. 3")
     parser.add_argument("--overlay", action="store_true",
                         help="render the on-screen overlay instead of the window")
     parser.add_argument("--backdrop", choices=["checker", "busy"], default="checker")
@@ -158,6 +161,11 @@ def main() -> int:
             app.activate_action({"preferences": "preferences", "about": "about",
                                  "shortcuts": "shortcuts"}.get(args.dialog, "about"), None) \
                 if args.dialog != "device" else win.activate_action("win.device-info", None)
+        if args.dialog == "preferences" and args.silent_layers is not None:
+            app.settings.set_boolean("notify-layer-changes", True)
+            app.settings.set_value("notify-excluded-layers", GLib.Variant(
+                "ai", [int(v) for v in args.silent_layers.split(",") if v]))
+            win.get_visible_dialog().silent_layers_row.set_expanded(True)
         GLib.timeout_add(900, render)
         return GLib.SOURCE_REMOVE
 

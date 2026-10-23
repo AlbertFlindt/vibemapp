@@ -37,6 +37,14 @@
                 <property name="subtitle" translatable="yes">Show a notification when Smart Layers switches the layer</property>
               </object>
             </child>
+            <child>
+              <object class="AdwExpanderRow" id="silent_layers_row">
+                <property name="title" translatable="yes">Silent _Layers</property>
+                <property name="use-underline">True</property>
+                <property name="subtitle" translatable="yes">Switches to these layers don't notify, such as a mouse layer the keyboard turns on by itself</property>
+                <property name="sensitive" bind-source="notify_layer_row" bind-property="active" bind-flags="sync-create"/>
+              </object>
+            </child>
           </object>
         </child>
         <child>
