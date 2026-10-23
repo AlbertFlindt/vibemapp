@@ -9,8 +9,8 @@ How it works, by feature: `docs/SPEC.md` (not loaded; read the feature's section
 and update it with the change). Release history: `CHANGELOG.md` (not loaded).
 
 ## Install (Arch)
-- `cd packaging/arch && makepkg -si` (PKGBUILD builds the `v$pkgver` tag from GitHub, so
-  commit, tag and push first; use `./run-dev.sh` for untagged changes. Replaces the old
+- `cd packaging/arch && makepkg -si` (PKGBUILD builds the `v$pkgver` tag from GitHub, which CI creates on merge;
+  use `./run-dev.sh` for unreleased changes. Replaces the old
   `keymappforlinux` package), then replug the keyboard (udev `uaccess` rules).
 
 ## Commands
@@ -62,4 +62,6 @@ and update it with the change). Release history: `CHANGELOG.md` (not loaded).
   user-visible strings in `_()` (gettext domain `vibemapp`).
 - The PKGBUILD lives in `packaging/arch/` on purpose. `makepkg -c/-C` runs `rm -rf ./src`,
   which would wipe our source tree if the PKGBUILD sat at the repo root.
-- Releases: run the `/release X.Y.Z` skill (`.claude/skills/release/`). Repo: https://github.com/AlbertFlindt/vibemapp
+- **Every merge that changes the app is a release.** Before a PR is merged, bump the version in it
+  with the `release` skill; on merge, CI (`.github/workflows/release.yml`) tags and publishes it.
+  CI (`ci.yml`) runs `check.sh` on Arch and fails PRs that change the app without a bump. Repo: https://github.com/AlbertFlindt/vibemapp
