@@ -59,6 +59,7 @@ class Application(Adw.Application):
         self._quitting = False
         self.tray = None
         self.overlay = None
+        self.layer_notifier = None
         self._overlay_last_on: str | None = None
 
         self.add_main_option("background", ord("b"), GLib.OptionFlags.NONE,
@@ -109,6 +110,7 @@ class Application(Adw.Application):
         self._setup_actions()
         self._setup_overlay()
         self._setup_tray()
+        self._setup_layer_notifier()
         self._sync_hold()
 
     def do_command_line(self, command_line: Gio.ApplicationCommandLine) -> int:
@@ -152,6 +154,9 @@ class Application(Adw.Application):
             self.window.teardown()
         if self.tray is not None:
             self.tray.shutdown()
+        if self.layer_notifier is not None:
+            self.layer_notifier.shutdown()
+            self.layer_notifier = None
         if self.service is not None:
             try:
                 self.service.shutdown()
@@ -238,6 +243,24 @@ class Application(Adw.Application):
         notification = Gio.Notification.new(_("Vibemapp Is Running"))
         notification.set_body(_("Smart Layers keeps working in the background"))
         self.send_notification("background", notification)
+
+    def _setup_layer_notifier(self) -> None:
+        from .ui.layer_notifier import LayerNotifier
+
+        # Lives on the application, so it also works while the window is
+        # closed or hidden in the tray.
+        self.layer_notifier = LayerNotifier(
+            self.service, self.settings, self._send_layer_notification,
+            lambda: self.window is not None and self.window.is_active())
+
+    def _send_layer_notification(self, notification_id: str, title: str,
+                                 body: str) -> None:
+        notification = Gio.Notification.new(title)
+        notification.set_body(body)
+        notification.set_icon(Gio.ThemedIcon.new(APP_ID))
+        # A status update, not something to act on.
+        notification.set_priority(Gio.NotificationPriority.LOW)
+        self.send_notification(notification_id, notification)
 
     def _on_error(self, _controller: object, message: str) -> None:
         if self.window is None or not self.window.get_visible():

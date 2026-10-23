@@ -44,7 +44,12 @@ class KeyboardService(GObject.Object):
         # Layers is disabled, so the UI can show what is focused.
         "focus-changed": (GObject.SignalFlags.RUN_LAST, None, (str, str)),
         # Smart Layers switched the keyboard because of a focus change.
-        # app_class is "" when the fallback layer was applied.
+        # app_class is the matched rule's (a regex for pattern rules, an app id
+        # or "" for Steam rules), and "" when the fallback layer was applied, so
+        # use get_focused_window() to name the app. Emitted right
+        # after set-layer is sent, before the keyboard confirms it, so
+        # get_active_layer() still returns the previous layer; "layer-changed"
+        # follows if the layer actually changed. May re-send the current layer.
         "rule-applied": (GObject.SignalFlags.RUN_LAST, None, (str, int)),
         # Rules or fallback layer changed (by set_rules/set_fallback_layer or
         # because a different layout's rule set got loaded).

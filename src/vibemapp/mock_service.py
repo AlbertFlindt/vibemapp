@@ -773,10 +773,11 @@ class MockKeyboardService(KeyboardService):
         if target == self._active_layer and target == self._last_sent:
             return
         self._last_sent = target
+        # Same order as the real keyboard: the switch is applied, then confirmed.
+        self.emit("rule-applied", rule.app_class if rule else "", target)
         if target != self._active_layer:
             self._active_layer = target
             self.emit("layer-changed", target)
-        self.emit("rule-applied", rule.app_class if rule else "", target)
 
     # --- KeyboardService: devices ----------------------------------------
 

@@ -24,6 +24,7 @@ class PreferencesDialog(Adw.PreferencesDialog):
     background_row: Adw.SwitchRow = Gtk.Template.Child()
     smart_layers_row: Adw.SwitchRow = Gtk.Template.Child()
     auto_connect_row: Adw.SwitchRow = Gtk.Template.Child()
+    notify_layer_row: Adw.SwitchRow = Gtk.Template.Child()
     snippet_label: Gtk.Label = Gtk.Template.Child()
 
     def __init__(self, settings: Gio.Settings, tray: object | None = None) -> None:
@@ -37,7 +38,8 @@ class PreferencesDialog(Adw.PreferencesDialog):
         for key, row in (("show-in-tray", self.tray_row),
                          ("run-in-background", self.background_row),
                          ("smart-layers-on-startup", self.smart_layers_row),
-                         ("auto-connect", self.auto_connect_row)):
+                         ("auto-connect", self.auto_connect_row),
+                         ("notify-layer-changes", self.notify_layer_row)):
             settings.bind(key, row, "active", Gio.SettingsBindFlags.DEFAULT)
         settings.connect("changed::show-in-tray", lambda *_a: self._sync_tray())
         self._sync_tray()
