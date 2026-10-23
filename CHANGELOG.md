@@ -2,6 +2,14 @@
 
 All notable changes to Vibemapp. Each version is a tag and a GitHub release.
 
+## 1.4.0 (2026-10-23)
+
+### Added
+- **Silent Layers** (Preferences, under Notify on Layer Changes): choose layers that never
+  cause a layer change notification, such as a mouse layer the keyboard turns on when you
+  touch the trackpad. While such a layer is on, switching windows only notifies when the
+  layer really differs from the one you were on before it.
+
 ## 1.3.1 (2026-10-23)
 
 ### Fixed
