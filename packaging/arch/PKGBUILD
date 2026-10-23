@@ -1,12 +1,12 @@
 # Maintainer: Albert Flindt <Albert.Flindt@proton.me>
 pkgname=vibemapp
-pkgver=1.3.0
+pkgver=1.3.1
 pkgrel=1
 pkgdesc="GNOME-style companion app for ZSA keyboards with Smart Layers (app-aware layer switching)"
 arch=('any')
 url="https://github.com/AlbertFlindt/vibemapp"
 license=('GPL-3.0-or-later')
-depends=('python' 'python-gobject' 'gtk4' 'libadwaita' 'glib2')
+depends=('python' 'python-gobject' 'python-cairo' 'gtk4' 'libadwaita' 'glib2')
 makedepends=('meson' 'git')
 optdepends=('hyprland: Smart Layers focus tracking'
             'gtk4-layer-shell: on-screen layout overlay (required for it)')

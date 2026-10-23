@@ -2,6 +2,12 @@
 
 All notable changes to Vibemapp. Each version is a tag and a GitHub release.
 
+## 1.3.1 (2026-10-23)
+
+### Fixed
+- The Arch package depends on `python-cairo`. The overlay needs it, and without it Vibemapp
+  could fail to start on systems where nothing else had installed it.
+
 ## 1.3.0 (2026-10-23)
 
 ### Added

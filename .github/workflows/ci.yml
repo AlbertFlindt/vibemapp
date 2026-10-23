@@ -13,7 +13,7 @@ jobs:
     steps:
       - name: Install system packages
         run: |
-          pacman -Syu --noconfirm --needed git python python-gobject gtk4 libadwaita glib2 \
+          pacman -Syu --noconfirm --needed git python python-gobject python-cairo gtk4 libadwaita glib2 \
             gtk4-layer-shell desktop-file-utils appstream meson xorg-server-xvfb \
             xorg-xauth adwaita-icon-theme
       - uses: actions/checkout@v4
