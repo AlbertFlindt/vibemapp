@@ -16,6 +16,11 @@
       <summary>Notify on layer changes</summary>
       <description>Show a desktop notification when Smart Layers switches the keyboard to another layer.</description>
     </key>
+    <key name="notify-excluded-layers" type="ai">
+      <default>[]</default>
+      <summary>Layers without notifications</summary>
+      <description>Layer indices that never cause a layer-change notification, such as a mouse layer the keyboard turns on by itself. Switches to them are silent, and while one is active the next switch is compared with the layer before it.</description>
+    </key>
     <key name="auto-connect" type="b">
       <default>true</default>
       <summary>Connect automatically</summary>

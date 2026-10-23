@@ -122,6 +122,11 @@ exists but can't be opened.
   (each replaces the last), low priority. Title: the layer ("Layer 2 · Media"); body:
   "Switched for Firefox" (focused app or Steam game name) or "No rule for Firefox, using the
   fallback layer". Skipped when the layer doesn't actually change or our window is active.
+  `notify-excluded-layers` (`ai`, default `[]`) lists layers that never notify, e.g. a mouse
+  layer the firmware turns on when the trackpad is touched: switches to them are silent, and
+  while one is active the target is compared with the last active layer that isn't excluded
+  (tracked from `layer-changed`), so Base → Mouse → a rule for Base is silent but a rule for
+  Code notifies. With no such layer known it notifies. The decision is the pure `layer_notice`.
 - **Steam detection:** class `steam_app_<id>` (Proton) or `SteamAppId`/`SteamGameId` in
   `/proc/<pid>/environ` (native). The `steam` client is never a game. Names come from
   `appmanifest_<id>.acf` in every library in `libraryfolders.vdf`; Proton, runtimes and
@@ -221,8 +226,9 @@ Menu: status header (keyboard and layer) / Show|Hide Vibemapp / Smart Layers / S
 Preferences / Quit. Re-registers if the watcher restarts.
 
 ### 4.6 Preferences
-`Adw.PreferencesDialog`: run in background, show in tray, notify on layer changes (Smart
-Layers group), Smart Layers on startup, auto-connect, plus the Hyprland Lua autostart hint
+`Adw.PreferencesDialog`: run in background, show in tray, notify on layer changes and a Silent Layers
+expander (one switch per layer of the loaded layout, insensitive while notifications are off,
+a hint row with no layout; writes `notify-excluded-layers`) (Smart Layers group), Smart Layers on startup, auto-connect, plus the Hyprland Lua autostart hint
 (`hl.on("hyprland.start", function () hl.exec_cmd("vibemapp --background") end)`).
 
 ## 5. Rename and migration

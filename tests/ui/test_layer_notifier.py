@@ -4,6 +4,8 @@ import unittest
 
 from vibemapp.mock_service import MockKeyboardService
 from vibemapp.models import AppRule, FocusedWindow, RuleMatch
+from gi.repository import GLib
+
 from vibemapp.ui import layer_notifier as ln
 from vibemapp.ui.settings import MemorySettings
 
@@ -33,6 +35,25 @@ class LayerNoticeTests(unittest.TestCase):
         self.assertEqual(self.notice(fallback=True, app_name=None)[1],
                          "No rule matched, using the fallback layer")
         self.assertEqual(self.notice(app_name=None)[1], "Switched by a Smart Layers rule")
+
+    def test_excluded_target_is_silent(self) -> None:
+        self.assertIsNone(self.notice(excluded=frozenset({2})))
+        self.assertIsNotNone(self.notice(excluded=frozenset({3})))
+
+    def test_excluded_active_layer_compares_with_previous(self) -> None:
+        mouse = frozenset({3})
+        # Base -> (firmware) Mouse -> a rule for Base: back where we were.
+        self.assertIsNone(self.notice(target=0, active_layer=3, excluded=mouse,
+                                      previous_layer=0))
+        # Base -> Mouse -> a rule for Media: a real change.
+        self.assertEqual(self.notice(target=2, active_layer=3, excluded=mouse,
+                                     previous_layer=0)[0], "Layer 2 · Media")
+        # Nothing known before the excluded layer: notify, the switch is real.
+        self.assertIsNotNone(self.notice(target=0, active_layer=3, excluded=mouse,
+                                         previous_layer=None))
+        # previous_layer only counts while the active layer is excluded.
+        self.assertIsNotNone(self.notice(target=2, active_layer=0, excluded=mouse,
+                                         previous_layer=2))
 
     def test_focused_app_name(self) -> None:
         names = {"kitty": "Kitty Terminal"}.get
@@ -114,10 +135,47 @@ class LayerNotifierTests(unittest.TestCase):
         self.assertEqual(self.sent, [("layer-changed", "Layer 3 · Navigation",
                                       "Switched for ELDEN RING")])
 
+    def exclude(self, *layers: int) -> None:
+        self.settings.set_value(ln.EXCLUDED_KEY, GLib.Variant("ai", list(layers)))
+
+    def test_switch_to_excluded_layer_is_silent(self) -> None:
+        self.exclude(1)
+        self.svc.simulate_focus("kitty", "fish")
+        self.assertEqual(self.svc.get_active_layer(), 1)
+        self.assertEqual(self.sent, [])
+
+    def test_back_from_excluded_layer_to_previous_is_silent(self) -> None:
+        self.exclude(3)
+        self.assertEqual(self.svc.get_active_layer(), 0)
+        self.svc.simulate_layer(3)                     # firmware: trackpad touched
+        self.svc.simulate_focus("blender", "scene")    # fallback: Base again
+        self.assertEqual(self.svc.get_active_layer(), 0)
+        self.assertEqual(self.sent, [])
+
+    def test_from_excluded_layer_to_another_notifies(self) -> None:
+        self.exclude(3)
+        self.svc.simulate_layer(3)
+        self.svc.simulate_focus("kitty", "fish")
+        self.assertEqual(self.sent, [("layer-changed", "Layer 1 · Symbols",
+                                      "Switched for App kitty")])
+
+    def test_previous_layer_follows_layer_changes(self) -> None:
+        self.exclude(3)
+        self.svc.simulate_focus("kitty", "fish")       # Base -> Symbols, notifies
+        self.svc.simulate_layer(3)                     # Symbols -> Mouse
+        self.svc.simulate_focus("kitty", "vim")        # back to Symbols: silent
+        self.assertEqual(self.svc.get_active_layer(), 1)
+        self.svc.simulate_layer(3)
+        self.svc.simulate_focus("blender", "scene")    # to Base: notifies
+        self.assertEqual([title for _id, title, _body in self.sent],
+                         ["Layer 1 · Symbols", "Layer 0 · Base"])
+
     def test_shutdown_disconnects(self) -> None:
         self.notifier.shutdown()
         self.svc.simulate_focus("kitty", "fish")
+        self.svc.simulate_layer(3)
         self.assertEqual(self.sent, [])
+        self.assertEqual(self.notifier._handlers, [])
 
 
 if __name__ == "__main__":

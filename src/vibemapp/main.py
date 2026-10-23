@@ -354,7 +354,8 @@ class Application(Adw.Application):
         from .ui.preferences import PreferencesDialog
 
         self.activate()
-        PreferencesDialog(self.settings, tray=self.tray).present(self.window)
+        PreferencesDialog(self.settings, tray=self.tray,
+                          service=self.service).present(self.window)
 
     def _show_shortcuts(self) -> None:
         self.activate()

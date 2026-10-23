@@ -35,6 +35,7 @@ _DEFAULTS: dict[str, object] = {
     "obsolete-keys-version": 0,
     "overlay-mode": "selected",
     "overlay-layers": [],
+    "notify-excluded-layers": [],
     "overlay-anchor": "bottom",
     "overlay-size": 80,
     "overlay-opacity": 60,

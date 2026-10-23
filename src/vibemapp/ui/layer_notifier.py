@@ -1,12 +1,14 @@
 """Opt-in desktop notification when Smart Layers switches the layer.
 
 ``layer_notice`` is the pure decision (unit-tested); ``LayerNotifier`` wires it
-to the service's ``rule-applied`` signal. It sends through an injected
+to the service's ``rule-applied`` signal and tracks ``layer-changed`` to know
+the last layer that isn't excluded from notifications. It sends through an injected
 ``send(notification_id, title, body)`` so it works without a window and in tests.
 """
 
 from __future__ import annotations
 
+from collections import deque
 from collections.abc import Callable
 
 from ..models import FocusedWindow
@@ -15,6 +17,10 @@ from . import rules_model as rm
 from .i18n import _
 
 SETTINGS_KEY = "notify-layer-changes"
+# Layers that never notify, e.g. a mouse layer the firmware turns on by itself.
+EXCLUDED_KEY = "notify-excluded-layers"
+# Recent active layers kept to find the last one that isn't excluded.
+_HISTORY = 16
 # One fixed id: each notification replaces the previous one instead of stacking.
 NOTIFICATION_ID = "layer-changed"
 
@@ -23,15 +29,24 @@ Send = Callable[[str, str, str], None]
 
 def layer_notice(*, enabled: bool, window_active: bool, target: int,
                  active_layer: int, layer_title: str,
-                 app_name: str | None, fallback: bool) -> tuple[str, str] | None:
+                 app_name: str | None, fallback: bool,
+                 excluded: frozenset[int] = frozenset(),
+                 previous_layer: int | None = None) -> tuple[str, str] | None:
     """``(title, body)`` to show, or ``None`` when nothing should be shown.
 
     Shown only when the setting is on, the layer really changes and the main
     window isn't active (rule edits re-assert the layer while you're in the
     app, and the live view already shows it). ``app_name`` is the focused app
     or game, if known; ``fallback`` means no rule matched.
+
+    Switches to an ``excluded`` layer are silent. While the active layer is
+    excluded (the firmware turned a mouse layer on, say), the target is
+    compared with ``previous_layer``, the last active layer that isn't
+    excluded; ``None`` (unknown) notifies, since the switch is real.
     """
-    if not enabled or window_active or target == active_layer:
+    if not enabled or window_active or target == active_layer or target in excluded:
+        return None
+    if active_layer in excluded and target == previous_layer:
         return None
     if fallback:
         body = (_("No rule for {app}, using the fallback layer").format(app=app_name)
@@ -65,14 +80,30 @@ class LayerNotifier:
         self._send = send
         self._is_window_active = is_window_active
         self._app_name = app_name
+        # Distinct consecutive active layers, newest last. A history rather than
+        # one "last non-excluded" value, so changing the excluded set applies at once.
+        self._recent: deque[int] = deque([service.get_active_layer()], maxlen=_HISTORY)
         self._handlers: list[tuple[object, int]] = [
             (service, service.connect("rule-applied", self._on_rule_applied)),
+            (service, service.connect("layer-changed", self._on_layer_changed)),
         ]
 
     def shutdown(self) -> None:
         for obj, handler in self._handlers:
             obj.disconnect(handler)
         self._handlers = []
+
+    def _on_layer_changed(self, _service: KeyboardService, layer: int) -> None:
+        if not self._recent or self._recent[-1] != layer:
+            self._recent.append(layer)
+
+    def _excluded(self) -> frozenset[int]:
+        return frozenset(self._settings.get_value(EXCLUDED_KEY).unpack())
+
+    def _previous_layer(self, excluded: frozenset[int]) -> int | None:
+        """The most recent active layer that isn't excluded, if known."""
+        return next((layer for layer in reversed(self._recent)
+                     if layer not in excluded), None)
 
     def _on_rule_applied(self, service: KeyboardService, app_class: str,
                          layer: int) -> None:
@@ -84,6 +115,12 @@ class LayerNotifier:
         window_active = self._is_window_active()
         if layer == active_layer or window_active:
             return   # skip the app lookup; layer_notice would say no anyway
+        excluded = self._excluded()
+        if layer in excluded:
+            return
+        previous = self._previous_layer(excluded) if active_layer in excluded else None
+        if previous == layer:
+            return
         app_name, fallback = self._describe(service, app_class)
         layout = service.get_layout()
         layers = layout.layers if layout is not None else ()
@@ -91,7 +128,8 @@ class LayerNotifier:
         notice = layer_notice(
             enabled=True, window_active=window_active, target=layer,
             active_layer=active_layer, layer_title=rm.layer_label(layer_obj, layer),
-            app_name=app_name, fallback=fallback)
+            app_name=app_name, fallback=fallback, excluded=excluded,
+            previous_layer=previous)
         if notice is not None:
             self._send(NOTIFICATION_ID, *notice)
 
