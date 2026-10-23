@@ -2,6 +2,14 @@
 
 All notable changes to Vibemapp. Each version is a tag and a GitHub release.
 
+## 1.3.0 (2026-10-23)
+
+### Added
+- **Layer change notifications** (Preferences, Smart Layers group, off by default): when Smart
+  Layers switches the layer, a desktop notification shows the layer's name and the app or
+  Steam game it switched for, or that no rule matched and the fallback layer is used. Each
+  notification replaces the previous one, and none appear while the Vibemapp window is active.
+
 ## 1.2.0 (2026-10-20)
 
 ### Added

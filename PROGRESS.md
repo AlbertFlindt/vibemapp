@@ -1,6 +1,6 @@
 # Progress / handoff
 
-**Last updated:** 2026-10-22. **Latest release:** 1.2.0 (details in `CHANGELOG.md`).
+**Last updated:** 2026-10-23. **Latest release:** 1.3.0 (details in `CHANGELOG.md`).
 How things work: `docs/SPEC.md`.
 
 ## Current state
