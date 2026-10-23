@@ -18,6 +18,9 @@ else
 fi
 glib-compile-schemas --strict --dry-run data
 
+echo "==> Checking the version is the same in every file"
+python3 build-aux/version.py check
+
 echo "==> Unit tests"
 # PyGObject 3.58 calls asyncio APIs deprecated in Python 3.14; not our code.
 PYTHONPATH=src python3 -W "ignore::DeprecationWarning:gi.events" \

@@ -1,0 +1,35 @@
+name: Release
+
+# On every push to main: if meson.build names a version that has no tag yet, tag it and
+# publish the GitHub release with that version's CHANGELOG section. The PKGBUILD builds the
+# tag, so `makepkg -si` picks the release up right after the merge.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Tag and publish if the version is new
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(python3 build-aux/version.py get)
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "v$version is already released; nothing to do."; exit 0
+          fi
+          python3 build-aux/version.py check
+          python3 build-aux/version.py notes > "$RUNNER_TEMP/notes.md"
+          gh release create "v$version" --target "$GITHUB_SHA" \
+            --title "Vibemapp $version" --notes-file "$RUNNER_TEMP/notes.md"

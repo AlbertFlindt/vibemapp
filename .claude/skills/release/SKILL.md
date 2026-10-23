@@ -1,20 +1,24 @@
 ---
 name: release
-description: Cut a Vibemapp release (version bump, tag, push, GitHub release). Use only when the owner asks for a release or a version bump.
+description: Bump the Vibemapp version for a release (every PR that changes the app ships as one on merge). Use when preparing a PR for merge, or when the owner asks for a release or a version bump.
 ---
-Release Vibemapp version $ARGUMENTS (X.Y.Z).
+Every merge to main that changes the app is a release. The version bump goes **in the PR**,
+as its last commit; on merge, `.github/workflows/release.yml` tags `vX.Y.Z` and publishes the
+GitHub release from the CHANGELOG section. CI's "Version bumped" check fails a PR that changes
+the app without a bump (docs, CI and `.claude/` changes alone are exempt).
 
-1. Run `./check.sh`; stop if it fails.
-2. Bump the version in:
-   - `meson.build` (`version`)
-   - `packaging/arch/PKGBUILD` (`pkgver`, reset `pkgrel=1`)
-   - `src/vibemapp/ui/resources.py` (dev fallback version)
-   - `data/io.github.albertflindt.Vibemapp.metainfo.xml`: add a `<release>` entry, and point every
-     screenshot URL at the new tag (`.../vibemapp/vX.Y.Z/data/screenshots/`)
-   - `CHANGELOG.md`: new section for this version
-3. Update the release line in `PROGRESS.md`.
-4. Run `./check.sh` again, then commit ("Release X.Y.Z: <summary>"), `git tag vX.Y.Z`,
-   `git push origin main --tags`.
-5. Write that version's CHANGELOG section to `NOTES.md` in the scratchpad (not the repo) and run
-   `gh release create vX.Y.Z --title "Vibemapp X.Y.Z" --notes-file NOTES.md`.
-6. Install is the owner's step: `cd packaging/arch && makepkg -si`, then replug the keyboard.
+Release version $ARGUMENTS (X.Y.Z). Without one, pick it from the changes since the last tag:
+patch for fixes, minor for new features, major for breaking changes.
+
+1. On the PR branch: `python3 build-aux/version.py bump X.Y.Z`. It sets `meson.build`, the
+   PKGBUILD (`pkgrel=1`), the dev fallback in `ui/resources.py`, the metainfo screenshot URLs
+   and the release line in `PROGRESS.md`; update its "Last updated" date too.
+2. Write by hand:
+   - `CHANGELOG.md`: a `## X.Y.Z (YYYY-MM-DD)` section (user-facing, Added/Changed/Fixed).
+   - `data/io.github.albertflindt.Vibemapp.metainfo.xml`: a `<release>` entry first in
+     `<releases>`, one short paragraph.
+3. `./check.sh` (it runs `build-aux/version.py check`), commit "Release X.Y.Z: <summary>", push.
+4. After the merge, confirm the release appeared (`gh release view vX.Y.Z`). If the workflow
+   failed, release by hand on main: `git tag vX.Y.Z && git push origin vX.Y.Z`, then
+   `gh release create vX.Y.Z --title "Vibemapp X.Y.Z" --notes-file <(python3 build-aux/version.py notes)`.
+5. Install is the owner's step: `cd packaging/arch && makepkg -si`, then replug the keyboard.

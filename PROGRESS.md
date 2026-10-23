@@ -1,6 +1,6 @@
 # Progress / handoff
 
-**Last updated:** 2026-10-23. **Latest release:** 1.3.0 (details in `CHANGELOG.md`).
+**Last updated:** 2026-10-23. **Latest release:** 1.3.1 (details in `CHANGELOG.md`).
 How things work: `docs/SPEC.md`.
 
 ## Current state
@@ -30,7 +30,8 @@ How things work: `docs/SPEC.md`.
 ## Workflow
 - Agree on the design before coding. UX and backend work are split by file; every change
   is reviewed, passes `./check.sh` and comes with screenshots.
-- Releases: the `/release` skill.
+- Releases: every PR that changes the app bumps the version (the `release` skill); merging
+  it tags and publishes the release via GitHub Actions.
 
 ## Decisions
 - **Vibemapp owns the overlay's behaviour, not the compositor:** e.g. the fade is our own

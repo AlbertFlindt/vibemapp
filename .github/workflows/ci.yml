@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    name: check.sh (Arch Linux)
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install system packages
+        run: |
+          pacman -Syu --noconfirm --needed git python python-gobject python-cairo gtk4 libadwaita glib2 \
+            gtk4-layer-shell desktop-file-utils appstream meson xorg-server-xvfb \
+            xorg-xauth adwaita-icon-theme
+      - uses: actions/checkout@v4
+      - name: Run check.sh
+        # GTK needs a display for the UI tests; Xvfb is enough (overlay tests fake layer-shell).
+        run: xvfb-run -a ./check.sh
+
+  release-ready:
+    # Every merge that changes the app ships as a release, so such a PR must bump the version.
+    name: Version bumped
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Require a new version when the app changes
+        run: |
+          base="origin/${{ github.base_ref }}"
+          changed=$(git diff --name-only "$base"...HEAD)
+          echo "Changed files:"; echo "$changed" | sed 's/^/  /'
+          # Docs, CI and Claude Code files alone don't need a release.
+          app=$(echo "$changed" | grep -Ev '^(\.github/|\.claude/|docs/|[^/]+\.md$|CLAUDE|check\.sh$|build-aux/version\.py$)' || true)
+          if [ -z "$app" ]; then
+            echo "Only docs/CI changed: no release needed."; exit 0
+          fi
+          new=$(python3 build-aux/version.py get)
+          old=$(git show "$base":meson.build | sed -n "s/^  version: '\(.*\)',/\1/p")
+          if [ "$new" = "$old" ] || [ "$(printf '%s\n%s\n' "$old" "$new" | sort -V | tail -1)" != "$new" ]; then
+            echo "::error::This PR changes the app but keeps version $old. Run build-aux/version.py bump X.Y.Z and add the CHANGELOG and metainfo entries (see the release skill)."
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/v$new" >/dev/null; then
+            echo "::error::Tag v$new already exists."; exit 1
+          fi
+          python3 build-aux/version.py check
+          echo "Will release $new on merge (was $old)."
