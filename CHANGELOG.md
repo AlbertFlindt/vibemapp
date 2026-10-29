@@ -2,6 +2,14 @@
 
 All notable changes to Vibemapp. Each version is a tag and a GitHub release.
 
+## 1.6.1 (2026-10-29)
+
+### Changed
+- The hold-action key follows the overlay's Appearance settings: its Opacity, Fade Duration,
+  Size and Monitor, and it shows at the top of the screen when the overlay is anchored there.
+- On the Overlay page, Hold Actions now comes before Appearance, so the features are together
+  and Appearance and Keyboard Shortcut are at the bottom.
+
 ## 1.6.0 (2026-10-29)
 
 ### Added

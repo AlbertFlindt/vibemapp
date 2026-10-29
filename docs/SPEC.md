@@ -185,17 +185,19 @@ up by the application next to the overlay; settings in the Overlay page's Hold A
   layout's, else 200 ms. Only `hold_combo` keys count, so mod-taps (permissive hold makes them
   uncertain) and layer keys never show a pill. A transparent key uses the base layer's key.
 - **Look:** an overlay key. A `KeyboardView` in overlay style shows one key labelled with the
-  combo: one key unit tall at the overlay's current key size (`OverlayController.key_unit_px`),
-  1u wide for two characters and wider in quarter units for longer labels, at full strength
-  (not the overlay's rest opacity).
+  combo, one key unit tall, 1u wide for two characters and wider in quarter units for longer
+  labels. It follows the overlay's Appearance settings (`OverlayController.pill_style`): key
+  size from Size, Opacity as its strength, Fade Duration (in, and three quarters of it out;
+  0 = instant), Monitor, and the anchor's top or bottom edge.
 - **Surface:** one layer-shell surface like the overlay's (OVERLAY layer, keyboard mode NONE,
   exclusive zone -1, empty input region, never unmapped once shown; hidden it parks on
-  BACKGROUND), namespace `vibemapp-hold-pill`, anchored to the bottom edge only so it's centred.
-  10 % of the monitor height up, or 12 px above the overlay while that is shown on the bottom
-  edge. Same monitor as the overlay. Shows 900 ms (100 ms fade in, 250 ms out); another hold
-  replaces the text and restarts the timer. Shown also while the Vibemapp window is active.
+  BACKGROUND), namespace `vibemapp-hold-pill`, anchored to the overlay's top or bottom edge
+  only, so it's centred. 10 % of the monitor height in from that edge, or 12 px past the
+  overlay while that is shown. Visible 900 ms; another hold replaces the text and restarts
+  the timer. Shown also while the Vibemapp window is active.
 - **Settings:** `hold-pill` (off by default) and `hold-pill-excluded` (`"layer:index"` ids; the
-  Keys expander lists every key with a hold action, all on by default). Needs gtk4-layer-shell.
+  Keys expander lists every key with a hold action, all on by default), in the Overlay page's
+  Hold Actions group above Appearance. Needs gtk4-layer-shell.
 
 ### 4.4 Heatmap
 Opt-in (`heatmap-recording`, default off). Stores only per-(local day, layer, key index)

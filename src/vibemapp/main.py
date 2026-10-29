@@ -332,8 +332,8 @@ class Application(Adw.Application):
         try:
             self.hold_pill = HoldPillController(
                 self.service, self.settings, self.overlay.layer_shell,
-                monitor=self.overlay.pill_monitor, clearance=self.overlay.bottom_clearance,
-                unit=self.overlay.key_unit_px)
+                monitor=self.overlay.pill_monitor, clearance=self.overlay.edge_clearance,
+                style=self.overlay.pill_style)
         except Exception:  # noqa: BLE001 — like the overlay, never break the app
             log.exception("Could not set up the hold-action pill")
             self.hold_pill = None

@@ -31,11 +31,11 @@ class SizeTests(unittest.TestCase):
 
 
 class MarginTests(unittest.TestCase):
-    def test_bottom_margin(self) -> None:
-        from vibemapp.ui.hold_pill import GAP_PX, bottom_margin
-        self.assertEqual(bottom_margin(1440, 0), 144)
-        self.assertEqual(bottom_margin(1440, 100), 144)        # overlay is lower
-        self.assertEqual(bottom_margin(1440, 400), 400 + GAP_PX)
+    def test_edge_margin(self) -> None:
+        from vibemapp.ui.hold_pill import GAP_PX, edge_margin
+        self.assertEqual(edge_margin(1440, 0), 144)
+        self.assertEqual(edge_margin(1440, 100), 144)        # overlay is nearer the edge
+        self.assertEqual(edge_margin(1440, 400), 400 + GAP_PX)
 
 
 @unittest.skipUnless(HAVE_DISPLAY, "needs a display")
@@ -51,9 +51,10 @@ class ControllerTests(unittest.TestCase):
         self.settings = MemorySettings()
         self.ls = FakeLayerShell()
         self.clearance = 0
+        self.style = hold_pill.PillStyle(unit=40.0)
         self.ctl = hold_pill.HoldPillController(
             self.svc, self.settings, self.ls, monitor=lambda: (None, 1000),
-            clearance=lambda: self.clearance, unit=lambda: 40.0)
+            clearance=lambda: self.clearance, style=lambda: self.style)
         self.svc.simulate_plug()
         self.assertTrue(spin(lambda: self.svc.get_connected_device() is not None))
         self.svc.load_layout_async(self.svc.get_connected_device(), None, lambda *_a: None)
@@ -114,6 +115,18 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(surface.view._fixed_size, (70, 40))
         self.assertEqual(surface.view._layer.keys[0].tap_label, "Ctrl+C")
         surface.destroy()
+
+    def test_follows_overlay_appearance(self) -> None:
+        self.settings.set_boolean("hold-pill", True)
+        self.style = self.hold_pill.PillStyle(edge="top", unit=40.0, opacity=0.3,
+                                              fade_in_ms=0, fade_out_ms=0)
+        self.hold_c()
+        surface = self.ctl.surface
+        state = self.ls.state(surface)
+        self.assertEqual((state["anchor"]["top"], state["anchor"]["bottom"]), (True, False))
+        self.assertEqual((state["margin"]["top"], state["margin"]["bottom"]), (100, 0))
+        self.assertEqual(surface.view._rest_opacity, 0.3)
+        self.assertEqual((surface._fade_in_ms, surface._fade_out_ms), (0, 0))
 
     def test_no_layer_shell_does_nothing(self) -> None:
         ctl = self.hold_pill.HoldPillController(self.svc, self.settings, None,
