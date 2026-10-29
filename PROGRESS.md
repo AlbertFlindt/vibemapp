@@ -22,6 +22,9 @@ How things work: `docs/SPEC.md`.
 - Moonlander, ErgoDox EZ and Planck EZ: geometry and key order come from QMK data; thumb-key
   angles are estimates.
 - Overlay with fractional monitor scaling, and the overlay on a Planck (no halves).
+- A changed layout-wide tapping term: Oryx's `config` holds only non-default settings and no
+  layout with a custom term has been seen, so its name there (`tappingTerm`) is a guess. Check
+  the cached layout JSON after changing it in Oryx. Per-key terms are verified to exist.
 
 ## Next steps
 1. **Translations.** Add `po/` (`POTFILES`, `LINGUAS`) and meson `i18n.gettext('vibemapp')`.
