@@ -13,6 +13,11 @@ objects like::
      "hold": {"code": "MO", "layer": 1, ...} | null,
      "customLabel": str | null, "emoji": str | null, "glowColor": "#rrggbb" | null, ...}
 
+``revision { config }`` is a JSON scalar of the layout's settings. It holds only
+what differs from Oryx's defaults (checked 2026-10-29: a layout with the default
+tapping term has no tapping-term entry). Each key object also has its own
+``tappingTerm`` (null for the global one).
+
 ``revisionId`` may be ``"latest"``. Fetches run on a worker thread with
 urllib, and results come back on the GLib main loop.
 """
@@ -41,7 +46,7 @@ LAYOUT_QUERY = (
     "query getLayout($hashId: String!, $revisionId: String!, $geometry: String) {"
     " layout(hashId: $hashId, geometry: $geometry, revisionId: $revisionId) {"
     " hashId title geometry"
-    " revision { hashId qmkVersion title layers { title color position keys } }"
+    " revision { hashId qmkVersion title config layers { title color position keys } }"
     " } }"
 )
 
@@ -218,7 +223,66 @@ def hold_label(action: dict[str, Any] | None) -> str:
     if code in _LAYER_CODES:
         layer = action.get("layer")
         return f"L{layer}" if isinstance(layer, int) else "L?"
-    return keycode_label(code, action.get("layer"))
+    label = keycode_label(code, action.get("layer"))
+    prefix = _modifier_prefix(action.get("modifiers"))
+    return prefix + label if prefix and label and not _is_modifier(code) else label
+
+
+# Plain modifier keycodes: holding one is a mod-tap, not a key being sent.
+_MODIFIER_NAMES = frozenset({
+    "LCTL", "LEFT_CTRL", "LCTRL", "RCTL", "RIGHT_CTRL", "RCTRL",
+    "LSFT", "LEFT_SHIFT", "LSHIFT", "RSFT", "RIGHT_SHIFT", "RSHIFT",
+    "LALT", "LEFT_ALT", "LOPT", "RALT", "RIGHT_ALT", "ROPT", "ALGR",
+    "LGUI", "LEFT_GUI", "LCMD", "LWIN", "RGUI", "RIGHT_GUI", "RCMD", "RWIN"})
+
+# Modifier names for ``hold_combo``, in the usual Ctrl, Shift, Alt, Super order.
+_MOD_NAMES = [("leftCtrl", "Ctrl"), ("rightCtrl", "Ctrl"), ("leftShift", "Shift"),
+              ("rightShift", "Shift"), ("leftAlt", "Alt"), ("rightAlt", "AltGr"),
+              ("leftGui", "Super"), ("rightGui", "Super")]
+
+
+def _is_modifier(code: str) -> bool:
+    return code.startswith("KC_") and code[3:] in _MODIFIER_NAMES
+
+
+def hold_combo(action: dict[str, Any] | None) -> str:
+    """``"Ctrl+C"`` when holding the key sends a key (with any modifiers), as
+    Oryx's "hold for another key" does. Empty for no hold, layer keys, mod-taps
+    and lone modifiers, which hold rather than send something."""
+    if not isinstance(action, dict):
+        return ""
+    code = action.get("code")
+    if (not isinstance(code, str) or code in _LAYER_CODES or code in _MOD_TAPS
+            or code in _TRANSPARENT_CODES or code == "KC_NO" or _is_modifier(code)):
+        return ""
+    label = keycode_label(code, action.get("layer"))
+    if not label:
+        return ""
+    mods = action.get("modifiers")
+    names: list[str] = []
+    if isinstance(mods, dict):
+        for key, name in _MOD_NAMES:
+            if mods.get(key) and name not in names:
+                names.append(name)
+    return "+".join([*names, label])
+
+
+def tapping_term(value: Any) -> int | None:
+    """A tapping term in ms from Oryx data, or None when unset or nonsense."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    term = int(value)
+    return term if 0 < term <= 5000 else None
+
+
+def _config(revision: dict[str, Any]) -> dict[str, Any]:
+    config = revision.get("config")
+    if isinstance(config, str):     # defensively accept a JSON-encoded scalar
+        try:
+            config = json.loads(config)
+        except ValueError:
+            return {}
+    return config if isinstance(config, dict) else {}
 
 
 def _modifier_prefix(mods: Any) -> str:
@@ -270,7 +334,9 @@ def key_binding_from_json(index: int, key: Any) -> KeyBinding:
         tap_label, glyph = emoji.strip(), None
     return KeyBinding(index=index, tap_label=tap_label, hold_label=hold_label(hold),
                       glyph=glyph, color=color,
-                      tap_code=code if isinstance(code, str) and code else None)
+                      tap_code=code if isinstance(code, str) and code else None,
+                      hold_combo=hold_combo(hold),
+                      tapping_term_ms=tapping_term(key.get("tappingTerm")))
 
 
 def parse_layout(data: dict[str, Any], model: KeyboardModel | None = None) -> Layout:
@@ -306,6 +372,9 @@ def parse_layout(data: dict[str, Any], model: KeyboardModel | None = None) -> La
         geometry=geometries.geometry_for(model),
         layers=tuple(layers),
         revision_id=str(revision.get("hashId")) if revision.get("hashId") else None,
+        # The name of a changed global term inside ``config`` is a guess: no
+        # layout with one has been seen yet.
+        tapping_term_ms=tapping_term(_config(revision).get("tappingTerm")),
     )
 
 
@@ -446,5 +515,5 @@ class LayoutRepository:
 
 
 __all__ = ["GRAPHQL_URL", "LAYOUT_QUERY", "keycode_label", "keycode_glyph", "hold_label",
-           "key_binding_from_json", "parse_layout", "fetch_layout_json", "LayoutCache",
+           "hold_combo", "tapping_term", "key_binding_from_json", "parse_layout", "fetch_layout_json", "LayoutCache",
            "LayoutRepository", "LayoutFetchError", "normalize_color", "default_cache_dir"]

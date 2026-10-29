@@ -173,6 +173,26 @@
                     </child>
                     <child>
                       <object class="AdwPreferencesGroup">
+                        <property name="title" translatable="yes">Hold Actions</property>
+                        <child>
+                          <object class="AdwSwitchRow" id="hold_pill_row">
+                            <property name="title" translatable="yes">Show _Hold Actions</property>
+                            <property name="use-underline">True</property>
+                            <property name="subtitle" translatable="yes">Briefly show what a key sends when you hold it, such as Ctrl+C. Works without the overlay.</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwExpanderRow" id="hold_keys_row">
+                            <property name="title" translatable="yes">_Keys</property>
+                            <property name="use-underline">True</property>
+                            <property name="subtitle" translatable="yes">Keys whose hold action is shown</property>
+                            <property name="sensitive" bind-source="hold_pill_row" bind-property="active" bind-flags="sync-create"/>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="AdwPreferencesGroup">
                         <property name="title" translatable="yes">Keyboard Shortcut</property>
                         <property name="description" translatable="yes">Apps can't add system-wide shortcuts on Wayland. To show or hide the overlay with a key, add this to ~/.config/hypr/keybindings.lua (or any file required from hyprland.lua)</property>
                         <child>

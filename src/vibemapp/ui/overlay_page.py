@@ -19,6 +19,8 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: E402
 from ..models import Layout  # noqa: E402
 from ..service import KeyboardService  # noqa: E402
 from .controller import DeviceController  # noqa: E402
+from .hold_actions import (hold_action_subtitle, key_id, layout_hold_actions,  # noqa: E402
+                           toggle_excluded)
 from .i18n import _  # noqa: E402
 from .resources import ui_file  # noqa: E402
 from .rules_model import layer_label  # noqa: E402
@@ -32,6 +34,8 @@ PREVIEW_ACTION = "overlay-preview"
 
 SHORTCUT_SNIPPET = 'hl.bind("SUPER + O", hl.dsp.exec_cmd("vibemapp --toggle-overlay"))'
 INSTALL_COMMAND = "sudo pacman -S gtk4-layer-shell"
+HOLD_PILL_KEY = "hold-pill"
+HOLD_EXCLUDED_KEY = "hold-pill-excluded"
 
 
 # --- pure helpers (unit tested) -------------------------------------------
@@ -116,6 +120,16 @@ def set_layers(settings: Gio.Settings, layers: Iterable[int]) -> None:
         settings.set_value("overlay-layers", GLib.Variant("ai", value))
 
 
+def get_hold_excluded(settings: Gio.Settings) -> list[str]:
+    return [str(k) for k in settings.get_value(HOLD_EXCLUDED_KEY).unpack()]
+
+
+def set_hold_excluded(settings: Gio.Settings, keys: Iterable[str]) -> None:
+    value = sorted(set(keys))
+    if value != get_hold_excluded(settings):
+        settings.set_value(HOLD_EXCLUDED_KEY, GLib.Variant("as", value))
+
+
 def has_halves(layout: Layout | None) -> bool:
     """Whether the board is split, so Half Spacing applies. Unknown (no
     layout, or the overlay module is missing) counts as split."""
@@ -160,6 +174,8 @@ class OverlayPage(Adw.Bin):
     half_spacing_row: Adw.SpinRow = Gtk.Template.Child()
     opacity_row: Adw.SpinRow = Gtk.Template.Child()
     fade_row: Adw.SpinRow = Gtk.Template.Child()
+    hold_pill_row: Adw.SwitchRow = Gtk.Template.Child()
+    hold_keys_row: Adw.ExpanderRow = Gtk.Template.Child()
     snippet_label: Gtk.Label = Gtk.Template.Child()
 
     def __init__(self) -> None:
@@ -172,6 +188,10 @@ class OverlayPage(Adw.Bin):
         self._layout: Layout | None = None
         self._built = False
         self._layer_rows: dict[int, Adw.SwitchRow] = {}
+        self._hold_layout: Layout | None = None
+        self._hold_built = False
+        self._hold_rows: dict[str, Adw.SwitchRow] = {}
+        self._hold_children: list[Gtk.Widget] = []
         self._monitor_values: list[str] = []
         self._syncing = False
         self._writing_monitor = False
@@ -202,13 +222,14 @@ class OverlayPage(Adw.Bin):
                              ("overlay-size", self._sync_spins),
                              ("overlay-half-spacing", self._sync_spins),
                              ("overlay-opacity", self._sync_spins),
-                             ("overlay-fade-ms", self._sync_spins)):
+                             ("overlay-fade-ms", self._sync_spins),
+                             (HOLD_PILL_KEY, self._sync_hold),
+                             (HOLD_EXCLUDED_KEY, self._sync_hold)):
             connect((settings, settings.connect(f"changed::{key}",
                                                 lambda *_a, cb=refresh: cb())))
-        connect((service, service.connect("layout-loaded", lambda *_a: self._sync_layers())))
-        connect((service, service.connect("disconnected", lambda *_a: self._sync_layers())))
-        connect((controller, controller.connect("notify::state",
-                                                lambda *_a: self._sync_layers())))
+        for obj, signal in ((service, "layout-loaded"), (service, "disconnected"),
+                            (controller, "notify::state")):
+            connect((obj, obj.connect(signal, lambda *_a: self._sync_layout())))
         display = Gdk.Display.get_default()
         if display is not None:
             monitors = display.get_monitors()
@@ -221,9 +242,11 @@ class OverlayPage(Adw.Bin):
         for row, key in self._spin_rows():
             row.connect("notify::value", self._on_spin_value, key)
         self.preview_row.connect("notify::active", self._on_preview_active)
+        self.hold_pill_row.connect("notify::active", self._on_hold_pill_active)
 
         self._sync_mode()
         self._sync_layers()
+        self._sync_hold()
         self._sync_anchor()
         self._sync_monitors()
         self._sync_spins()
@@ -279,6 +302,48 @@ class OverlayPage(Adw.Bin):
         for index, row in self._layer_rows.items():
             self._guarded(lambda r=row, i=index: r.set_active(i in chosen))
         self._sync_hint()
+
+    def _sync_layout(self) -> None:
+        self._sync_layers()
+        self._sync_hold()
+
+    def _sync_hold(self) -> None:
+        layout = self._current_layout()
+        if not self._hold_built or layout is not self._hold_layout:
+            self._rebuild_hold_rows(layout)
+        excluded = set(get_hold_excluded(self.settings))
+
+        def apply() -> None:
+            self.hold_pill_row.set_active(self.settings.get_boolean(HOLD_PILL_KEY))
+            for key, row in self._hold_rows.items():
+                row.set_active(key not in excluded)
+
+        self._guarded(apply)
+
+    def _rebuild_hold_rows(self, layout: Layout | None) -> None:
+        self._hold_built = True
+        self._hold_layout = layout
+        for row in self._hold_children:
+            self.hold_keys_row.remove(row)
+        self._hold_children = []
+        self._hold_rows = {}
+        actions = layout_hold_actions(layout)
+        if not actions:
+            text = (_("Connect a keyboard to choose keys") if layout is None
+                    else _("No key in this layout sends a key when held"))
+            hint = Adw.ActionRow(title=text, use_markup=False)
+            hint.add_css_class("dim-label")
+            self.hold_keys_row.add_row(hint)
+            self._hold_children.append(hint)
+            return
+        for action in actions:
+            key = key_id(action.layer, action.index)
+            row = Adw.SwitchRow(title=action.combo, use_markup=False,
+                                subtitle=hold_action_subtitle(action, layout))
+            row.connect("notify::active", self._on_hold_key_active, key)
+            self.hold_keys_row.add_row(row)
+            self._hold_children.append(row)
+            self._hold_rows[key] = row
 
     def _rebuild_layer_rows(self, layout: Layout | None) -> None:
         self._built = True
@@ -376,6 +441,16 @@ class OverlayPage(Adw.Bin):
         if not self._syncing:
             set_layers(self.settings,
                        toggle_layer(get_layers(self.settings), index, row.get_active()))
+
+    def _on_hold_pill_active(self, row: Adw.SwitchRow, _pspec: object) -> None:
+        if not self._syncing and row.get_active() != self.settings.get_boolean(HOLD_PILL_KEY):
+            self.settings.set_boolean(HOLD_PILL_KEY, row.get_active())
+
+    def _on_hold_key_active(self, row: Adw.SwitchRow, _pspec: object, key: str) -> None:
+        if not self._syncing:
+            # Saved keys that aren't in this layout stay in the list.
+            set_hold_excluded(self.settings, toggle_excluded(
+                get_hold_excluded(self.settings), key, row.get_active()))
 
     # --- preview ---------------------------------------------------------
 

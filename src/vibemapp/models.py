@@ -59,6 +59,13 @@ class KeyBinding:
     # None when unknown or transparent. Additive (1.2): the layout comparison uses
     # it to find the letters.
     tap_code: str | None = None
+    # What holding the key sends when that is a key, not a layer or a lone
+    # modifier: "Ctrl+C" for hold C = Ctrl+C. Empty otherwise. Additive (1.5):
+    # the hold-action pill shows it.
+    hold_combo: str = ""
+    # This key's own Oryx tapping term in ms, None for the layout's global one.
+    # Additive (1.5).
+    tapping_term_ms: int | None = None
 
 
 @dataclass(frozen=True)
@@ -76,6 +83,9 @@ class Layout:
     geometry: tuple[KeyGeometry, ...]
     layers: tuple[Layer, ...]
     revision_id: str | None = None
+    # The layout's global tapping term in ms when Oryx says it was changed, None
+    # for the default. Additive (1.5).
+    tapping_term_ms: int | None = None
 
 
 class RuleMatch(str, Enum):

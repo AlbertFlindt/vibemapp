@@ -114,6 +114,16 @@
       <summary>Hide overlay when idle</summary>
       <description>Hide the overlay after this many seconds without key presses. 0 never hides it.</description>
     </key>
+    <key name="hold-pill" type="b">
+      <default>false</default>
+      <summary>Show hold actions</summary>
+      <description>Briefly show a key's hold action on screen, such as Ctrl+C, when holding the key sends it. Needs gtk4-layer-shell, like the overlay.</description>
+    </key>
+    <key name="hold-pill-excluded" type="as">
+      <default>[]</default>
+      <summary>Hold actions not shown</summary>
+      <description>Keys whose hold action is never shown, as "layer:key" with the layer position and the Oryx key index.</description>
+    </key>
     <key name="window-width" type="i">
       <default>960</default>
       <summary>Window width</summary>

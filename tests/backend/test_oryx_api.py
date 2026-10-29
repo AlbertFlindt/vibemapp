@@ -89,6 +89,50 @@ class LabelTests(unittest.TestCase):
         self.assertEqual((b.transparent, b.tap_label), (False, "Macro"))
 
 
+class HoldActionTests(unittest.TestCase):
+    CTRL = {"leftCtrl": True, "leftShift": False, "rightAlt": False}
+
+    def test_hold_combo_for_hold_another_key(self) -> None:
+        # Albert's C key as Oryx sends it.
+        b = key_binding_from_json(21, _key("KC_C", hold={
+            "code": "KC_C", "modifiers": self.CTRL}, tappingTerm=None))
+        self.assertEqual((b.hold_label, b.hold_combo, b.tapping_term_ms), ("⌃C", "Ctrl+C", None))
+        b = key_binding_from_json(0, _key("KC_A", hold={"code": "KC_ESCAPE"}))
+        self.assertEqual((b.hold_label, b.hold_combo), ("Esc", "Esc"))
+        both = {"leftCtrl": True, "rightCtrl": True, "leftShift": True, "rightAlt": True}
+        b = key_binding_from_json(0, _key("KC_A", hold={"code": "KC_T", "modifiers": both}))
+        self.assertEqual(b.hold_combo, "Ctrl+Shift+AltGr+T")
+
+    def test_no_combo_for_layers_and_modifiers(self) -> None:
+        for hold in ({"code": "MO", "layer": 1}, {"code": "ALT_T"},
+                     {"code": "KC_LEFT_SHIFT"}, {"code": "KC_LCTL", "modifiers": self.CTRL},
+                     {"code": "KC_NO"}, {"code": "KC_TRANSPARENT"}, {"code": None}):
+            self.assertEqual(key_binding_from_json(0, _key("KC_A", hold=hold)).hold_combo, "",
+                             hold)
+        self.assertEqual(key_binding_from_json(0, _key("KC_A")).hold_combo, "")
+        # A modifier hold with more modifiers keeps its plain label.
+        b = key_binding_from_json(0, _key("KC_A", hold={"code": "KC_LCTL",
+                                                        "modifiers": self.CTRL}))
+        self.assertEqual(b.hold_label, "Ctrl")
+
+    def test_tapping_terms(self) -> None:
+        b = key_binding_from_json(0, _key("KC_A", hold={"code": "KC_B"}, tappingTerm=250))
+        self.assertEqual(b.tapping_term_ms, 250)
+        for bad in (0, -5, True, "200", 99999):
+            self.assertIsNone(oryx_api.tapping_term(bad), bad)
+        data = {"hashId": "x", "geometry": "voyager", "revision": {
+            "hashId": "r", "config": {"danish": True}, "layers": []}}
+        self.assertIsNone(parse_layout(data).tapping_term_ms)
+        data["revision"]["config"] = {"tappingTerm": 180}
+        self.assertEqual(parse_layout(data).tapping_term_ms, 180)
+        data["revision"]["config"] = '{"tappingTerm": 220}'
+        self.assertEqual(parse_layout(data).tapping_term_ms, 220)
+        data["revision"]["config"] = "not json"
+        self.assertIsNone(parse_layout(data).tapping_term_ms)
+        del data["revision"]["config"]          # cached before 1.5
+        self.assertIsNone(parse_layout(data).tapping_term_ms)
+
+
 class TapCodeTests(unittest.TestCase):
     def test_tap_code(self) -> None:
         self.assertEqual(key_binding_from_json(0, _key("KC_A")).tap_code, "KC_A")
@@ -171,7 +215,7 @@ class RepositoryTests(unittest.TestCase):
     def test_query_text(self) -> None:
         q = oryx_api.LAYOUT_QUERY
         for part in ("layout(hashId: $hashId, geometry: $geometry, revisionId: $revisionId)",
-                     "layers { title color position keys }"):
+                     "layers { title color position keys }", " config "):
             self.assertIn(part, q)
 
 

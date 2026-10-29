@@ -8,7 +8,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gio, GLib, GObject, Gtk  # noqa: E402
 
-from vibemapp.models import KeyGeometry, Layer, Layout  # noqa: E402
+from vibemapp.models import KeyBinding, KeyGeometry, Layer, Layout  # noqa: E402
 from vibemapp.ui import overlay_page as op  # noqa: E402
 from vibemapp.ui.settings import MemorySettings  # noqa: E402
 
@@ -155,6 +155,25 @@ class PageTests(unittest.TestCase):
         self.assertFalse(self.page.idle_row.get_sensitive())
         self.page.anchor_row.set_selected(4)
         self.assertEqual(self.settings.get_string("overlay-anchor"), "top-left")
+
+    def test_hold_actions(self) -> None:
+        children = list(self.page._hold_children)
+        self.assertEqual(len(children), 1)                       # hint without a layout
+        self.assertFalse(self.page.hold_keys_row.get_sensitive())
+        self.page.hold_pill_row.set_active(True)
+        self.assertTrue(self.settings.get_boolean("hold-pill"))
+        self.assertTrue(self.page.hold_keys_row.get_sensitive())
+        self.settings.set_value("hold-pill-excluded", GLib.Variant("as", ["7:7"]))
+        keys = (KeyBinding(0, tap_label="C", hold_combo="Ctrl+C"), KeyBinding(1, tap_label="D"))
+        self.service.layout = Layout("abc", "Test", (), (Layer(0, "Base", None, keys),))
+        self.controller.state = "ready"
+        self.assertEqual(list(self.page._hold_rows), ["0:0"])
+        row = self.page._hold_rows["0:0"]
+        self.assertEqual((row.get_title(), row.get_active()), ("Ctrl+C", True))
+        row.set_active(False)
+        self.assertEqual(op.get_hold_excluded(self.settings), ["0:0", "7:7"])
+        self.settings.set_value("hold-pill-excluded", GLib.Variant("as", []))
+        self.assertTrue(row.get_active())
 
     def test_spins(self) -> None:
         self.assertEqual(int(self.page.size_row.get_value()),

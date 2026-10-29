@@ -86,6 +86,8 @@ def main() -> int:
     parser.add_argument("--width-mm", type=int, default=800)
     parser.add_argument("--opacity", type=int, default=60)
     parser.add_argument("--real-geometry", action="store_true")
+    parser.add_argument("--hold-pill", metavar="TEXT",
+                        help="with --overlay: also show the hold-action pill, e.g. Ctrl+C")
     args = parser.parse_args()
     if args.overlay:
         if args.size == parser.get_default("size"):
@@ -306,6 +308,24 @@ def overlay_shot(args) -> int:
         stack.add_overlay(box)
         print(f"surface at x={margins['left']} {vertical}={margins[vertical]} "
               f"board {surface.view._fixed_size[0]}x{surface.view._fixed_size[1]}")
+    if args.hold_pill:
+        from vibemapp.ui import hold_pill as pill_mod
+        pill_mod.HoldPillSurface.flash = lambda self, text: (
+            self.label.set_label(text), self.label.set_opacity(1.0))
+        clearance = max((fake.state(s)["margin"]["bottom"]
+                         + s.box.measure(Gtk.Orientation.VERTICAL, -1)[1]
+                         for s in controller.surfaces if vertical == "bottom"), default=0)
+        pill = pill_mod.HoldPillController(service, settings, fake,
+                                           monitor=lambda: (None, height),
+                                           clearance=lambda: clearance)
+        pill.show(args.hold_pill)
+        label = pill.surface.label
+        pill.surface.set_child(None)
+        label.set_halign(Gtk.Align.CENTER)
+        label.set_valign(Gtk.Align.END)
+        label.set_margin_bottom(fake.state(pill.surface)["margin"]["bottom"])
+        stack.add_overlay(label)
+        print(f"hold pill bottom={fake.state(pill.surface)['margin']['bottom']}")
     scene.set_child(stack)
     scene.present()
 
