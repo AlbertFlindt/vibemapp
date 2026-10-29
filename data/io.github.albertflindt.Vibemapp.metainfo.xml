@@ -41,23 +41,23 @@
   <screenshots>
     <screenshot type="default">
       <caption>Your Oryx layout with the active layer</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.4.0/data/screenshots/layout.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.5.0/data/screenshots/layout.png</image>
     </screenshot>
     <screenshot>
       <caption>Smart Layers switches layers per app</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.4.0/data/screenshots/smart-layers.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.5.0/data/screenshots/smart-layers.png</image>
     </screenshot>
     <screenshot>
       <caption>An opt-in heatmap of your key presses</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.4.0/data/screenshots/heatmap.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.5.0/data/screenshots/heatmap.png</image>
     </screenshot>
     <screenshot>
       <caption>Overlay settings: which layers show it, where and how large</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.4.0/data/screenshots/overlay.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.5.0/data/screenshots/overlay.png</image>
     </screenshot>
     <screenshot>
       <caption>Insights: the load on each finger and the hand split</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.4.0/data/screenshots/insights.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.5.0/data/screenshots/insights.png</image>
     </screenshot>
   </screenshots>
   <branding>
@@ -74,6 +74,11 @@
     <keyword>layer</keyword>
   </keywords>
   <releases>
+    <release version="1.5.0" date="2026-10-29">
+      <description>
+        <p>The Insights page now shows Finger Load only: how your key presses are spread over your fingers and hands. Same-finger pairs, reach, layer switches, the score and the layout comparisons are gone, and key pairs are no longer recorded.</p>
+      </description>
+    </release>
     <release version="1.4.0" date="2026-10-23">
       <description>
         <p>Layer change notifications can skip chosen layers, such as a mouse layer the keyboard turns on by itself, so moving between windows while using the trackpad no longer floods you with notifications.</p>

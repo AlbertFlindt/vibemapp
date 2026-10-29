@@ -2,6 +2,17 @@
 
 All notable changes to Vibemapp. Each version is a tag and a GitHub release.
 
+## 1.5.0 (2026-10-29)
+
+### Changed
+- **Insights shows Finger Load only:** the load per finger against its comfortable share, and
+  the hand split, with the same Period and App filters.
+
+### Removed
+- Same-finger pairs, reach, layer switches, the ergonomic score and Alternative Layouts on the
+  Insights page, and the Record Key Pairs switch. Key pairs are no longer recorded; pairs
+  recorded earlier stay on disk.
+
 ## 1.4.0 (2026-10-23)
 
 ### Added
