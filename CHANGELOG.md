@@ -2,6 +2,19 @@
 
 All notable changes to Vibemapp. Each version is a tag and a GitHub release.
 
+## 1.6.0 (2026-10-29)
+
+### Added
+- **Hold actions on screen** (Overlay page, Hold Actions group, off by default): when holding a
+  key sends something, such as hold C for Ctrl+C, a short pill with "Ctrl+C" appears near the
+  bottom of the screen, above the overlay if it's shown there. It works without the overlay.
+  Choose which keys show it under Keys. The keyboard doesn't report taps and holds, so
+  Vibemapp tells them apart by timing, using each key's tapping term from Oryx (200 ms unless
+  you changed it).
+
+### Changed
+- Hold actions with modifiers are labelled with them in the layout, e.g. ⌃C instead of C.
+
 ## 1.5.0 (2026-10-29)
 
 ### Changed

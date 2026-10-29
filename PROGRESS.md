@@ -1,6 +1,6 @@
 # Progress / handoff
 
-**Last updated:** 2026-10-29. **Latest release:** 1.5.0 (details in `CHANGELOG.md`).
+**Last updated:** 2026-10-29. **Latest release:** 1.6.0 (details in `CHANGELOG.md`).
 How things work: `docs/SPEC.md`.
 
 ## Current state
@@ -41,6 +41,10 @@ How things work: `docs/SPEC.md`.
 - **Overlay requires gtk4-layer-shell, no fallback window:** the app stays lean with
   optional packages, as long as the UI says what to install.
 - **Overlay settings live on their own sidebar page**, not in Preferences: it has many tweaks.
+- **Hold actions show as an on-screen pill, not a desktop notification** (2026-10-29): Albert
+  holds C for Ctrl+C every few seconds; a notification would pile up and may play a sound.
+  The firmware never says tap or hold, so it's inferred from tap-dance timing (SPEC 4.3.1).
+  Its settings sit on the Overlay page (same layer-shell requirement). Not verified on hardware.
 - **Overlay shows whenever a selected layer is active**, not only while a layer key is held.
 - **Overlay size is % of the real keyboard size** (same look on every monitor), default 80;
   half spacing is a 0–100 % value, not a toggle.
