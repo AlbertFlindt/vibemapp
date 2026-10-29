@@ -53,7 +53,7 @@ How things work: `docs/SPEC.md`.
   half spacing is a 0–100 % value, not a toggle.
 - **Screenshots come from the mock service** (`data/screenshots/`, `tests/ui/screenshot.py` and
   `tray_menu_shot.py`; heatmap with `VIBEMAPP_MOCK_HEATMAP_SEED=1 --record --size 1000x1000`; insights the same with
-  `--page insights --size 1000x2200`;
+  `--page insights --size 1000x700`;
   overlay page with `--page overlay --overlay-layers 1,2 --size 1000x1300`): no personal data.
 - **PKGBUILD builds the GitHub tag, not the working tree:** reproducible packages. Tag and push
   before `makepkg`; use `./run-dev.sh` for untagged work.

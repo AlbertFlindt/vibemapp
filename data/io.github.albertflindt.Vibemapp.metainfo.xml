@@ -79,6 +79,11 @@
         <p>Holding a key that sends something, such as hold C for Ctrl+C, can briefly show what it sent on screen, so you know the hold registered.</p>
       </description>
     </release>
+    <release version="1.5.1" date="2026-10-29">
+      <description>
+        <p>The Insights screenshot now shows the page with Finger Load only.</p>
+      </description>
+    </release>
     <release version="1.5.0" date="2026-10-29">
       <description>
         <p>The Insights page now shows Finger Load only: how your key presses are spread over your fingers and hands. Same-finger pairs, reach, layer switches, the score and the layout comparisons are gone, and key pairs are no longer recorded.</p>
