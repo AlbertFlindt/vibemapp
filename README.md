@@ -51,14 +51,11 @@ counts are stored, never what you typed.
 
 ### Insights
 
-An ergonomic score of your typing, from the heatmap counts: load per finger and hand,
-same-finger pairs, reach and layer switches. Alternative Layouts scores the same typing on
-QWERTY, Colemak, Colemak-DH, Workman and Dvorak, keeping letters such as Æ, Ø and Å in place.
-Key-pair counting is a separate opt-in; only which key position follows which is stored.
-Vibemapp only shows the numbers; it never changes your keyboard's layout.
+Finger Load, from the heatmap counts: the share of key presses each finger takes, against a
+comfortable share per finger, and the split between your hands. Filter it by period and app.
 
 <p align="center">
-  <img src="data/screenshots/insights.png" alt="Insights page with finger load, same-finger pairs, the score and alternative layouts" width="600">
+  <img src="data/screenshots/insights.png" alt="Insights page with the finger load chart and hand split" width="600">
 </p>
 
 ### Tray Icon

@@ -1,4 +1,4 @@
-"""Insights page: how comfortable the recorded typing is, as an ergo score and its parts."""
+"""Insights page: how the recorded typing is spread over the fingers (Finger Load)."""
 
 from __future__ import annotations
 
@@ -11,21 +11,12 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib, GObject, Gtk  # noqa: E402
 
 from ..backend import ergo  # noqa: E402
-from ..models import (COMPARISON_MIN_PRESSES,  # noqa: E402
-                      ErgoReport, Finger, HeatmapApp, HeatmapPeriod, KeyPairCount, Layout,
-                      LayoutComparison)
+from ..models import ErgoReport, Finger, HeatmapApp, HeatmapPeriod  # noqa: E402
 from ..service import KeyboardService  # noqa: E402
-from . import heat  # noqa: E402
 from .controller import DeviceController  # noqa: E402
-from .i18n import _, ngettext  # noqa: E402
+from .i18n import _  # noqa: E402
 from .resources import ui_file  # noqa: E402
-from .transparency import binding_label, is_transparent  # noqa: E402
 from .widgets import FingerLoadChart  # noqa: E402,F401  (registers the type)
-
-# Same-finger pairs above this share of all pairs get a warning.
-SAME_FINGER_TARGET = 0.01
-MINUS = "−"
-
 
 # --- pure helpers (unit-tested) ----------------------------------------------
 
@@ -42,18 +33,6 @@ def format_percent(share: float, decimals: int = 0) -> str:
     return _("{pct}%").format(pct=format_number(pct, decimals))
 
 
-def format_penalty(points: float) -> str:
-    """``3.2`` -> ``−3.2``; nothing taken off reads ``0.0``."""
-    if round(points, 1) <= 0:
-        return format_number(0.0)
-    return MINUS + format_number(points)
-
-
-def format_score(score: float) -> str:
-    """``82.0`` -> ``82``, ``82.4`` -> ``82.4``."""
-    return format_number(score, 0 if round(score, 1) == round(score) else 1)
-
-
 def finger_kind(finger: Finger) -> str:
     return finger.value.split("-", 1)[1]
 
@@ -64,87 +43,6 @@ def finger_name(finger: Finger) -> str:
             "index": _("index"), "thumb": _("thumb")}[finger_kind(finger)]
     # Translators: the first word is the hand, the second the finger: "Left middle"
     return (_("Left {finger}") if finger.is_left else _("Right {finger}")).format(finger=kind)
-
-
-def key_label(layout: Layout | None, layer: int, index: int) -> str:
-    """Name of a key as the layout shows it on ``layer`` (base layer if the key is
-    transparent there), else ``Key N``."""
-    def binding(position: int):
-        source = next((l for l in layout.layers if l.index == position), None) if layout else None
-        return next((k for k in source.keys if k.index == index), None) if source else None
-
-    found = binding(layer)
-    if found is None or is_transparent(found):
-        found = binding(0)
-    name = binding_label(found) if found is not None and not is_transparent(found) else ""
-    if name:
-        return name
-    return _("Key {index}").format(index=index)
-
-
-def key_name(layout: Layout | None, layer: int, index: int) -> str:
-    """``key_label`` for running text: glyph labels spelled out (⌫ → Backspace) and single
-    punctuation marks quoted (“,”), so they read in a title."""
-    label = key_label(layout, layer, index)
-    names = {"⌫": _("Backspace"), "⌦": _("Delete"), "⏎": _("Enter"), "↵": _("Enter"),
-             "⇥": _("Tab"), "␣": _("Space"), "⇧": _("Shift"), "←": _("Left Arrow"),
-             "→": _("Right Arrow"), "↑": _("Up Arrow"), "↓": _("Down Arrow"),
-             "∞": _("Infinity")}
-    if label in names:
-        return names[label]
-    if len(label) == 1 and not label.isalnum():
-        return _("“{key}”").format(key=label)
-    return label
-
-
-def format_delta(delta: float) -> str:
-    """``+14.4``, ``−2.0``, ``0.0`` (a change that rounds to nothing carries no sign)."""
-    if round(delta, 1) == 0:
-        return format_number(0.0)
-    return ("+" if delta > 0 else MINUS) + format_number(abs(delta))
-
-
-def _part(key: str, report: ErgoReport) -> tuple[str, str] | None:
-    """One ergo part of a report as (name, short value), None when it can't be measured."""
-    if key == "same_finger":
-        return (_("Same-finger"), format_percent(report.same_finger_rate, 1)) if report.pairs else None
-    if key == "layer_switch":
-        return (_("Layer switches"), format_percent(report.layer_switch_rate, 1)) if report.pairs else None
-    if key == "reach":
-        return _("Reach"), format_number(report.reach_cost, 2)
-    if key == "hand_imbalance":
-        return _("Left hand"), format_percent(report.left_share)
-    busiest = max(report.finger_load.values(), default=0.0)
-    return _("Busiest finger"), format_percent(busiest)
-
-
-def comparison_subtitle(item: LayoutComparison, baseline: ErgoReport | None) -> str:
-    """The parts that change most against ``baseline`` as ``Same-finger 3.2% → 1.4% · Reach
-    1.09 → 0.82``; for the current layout (or without a baseline) its own main parts."""
-    if item.current or baseline is None:
-        own = [_part(k, item.report) for k in ("same_finger", "reach")]
-        return " · ".join(_("{part} {value}").format(part=p[0], value=p[1]) for p in own if p)
-    changes = sorted(
-        ((abs(item.report.penalties.get(k, 0.0) - baseline.penalties.get(k, 0.0)), k)
-         for k in ergo.PENALTY_KEYS), reverse=True)
-    parts = []
-    for size, key in changes:
-        before, after = _part(key, baseline), _part(key, item.report)
-        if size < 0.05 or before is None or after is None or before[1] == after[1]:
-            continue
-        parts.append(_("{part} {before} → {after}").format(part=before[0], before=before[1],
-                                                           after=after[1]))
-        if len(parts) == 2:
-            break
-    return " · ".join(parts) if parts else _("Little change")
-
-
-def _clear(listbox: Gtk.ListBox) -> None:
-    child = listbox.get_first_child()
-    while child is not None:
-        next_child = child.get_next_sibling()
-        listbox.remove(child)
-        child = next_child
 
 
 @Gtk.Template(filename=ui_file("insights_page.ui"))
@@ -160,15 +58,7 @@ class InsightsPage(Adw.Bin):
     results_box: Gtk.Box = Gtk.Template.Child()
     finger_chart: FingerLoadChart = Gtk.Template.Child()
     hands_row: Adw.ActionRow = Gtk.Template.Child()
-    same_list: Gtk.ListBox = Gtk.Template.Child()
-    reach_label: Gtk.Label = Gtk.Template.Child()
-    switch_label: Gtk.Label = Gtk.Template.Child()
-    penalty_list: Gtk.ListBox = Gtk.Template.Child()
-    layouts_list: Gtk.ListBox = Gtk.Template.Child()
-    score_label: Gtk.Label = Gtk.Template.Child()
-    score_caption: Gtk.Label = Gtk.Template.Child()
     record_row: Adw.SwitchRow = Gtk.Template.Child()
-    pairs_row: Adw.SwitchRow = Gtk.Template.Child()
 
     def __init__(self) -> None:
         super().__init__()
@@ -190,12 +80,10 @@ class InsightsPage(Adw.Bin):
         flags = GObject.BindingFlags.BIDIRECTIONAL | GObject.BindingFlags.SYNC_CREATE
         self._bindings = [
             service.bind_property("heatmap-recording", self.record_row, "active", flags),
-            service.bind_property("pair-recording", self.pairs_row, "active", flags),
         ]
         self._handlers = [
             (service, service.connect("key-counts-changed", lambda *_a: self._queue_refresh())),
             (service, service.connect("notify::heatmap-recording", lambda *_a: self.refresh())),
-            (service, service.connect("notify::pair-recording", lambda *_a: self.refresh())),
             (service, service.connect("layout-loaded", lambda *_a: self.refresh())),
             (controller, controller.connect("notify::state", lambda *_a: self.refresh())),
         ]
@@ -269,7 +157,6 @@ class InsightsPage(Adw.Bin):
     def refresh(self) -> None:
         if self.service is None:
             return
-        self.pairs_row.set_sensitive(self.recording)
         if not self.has_layout:
             self.stack.set_visible_child_name("no-keyboard")
             return
@@ -291,20 +178,9 @@ class InsightsPage(Adw.Bin):
         self.empty_status.set_visible(not has_presses)
         self.results_box.set_visible(has_presses)
         if has_presses:
-            self._show_report(report, layout)
+            self._fill_fingers(report)
 
     # --- report ----------------------------------------------------------
-
-    def _show_report(self, report: ErgoReport, layout: Layout | None) -> None:
-        self._fill_fingers(report)
-        self._fill_same_finger(report, layout)
-        self.reach_label.set_label(format_number(report.reach_cost, 2))
-        self.switch_label.set_label(
-            format_percent(report.layer_switch_rate, 1) if report.pairs else _("n/a"))
-        self.switch_label.set_tooltip_text(
-            None if report.pairs else _("Turn on Record Key Pairs to measure this"))
-        self._fill_score(report)
-        self._fill_layouts(report)
 
     def _fill_fingers(self, report: ErgoReport) -> None:
         order = list(Finger)
@@ -326,109 +202,3 @@ class InsightsPage(Adw.Bin):
             _("{left_hand} {left} · {right_hand} {right}").format(
                 left_hand=left, left=format_percent(report.left_share),
                 right_hand=right, right=format_percent(1 - report.left_share)))
-
-    def _fill_same_finger(self, report: ErgoReport, layout: Layout | None) -> None:
-        _clear(self.same_list)
-        if not report.pairs:
-            row = Adw.ActionRow(
-                title=_("No Key Pairs Recorded"), use_markup=False,
-                subtitle=_("Turn on Record Key Pairs below, then type for a while"))
-            row.add_prefix(Gtk.Image.new_from_icon_name("dialog-information-symbolic"))
-            self.same_list.append(row)
-            return
-        over = report.same_finger_rate > SAME_FINGER_TARGET
-        row = Adw.ActionRow(title=_("Same-Finger Rate"), use_markup=False,
-                            subtitle=_("Target under 1%"))
-        icon = Gtk.Image.new_from_icon_name("dialog-warning-symbolic" if over
-                                            else "object-select-symbolic")
-        icon.add_css_class("warning" if over else "success")
-        icon.update_property([Gtk.AccessibleProperty.LABEL],
-                             [_("Above the target") if over else _("Within the target")])
-        value = Gtk.Label(label=format_percent(report.same_finger_rate, 1),
-                          valign=Gtk.Align.CENTER)
-        value.add_css_class("numeric")
-        value.add_css_class("warning" if over else "success")
-        row.add_suffix(icon)
-        row.add_suffix(value)
-        self.same_list.append(row)
-        for pair in report.worst_same_finger:
-            self.same_list.append(self._pair_row(pair, layout))
-
-    def _pair_row(self, pair: KeyPairCount, layout: Layout | None) -> Adw.ActionRow:
-        first = key_name(layout, *pair.first)
-        second = key_name(layout, *pair.second)
-        count = ngettext("{count} time", "{count} times", pair.count).format(
-            count=heat.format_count(pair.count))
-        finger = pair.finger
-        subtitle = (_("{finger} · {count}").format(finger=finger_name(finger), count=count)
-                    if finger is not None else count)
-        # Translators: two key names, the second pressed right after the first
-        row = Adw.ActionRow(title=_("{first} → {second}").format(first=first, second=second),
-                            subtitle=subtitle, use_markup=False)
-        return row
-
-    def _fill_score(self, report: ErgoReport) -> None:
-        _clear(self.penalty_list)
-        titles = {"finger_overload": _("Finger Overload"), "hand_imbalance": _("Hand Imbalance"),
-                  "same_finger": _("Same-Finger Pairs"), "reach": _("Reach"),
-                  "layer_switch": _("Layer Switches")}
-        for key in ergo.PENALTY_KEYS:
-            row = Adw.ActionRow(title=titles[key], use_markup=False)
-            value = Gtk.Label(label=format_penalty(report.penalties.get(key, 0.0)),
-                              valign=Gtk.Align.CENTER)
-            value.add_css_class("numeric")
-            row.add_suffix(value)
-            self.penalty_list.append(row)
-        self.score_label.set_label(
-            _("{score} / 100").format(score=format_number(report.score)))
-        presses = ngettext("{n} key press", "{n} key presses", report.presses).format(
-            n=heat.format_count(report.presses))
-        if report.pairs:
-            pairs = ngettext("{n} key pair", "{n} key pairs", report.pairs).format(
-                n=heat.format_count(report.pairs))
-            caption = _("Based on {presses} and {pairs}").format(presses=presses, pairs=pairs)
-        else:
-            caption = _("Based on {presses}").format(presses=presses)
-        self.score_caption.set_label(caption)
-
-    def _fill_layouts(self, report: ErgoReport) -> None:
-        _clear(self.layouts_list)
-        assert self.service is not None
-        if report.presses < COMPARISON_MIN_PRESSES:
-            self._layouts_note(_("Layout comparisons appear after {min} key presses "
-                                 "({n} so far)").format(min=heat.format_count(COMPARISON_MIN_PRESSES),
-                                                        n=heat.format_count(report.presses)))
-            return
-        items = self.service.get_layout_comparisons(self.period(), self.app_filter())
-        if not items:
-            self._layouts_note(_("Your base layer has no recognisable A–Z letter block"))
-            return
-        baseline = next((i.report for i in items if i.current), None)
-        for item in items:
-            row = Adw.ActionRow(title=item.name, use_markup=False,
-                                subtitle=comparison_subtitle(item, baseline))
-            score = Gtk.Label(label=format_number(item.report.score), valign=Gtk.Align.CENTER)
-            score.add_css_class("numeric")
-            score.add_css_class("heading")
-            tag = Gtk.Label(valign=Gtk.Align.CENTER, xalign=1.0, width_chars=6)
-            tag.add_css_class("numeric")
-            if item.current:
-                tag.set_label(_("Current"))
-                tag.add_css_class("dim-label")
-            else:
-                tag.set_label(format_delta(item.score_delta))
-                tag.set_tooltip_text(_("Score change against your current layout"))
-                if round(item.score_delta, 1) > 0:
-                    tag.add_css_class("success")
-                elif round(item.score_delta, 1) < 0:
-                    tag.add_css_class("warning")
-                else:
-                    tag.add_css_class("dim-label")
-            row.add_suffix(score)
-            row.add_suffix(tag)
-            self.layouts_list.append(row)
-
-    def _layouts_note(self, text: str) -> None:
-        row = Adw.ActionRow(title=text, use_markup=False, title_lines=0)
-        row.add_css_class("dim-label")
-        self.layouts_list.append(row)

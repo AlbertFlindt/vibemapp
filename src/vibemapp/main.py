@@ -99,8 +99,8 @@ class Application(Adw.Application):
         # property; persist it both ways.
         self.settings.bind("heatmap-recording", self.service, "heatmap-recording",
                            Gio.SettingsBindFlags.DEFAULT)
-        self.settings.bind("pair-recording", self.service, "pair-recording",
-                           Gio.SettingsBindFlags.DEFAULT)
+        # pair-recording is left unbound: nothing shows key pairs since Insights was
+        # trimmed to Finger Load, so the service keeps its default (off).
         self.service.props.smart_layers_enabled = self.settings.get_boolean(
             "smart-layers-on-startup")
         self.controller = DeviceController(self.service, self.settings)

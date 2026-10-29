@@ -1,6 +1,6 @@
 # Progress / handoff
 
-**Last updated:** 2026-10-23. **Latest release:** 1.4.0 (details in `CHANGELOG.md`).
+**Last updated:** 2026-10-29. **Latest release:** 1.5.0 (details in `CHANGELOG.md`).
 How things work: `docs/SPEC.md`.
 
 ## Current state
@@ -36,6 +36,8 @@ How things work: `docs/SPEC.md`.
 ## Decisions
 - **Vibemapp owns the overlay's behaviour, not the compositor:** e.g. the fade is our own
   animation with a setting, rather than Hyprland's layer animations.
+- **Insights is Finger Load only** (2026-10-29): the owner wasn't sold on the score, same-finger pairs,
+  reach, layer switches and Alternative Layouts. Their backend stays (additive contract); pair recording is off.
 - **Overlay requires gtk4-layer-shell, no fallback window:** the app stays lean with
   optional packages, as long as the UI says what to install.
 - **Overlay settings live on their own sidebar page**, not in Preferences: it has many tweaks.
