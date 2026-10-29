@@ -2,6 +2,11 @@
 
 All notable changes to Vibemapp. Each version is a tag and a GitHub release.
 
+## 1.5.1 (2026-10-29)
+
+### Changed
+- The Insights screenshot shows the page as it is now, with Finger Load only.
+
 ## 1.5.0 (2026-10-29)
 
 ### Changed
