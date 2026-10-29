@@ -167,7 +167,10 @@ def voyager_layout() -> Layout:
          ["Tab", "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "\\"],
          ["⌫", ("A", "Ctrl"), ("S", "Alt"), ("D", "Super"), ("F", "Shift"), "G",
           "H", ("J", "Shift"), ("K", "Super"), ("L", "Alt"), ("Æ", "Ctrl"), "Ø"],
-         ["Shift", "Z", "X", "C", "V", "B", "N", "M", ",", ".", "/", "Shift"]],
+         ["Shift", "Z", "X",
+          {"tap_label": "C", "hold_label": "⌃C", "hold_combo": "Ctrl+C"},
+          {"tap_label": "V", "hold_label": "⌃V", "hold_combo": "Ctrl+V"},
+          "B", "N", "M", ",", ".", "/", "Shift"]],
         [("Space", "L1"), ("Esc", "L3"), ("Enter", "L2"), "⌫"])
     symbols = _layer_keys(
         [["`", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11"],

@@ -129,6 +129,8 @@ class OverlaySurface(Gtk.Window):
         self._showing = False
         self._fade: Adw.TimedAnimation | None = None
         self._fade_in_ms, self._fade_out_ms = fade_durations(OverlayConfig())
+        self.vertical = "bottom"
+        self.edge_margin = 0
 
         self.box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=PILL_GAP_PX,
                            can_target=False)
@@ -170,6 +172,7 @@ class OverlaySurface(Gtk.Window):
         else:
             self.box.reorder_child_after(self.pill, self.view)
         self.pill.set_halign(pill_halign)
+        self.vertical, self.edge_margin = vertical, placement.edge_margin
         ls = self._ls
         margins = {"top": 0, "bottom": 0, "right": 0, "left": placement.x}
         margins[vertical] = placement.edge_margin
@@ -321,6 +324,33 @@ class OverlayController(GObject.Object):
     @property
     def surfaces(self) -> list[OverlaySurface]:
         return list(self._surfaces)
+
+    @property
+    def layer_shell(self):
+        """The layer-shell module the overlay uses, or None."""
+        return self._ls
+
+    def pill_monitor(self) -> tuple[Gdk.Monitor | None, int]:
+        """Where the hold-action pill goes: the overlay's monitor and its
+        logical height."""
+        monitor, info = self.resolve_monitor()
+        return monitor, info.height
+
+    def key_unit_px(self) -> float:
+        """Logical px per key unit the overlay uses on its monitor now."""
+        layout = self.service.get_layout()
+        geometry = layout.geometry if layout is not None else ()
+        if not geometry:
+            return 48.0
+        board = geometry_bounds(geometry)
+        _monitor, info = self.resolve_monitor()
+        return unit_px(info, self.config.size, board[2] - board[0])
+
+    def bottom_clearance(self) -> int:
+        """Logical px the overlay takes up from the bottom edge while it's
+        shown there, else 0."""
+        return max((s.edge_margin + s.get_height() for s in self._surfaces
+                    if s.showing and s.vertical == "bottom"), default=0)
 
     def destroy(self) -> None:
         if self._destroyed:

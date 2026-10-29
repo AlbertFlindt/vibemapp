@@ -43,7 +43,12 @@ _DEFAULTS: dict[str, object] = {
     "overlay-half-spacing": 0,
     "overlay-monitor": "",
     "overlay-idle-seconds": 0,
+    "hold-pill": False,
+    "hold-pill-excluded": [],
 }
+
+# List keys of type "as"; every other list is "ai".
+_STRING_LISTS = frozenset({"hold-pill-excluded"})
 
 OLD_PATH = "/io/github/albertflindt/KeyMappForLinux/"
 MIGRATION_KEY = "migrated-from-keymappforlinux"
@@ -81,6 +86,8 @@ class MemorySettings(GObject.Object):
             return GLib.Variant("b", value)
         if isinstance(value, int):
             return GLib.Variant("i", value)
+        if isinstance(value, list) and key in _STRING_LISTS:
+            return GLib.Variant("as", [str(v) for v in value])
         if isinstance(value, list):
             return GLib.Variant("ai", [int(v) for v in value])
         return GLib.Variant("s", str(value))

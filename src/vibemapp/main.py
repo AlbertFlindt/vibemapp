@@ -59,6 +59,7 @@ class Application(Adw.Application):
         self._quitting = False
         self.tray = None
         self.overlay = None
+        self.hold_pill = None
         self.layer_notifier = None
         self._overlay_last_on: str | None = None
 
@@ -147,6 +148,9 @@ class Application(Adw.Application):
         self.window.present()
 
     def do_shutdown(self) -> None:
+        if self.hold_pill is not None:
+            self.hold_pill.destroy()
+            self.hold_pill = None
         if self.overlay is not None:
             self.overlay.destroy()
             self.overlay = None
@@ -308,6 +312,8 @@ class Application(Adw.Application):
             self.overlay = None
 
         available = self.overlay is not None and self.overlay.available
+        if available:
+            self._setup_hold_pill()
         toggle = Gio.SimpleAction.new("toggle-overlay", None)
         toggle.connect("activate", lambda *_a: self._toggle_overlay())
         toggle.set_enabled(available)
@@ -319,6 +325,18 @@ class Application(Adw.Application):
         preview.connect("change-state", self._on_overlay_preview)
         preview.set_enabled(available)
         self.add_action(preview)
+
+    def _setup_hold_pill(self) -> None:
+        from .ui.hold_pill import HoldPillController
+
+        try:
+            self.hold_pill = HoldPillController(
+                self.service, self.settings, self.overlay.layer_shell,
+                monitor=self.overlay.pill_monitor, clearance=self.overlay.bottom_clearance,
+                unit=self.overlay.key_unit_px)
+        except Exception:  # noqa: BLE001 — like the overlay, never break the app
+            log.exception("Could not set up the hold-action pill")
+            self.hold_pill = None
 
     def _on_overlay_mode_changed(self, settings: Gio.Settings, key: str) -> None:
         mode = settings.get_string(key)

@@ -64,7 +64,13 @@ The full, verified notes are in the `backend/oryx.py` module docstring. The sour
 
 ### 3.3 Layout fetch
 - Oryx GraphQL `https://oryx.zsa.io/graphql`, by layout hash, geometry and revision.
-- QMK/Oryx keycodes map to short labels; tap and hold labels; layer titles and colours.
+- QMK/Oryx keycodes map to short labels; tap and hold labels; layer titles and colours. A hold
+  with modifiers is labelled with them (`⌃C`), and `KeyBinding.hold_combo` names a hold that
+  sends a key (`Ctrl+C`; empty for layer keys, mod-taps and lone modifiers).
+- Tapping terms: each key object's `tappingTerm` (`KeyBinding.tapping_term_ms`) and the
+  revision's `config` JSON (`Layout.tapping_term_ms`). `config` holds only settings changed from
+  Oryx's defaults; the name of a changed global term in it (`tappingTerm`) is a guess, since no
+  layout with one has been seen. Unset means QMK's 200 ms.
 - Cached at `$XDG_CACHE_HOME/vibemapp/layouts/<layout>-<revision>.json` and used offline.
 - **Transparent keys:** Oryx stores them as all-null key objects (`KC_TRNS` counts too,
   `KC_NO` doesn't); `KeyBinding.transparent` marks them. They fall through to the base layer
@@ -166,6 +172,30 @@ docstring for sizing and half-spacing rules), `ui/overlay_page.py`/`.ui`.
   `app.toggle-overlay` / `vibemapp --toggle-overlay` for a Hyprland bind (the page shows the
   snippet). Toggle remembers the last non-off mode in memory.
 - Additive contract: `get_pressed_keys()`, `get_focused_monitor()`, `focused-monitor-changed`.
+
+#### 4.3.1 Hold-action pill
+A short on-screen key labelled `Ctrl+C` when a key's hold action fires, e.g. hold C = Ctrl+C. Code:
+`ui/hold_actions.py` (pure detection), `ui/hold_pill.py` (surface, `HoldPillController`), set
+up by the application next to the overlay; settings in the Overlay page's Hold Actions group.
+- **Detection is inferred.** Oryx key events are raw matrix events sent before QMK decides tap
+  or hold (`pre_process_record_oryx`). Oryx builds "hold for another key" as a tap dance, which
+  resolves as a hold when the key is still down one tapping term after its press and no other
+  key was pressed meanwhile; `HoldDetector` watches for exactly that. A press within a term of
+  the same key's tap continues the dance and doesn't count. Term: the key's, else the
+  layout's, else 200 ms. Only `hold_combo` keys count, so mod-taps (permissive hold makes them
+  uncertain) and layer keys never show a pill. A transparent key uses the base layer's key.
+- **Look:** an overlay key. A `KeyboardView` in overlay style shows one key labelled with the
+  combo: one key unit tall at the overlay's current key size (`OverlayController.key_unit_px`),
+  1u wide for two characters and wider in quarter units for longer labels, at full strength
+  (not the overlay's rest opacity).
+- **Surface:** one layer-shell surface like the overlay's (OVERLAY layer, keyboard mode NONE,
+  exclusive zone -1, empty input region, never unmapped once shown; hidden it parks on
+  BACKGROUND), namespace `vibemapp-hold-pill`, anchored to the bottom edge only so it's centred.
+  10 % of the monitor height up, or 12 px above the overlay while that is shown on the bottom
+  edge. Same monitor as the overlay. Shows 900 ms (100 ms fade in, 250 ms out); another hold
+  replaces the text and restarts the timer. Shown also while the Vibemapp window is active.
+- **Settings:** `hold-pill` (off by default) and `hold-pill-excluded` (`"layer:index"` ids; the
+  Keys expander lists every key with a hold action, all on by default). Needs gtk4-layer-shell.
 
 ### 4.4 Heatmap
 Opt-in (`heatmap-recording`, default off). Stores only per-(local day, layer, key index)
