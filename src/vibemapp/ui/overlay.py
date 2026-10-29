@@ -336,6 +336,16 @@ class OverlayController(GObject.Object):
         monitor, info = self.resolve_monitor()
         return monitor, info.height
 
+    def key_unit_px(self) -> float:
+        """Logical px per key unit the overlay uses on its monitor now."""
+        layout = self.service.get_layout()
+        geometry = layout.geometry if layout is not None else ()
+        if not geometry:
+            return 48.0
+        board = geometry_bounds(geometry)
+        _monitor, info = self.resolve_monitor()
+        return unit_px(info, self.config.size, board[2] - board[0])
+
     def bottom_clearance(self) -> int:
         """Logical px the overlay takes up from the bottom edge while it's
         shown there, else 0."""

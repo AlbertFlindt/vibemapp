@@ -22,6 +22,14 @@ if HAVE_DISPLAY:
     Adw.init()
 
 
+class SizeTests(unittest.TestCase):
+    def test_key_width(self) -> None:
+        from vibemapp.ui.hold_pill import key_width_units
+        self.assertEqual(key_width_units("C"), 1.0)
+        self.assertEqual(key_width_units("Esc"), 1.25)
+        self.assertEqual(key_width_units("Ctrl+C"), 1.75)
+
+
 class MarginTests(unittest.TestCase):
     def test_bottom_margin(self) -> None:
         from vibemapp.ui.hold_pill import GAP_PX, bottom_margin
@@ -38,14 +46,14 @@ class ControllerTests(unittest.TestCase):
         self.hold_pill = hold_pill
         self._flash = hold_pill.HoldPillSurface.flash
         self.flashes: list[str] = []
-        hold_pill.HoldPillSurface.flash = lambda _s, text: self.flashes.append(text)
+        hold_pill.HoldPillSurface.flash = lambda _s, text, unit: self.flashes.append(text)
         self.svc = MockKeyboardService(speed=50, autostart=False)
         self.settings = MemorySettings()
         self.ls = FakeLayerShell()
         self.clearance = 0
         self.ctl = hold_pill.HoldPillController(
             self.svc, self.settings, self.ls, monitor=lambda: (None, 1000),
-            clearance=lambda: self.clearance)
+            clearance=lambda: self.clearance, unit=lambda: 40.0)
         self.svc.simulate_plug()
         self.assertTrue(spin(lambda: self.svc.get_connected_device() is not None))
         self.svc.load_layout_async(self.svc.get_connected_device(), None, lambda *_a: None)
@@ -97,6 +105,15 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(self.flashes, ["Ctrl+C"])
         self.assertEqual(self.ls.state(self.ctl.surface)["margin"]["bottom"],
                          300 + self.hold_pill.GAP_PX)
+
+    def test_key_looks_like_an_overlay_key(self) -> None:
+        from vibemapp.ui.hold_pill import HoldPillSurface
+        surface = HoldPillSurface(self.ls)
+        surface.set_key("Ctrl+C", 40.0)
+        self.assertTrue(surface.view.is_overlay)
+        self.assertEqual(surface.view._fixed_size, (70, 40))
+        self.assertEqual(surface.view._layer.keys[0].tap_label, "Ctrl+C")
+        surface.destroy()
 
     def test_no_layer_shell_does_nothing(self) -> None:
         ctl = self.hold_pill.HoldPillController(self.svc, self.settings, None,

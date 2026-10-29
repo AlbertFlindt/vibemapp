@@ -174,7 +174,7 @@ docstring for sizing and half-spacing rules), `ui/overlay_page.py`/`.ui`.
 - Additive contract: `get_pressed_keys()`, `get_focused_monitor()`, `focused-monitor-changed`.
 
 #### 4.3.1 Hold-action pill
-A short on-screen pill (`Ctrl+C`) when a key's hold action fires, e.g. hold C = Ctrl+C. Code:
+A short on-screen key labelled `Ctrl+C` when a key's hold action fires, e.g. hold C = Ctrl+C. Code:
 `ui/hold_actions.py` (pure detection), `ui/hold_pill.py` (surface, `HoldPillController`), set
 up by the application next to the overlay; settings in the Overlay page's Hold Actions group.
 - **Detection is inferred.** Oryx key events are raw matrix events sent before QMK decides tap
@@ -184,6 +184,10 @@ up by the application next to the overlay; settings in the Overlay page's Hold A
   the same key's tap continues the dance and doesn't count. Term: the key's, else the
   layout's, else 200 ms. Only `hold_combo` keys count, so mod-taps (permissive hold makes them
   uncertain) and layer keys never show a pill. A transparent key uses the base layer's key.
+- **Look:** an overlay key. A `KeyboardView` in overlay style shows one key labelled with the
+  combo: one key unit tall at the overlay's current key size (`OverlayController.key_unit_px`),
+  1u wide for two characters and wider in quarter units for longer labels, at full strength
+  (not the overlay's rest opacity).
 - **Surface:** one layer-shell surface like the overlay's (OVERLAY layer, keyboard mode NONE,
   exclusive zone -1, empty input region, never unmapped once shown; hidden it parks on
   BACKGROUND), namespace `vibemapp-hold-pill`, anchored to the bottom edge only so it's centred.

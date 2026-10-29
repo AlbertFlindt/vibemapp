@@ -1,5 +1,9 @@
 """Hold-action pill: a short on-screen "Ctrl+C" when a key's hold action fires.
 
+It looks like a key of the overlay: a ``KeyboardView`` in overlay style
+(outline and label, light with a dark halo) showing one key, one key unit
+tall at the overlay's key size and as wide as its label needs.
+
 ``HoldDetector`` (``ui/hold_actions.py``) decides that a hold fired;
 ``HoldPillController`` feeds it the service's key events and flashes a
 ``HoldPillSurface`` for ``VISIBLE_MS``. Off unless ``hold-pill`` is on; single
@@ -30,8 +34,10 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, GLib, GObject, Gtk  # noqa: E402
 
+from ..models import KeyBinding, KeyGeometry, Layer  # noqa: E402
 from ..service import KeyboardService  # noqa: E402
 from .hold_actions import HoldAction, HoldDetector, hold_action, key_id  # noqa: E402
+from .keyboard_view import KeyboardView  # noqa: E402
 
 log = logging.getLogger(__name__)
 
@@ -43,17 +49,30 @@ FADE_IN_MS = 100
 FADE_OUT_MS = 250
 BOTTOM_FRACTION = 0.1
 GAP_PX = 12
+# Room around the key for the overlay's halo, which is drawn outside it.
+HALO_PAD_PX = 4
+# Key size when the overlay can't say (no monitor or layout yet).
+DEFAULT_UNIT_PX = 48.0
 
 # (monitor, its logical height) to show on, and the px to keep free at the
 # bottom (the overlay's height when it's shown there, else 0).
 MonitorFn = Callable[[], tuple[Gdk.Monitor | None, int]]
 ClearanceFn = Callable[[], int]
+# Logical px per key unit, the overlay's key size.
+UnitFn = Callable[[], float]
 
 
 def bottom_margin(monitor_height: int, clearance: int) -> int:
     """Distance of the pill from the bottom edge, in logical px."""
     base = int(monitor_height * BOTTOM_FRACTION)
     return max(base, clearance + GAP_PX) if clearance > 0 else base
+
+
+def key_width_units(text: str) -> float:
+    """Width of the pill key, in key units: 1u for up to two characters (the
+    overlay's large label size), wider in quarter units like real keys."""
+    extra = max(len(text) - 2, 0) * 0.17
+    return 1.0 + -(-extra * 4 // 1) / 4 if extra else 1.0
 
 
 class HoldPillSurface(Gtk.Window):
@@ -70,9 +89,13 @@ class HoldPillSurface(Gtk.Window):
         self._showing = False
         self._fade: Adw.TimedAnimation | None = None
         self._hide_id = 0
-        self.label = Gtk.Label(css_classes=["hold-pill"], can_target=False)
-        self.label.set_opacity(0.0)
-        self.set_child(self.label)
+        self.view = KeyboardView()
+        self.view.set_overlay_style(True)
+        self.view.set_can_target(False)
+        for side in ("top", "bottom", "start", "end"):
+            getattr(self.view, f"set_margin_{side}")(HALO_PAD_PX)
+        self.view.set_opacity(0.0)
+        self.set_child(self.view)
 
         ls = layer_shell
         ls.init_for_window(self)
@@ -94,8 +117,15 @@ class HoldPillSurface(Gtk.Window):
         self._ls.set_monitor(self, monitor)
         self._ls.set_margin(self, self._ls.Edge.BOTTOM, margin)
 
-    def flash(self, text: str) -> None:
-        self.label.set_label(text)
+    def set_key(self, text: str, unit: float) -> None:
+        width = key_width_units(text)
+        self.view.set_geometry((KeyGeometry(0, 0.0, 0.0, w=width),))
+        self.view.set_layer(Layer(0, "", None, (KeyBinding(0, tap_label=text),)),
+                            animate=False)
+        self.view.set_fixed_size(round(width * unit), round(unit))
+
+    def flash(self, text: str, unit: float = DEFAULT_UNIT_PX) -> None:
+        self.set_key(text, unit)
         if self._hide_id:
             GLib.source_remove(self._hide_id)
         self._hide_id = GLib.timeout_add(VISIBLE_MS, self._on_hide_timeout)
@@ -113,7 +143,7 @@ class HoldPillSurface(Gtk.Window):
             self._hide_id = 0
         self._stop_fade()
         self._showing = False
-        self.label.set_opacity(0.0)
+        self.view.set_opacity(0.0)
         self._ls.set_layer(self, self._ls.Layer.BACKGROUND)
 
     def _on_hide_timeout(self) -> bool:
@@ -124,8 +154,8 @@ class HoldPillSurface(Gtk.Window):
 
     def _animate(self, target: float, duration: int) -> None:
         self._stop_fade()
-        anim = Adw.TimedAnimation.new(self.label, self.label.get_opacity(), target, duration,
-                                      Adw.PropertyAnimationTarget.new(self.label, "opacity"))
+        anim = Adw.TimedAnimation.new(self.view, self.view.get_opacity(), target, duration,
+                                      Adw.PropertyAnimationTarget.new(self.view, "opacity"))
         anim.set_easing(Adw.Easing.EASE_OUT_CUBIC)
         anim.connect("done", self._on_fade_done)
         self._fade = anim
@@ -159,6 +189,7 @@ class HoldPillController(GObject.Object):
 
     def __init__(self, service: KeyboardService, settings, layer_shell, *,
                  monitor: MonitorFn, clearance: ClearanceFn = lambda: 0,
+                 unit: UnitFn = lambda: DEFAULT_UNIT_PX,
                  now: Callable[[], float] | None = None) -> None:
         super().__init__()
         self.service = service
@@ -166,6 +197,7 @@ class HoldPillController(GObject.Object):
         self._ls = layer_shell
         self._monitor = monitor
         self._clearance = clearance
+        self._unit = unit
         self._now = now or (lambda: time.monotonic() * 1000)
         self._surface: HoldPillSurface | None = None
         self.detector = HoldDetector(self._lookup, self._on_fired,
@@ -234,8 +266,8 @@ class HoldPillController(GObject.Object):
             self._surface = HoldPillSurface(self._ls)
         monitor, height = self._monitor()
         self._surface.place(monitor, bottom_margin(height, self._clearance()))
-        self._surface.flash(text)
+        self._surface.flash(text, self._unit())
 
 
 __all__ = ["ENABLED_KEY", "EXCLUDED_KEY", "HoldPillController", "HoldPillSurface",
-           "NAMESPACE", "bottom_margin"]
+           "NAMESPACE", "bottom_margin", "key_width_units"]

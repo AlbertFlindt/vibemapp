@@ -47,16 +47,6 @@ keyboardview > .probe-overlay-halo { color: transparent; }
 window.vibemapp-overlay,
 window.vibemapp-overlay > * { background: none; box-shadow: none; }
 
-/* Hold-action pill (ui/hold_pill.py): like the layer pill, but larger. */
-.hold-pill {
-  padding: 10px 24px;
-  border-radius: 999px;
-  color: var(--light-1);
-  background-color: color-mix(in srgb, var(--dark-5) 80%, transparent);
-  font-weight: 700;
-  font-size: 1.6em;
-}
-
 .overlay-pill {
   padding: 2px 10px;
   border-radius: 999px;
