@@ -346,11 +346,20 @@ class OverlayController(GObject.Object):
         _monitor, info = self.resolve_monitor()
         return unit_px(info, self.config.size, board[2] - board[0])
 
-    def bottom_clearance(self) -> int:
-        """Logical px the overlay takes up from the bottom edge while it's
-        shown there, else 0."""
+    def edge_clearance(self) -> int:
+        """Logical px the overlay takes up from its anchored edge while it's
+        shown, else 0."""
         return max((s.edge_margin + s.get_height() for s in self._surfaces
-                    if s.showing and s.vertical == "bottom"), default=0)
+                    if s.showing), default=0)
+
+    def pill_style(self):
+        """The overlay's appearance settings for the hold-action pill."""
+        from .hold_pill import PillStyle
+        vertical, _horizontal = anchor_edges(self.config.anchor)
+        fade_in, fade_out = fade_durations(self.config)
+        return PillStyle(edge=vertical, unit=self.key_unit_px(),
+                         opacity=self.config.opacity / 100,
+                         fade_in_ms=fade_in, fade_out_ms=fade_out)
 
     def destroy(self) -> None:
         if self._destroyed:

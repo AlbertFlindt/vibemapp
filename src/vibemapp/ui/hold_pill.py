@@ -2,7 +2,9 @@
 
 It looks like a key of the overlay: a ``KeyboardView`` in overlay style
 (outline and label, light with a dark halo) showing one key, one key unit
-tall at the overlay's key size and as wide as its label needs.
+tall and as wide as its label needs. It follows the overlay's appearance
+settings (``PillStyle``): its key size, opacity, fade duration, monitor and
+the edge it's anchored to.
 
 ``HoldDetector`` (``ui/hold_actions.py``) decides that a hold fired;
 ``HoldPillController`` feeds it the service's key events and flashes a
@@ -13,10 +15,10 @@ Surface
     One gtk4-layer-shell surface, namespace ``vibemapp-hold-pill``, made the
     same way as the overlay's (``ui/overlay.py``): OVERLAY layer, keyboard mode
     NONE, exclusive zone -1, empty input region, not added to the
-    Gtk.Application. It is anchored to the bottom edge only, so the compositor
-    centres it, ``BOTTOM_FRACTION`` of the monitor height up, or just above
-    the overlay when that is shown on the bottom edge. It goes on the
-    overlay's monitor (the fixed one, else the focused one). Like the overlay
+    Gtk.Application. It is anchored to the overlay's top or bottom edge only,
+    so the compositor centres it, ``EDGE_FRACTION`` of the monitor height in
+    from that edge, or just past the overlay while that is shown there. It
+    goes on the overlay's monitor (the fixed one, else the focused one). Like the overlay
     it never unmaps once shown: hidden, it's transparent and parked on the
     BACKGROUND layer, so it never takes keyboard focus from another panel.
 """
@@ -26,6 +28,7 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 
 import cairo
 import gi
@@ -45,26 +48,35 @@ NAMESPACE = "vibemapp-hold-pill"
 ENABLED_KEY = "hold-pill"
 EXCLUDED_KEY = "hold-pill-excluded"
 VISIBLE_MS = 900
-FADE_IN_MS = 100
-FADE_OUT_MS = 250
-BOTTOM_FRACTION = 0.1
+EDGE_FRACTION = 0.1
 GAP_PX = 12
 # Room around the key for the overlay's halo, which is drawn outside it.
 HALO_PAD_PX = 4
 # Key size when the overlay can't say (no monitor or layout yet).
 DEFAULT_UNIT_PX = 48.0
 
-# (monitor, its logical height) to show on, and the px to keep free at the
-# bottom (the overlay's height when it's shown there, else 0).
+
+
+@dataclass(frozen=True)
+class PillStyle:
+    """The overlay's appearance, as the pill uses it."""
+    edge: str = "bottom"            # "top" or "bottom", the overlay's anchor edge
+    unit: float = DEFAULT_UNIT_PX   # logical px per key unit (overlay Size)
+    opacity: float = 0.6            # overlay Opacity, 0..1
+    fade_in_ms: int = 200           # overlay Fade Duration
+    fade_out_ms: int = 150
+
+
+# (monitor, its logical height) to show on; the px to keep free at the edge
+# (the overlay's extent while it's shown there, else 0); the style.
 MonitorFn = Callable[[], tuple[Gdk.Monitor | None, int]]
 ClearanceFn = Callable[[], int]
-# Logical px per key unit, the overlay's key size.
-UnitFn = Callable[[], float]
+StyleFn = Callable[[], PillStyle]
 
 
-def bottom_margin(monitor_height: int, clearance: int) -> int:
-    """Distance of the pill from the bottom edge, in logical px."""
-    base = int(monitor_height * BOTTOM_FRACTION)
+def edge_margin(monitor_height: int, clearance: int) -> int:
+    """Distance of the pill from its edge, in logical px."""
+    base = int(monitor_height * EDGE_FRACTION)
     return max(base, clearance + GAP_PX) if clearance > 0 else base
 
 
@@ -89,6 +101,7 @@ class HoldPillSurface(Gtk.Window):
         self._showing = False
         self._fade: Adw.TimedAnimation | None = None
         self._hide_id = 0
+        self._fade_in_ms, self._fade_out_ms = PillStyle().fade_in_ms, PillStyle().fade_out_ms
         self.view = KeyboardView()
         self.view.set_overlay_style(True)
         self.view.set_can_target(False)
@@ -103,9 +116,8 @@ class HoldPillSurface(Gtk.Window):
         ls.set_namespace(self, NAMESPACE)
         ls.set_keyboard_mode(self, ls.KeyboardMode.NONE)
         ls.set_exclusive_zone(self, -1)
-        for edge in (ls.Edge.TOP, ls.Edge.LEFT, ls.Edge.RIGHT):
+        for edge in (ls.Edge.LEFT, ls.Edge.RIGHT):
             ls.set_anchor(self, edge, False)
-        ls.set_anchor(self, ls.Edge.BOTTOM, True)
         self.connect("realize", lambda *_a: self._click_through())
         self.connect("map", lambda *_a: self._click_through())
 
@@ -113,9 +125,19 @@ class HoldPillSurface(Gtk.Window):
     def showing(self) -> bool:
         return self._showing
 
-    def place(self, monitor: Gdk.Monitor | None, margin: int) -> None:
-        self._ls.set_monitor(self, monitor)
-        self._ls.set_margin(self, self._ls.Edge.BOTTOM, margin)
+    def place(self, monitor: Gdk.Monitor | None, edge: str, margin: int) -> None:
+        ls = self._ls
+        bottom = edge != "top"
+        ls.set_anchor(self, ls.Edge.BOTTOM, bottom)
+        ls.set_anchor(self, ls.Edge.TOP, not bottom)
+        ls.set_margin(self, ls.Edge.BOTTOM, margin if bottom else 0)
+        ls.set_margin(self, ls.Edge.TOP, 0 if bottom else margin)
+        ls.set_monitor(self, monitor)
+
+    def set_style(self, style: PillStyle) -> None:
+        """Opacity at once; fade durations from the next fade."""
+        self.view.set_rest_opacity(style.opacity)
+        self._fade_in_ms, self._fade_out_ms = max(0, style.fade_in_ms), max(0, style.fade_out_ms)
 
     def set_key(self, text: str, unit: float) -> None:
         width = key_width_units(text)
@@ -135,7 +157,7 @@ class HoldPillSurface(Gtk.Window):
         self._ls.set_layer(self, self._ls.Layer.OVERLAY)
         if not self.get_mapped():
             self.present()
-        self._animate(1.0, FADE_IN_MS)
+        self._animate(1.0, self._fade_in_ms)
 
     def hide_now(self) -> None:
         if self._hide_id:
@@ -149,11 +171,16 @@ class HoldPillSurface(Gtk.Window):
     def _on_hide_timeout(self) -> bool:
         self._hide_id = 0
         self._showing = False
-        self._animate(0.0, FADE_OUT_MS)
+        self._animate(0.0, self._fade_out_ms)
         return GLib.SOURCE_REMOVE
 
     def _animate(self, target: float, duration: int) -> None:
         self._stop_fade()
+        if duration <= 0:           # Fade Duration 0: show and hide at once
+            self.view.set_opacity(target)
+            if target == 0.0:
+                self._ls.set_layer(self, self._ls.Layer.BACKGROUND)
+            return
         anim = Adw.TimedAnimation.new(self.view, self.view.get_opacity(), target, duration,
                                       Adw.PropertyAnimationTarget.new(self.view, "opacity"))
         anim.set_easing(Adw.Easing.EASE_OUT_CUBIC)
@@ -189,7 +216,7 @@ class HoldPillController(GObject.Object):
 
     def __init__(self, service: KeyboardService, settings, layer_shell, *,
                  monitor: MonitorFn, clearance: ClearanceFn = lambda: 0,
-                 unit: UnitFn = lambda: DEFAULT_UNIT_PX,
+                 style: StyleFn = PillStyle,
                  now: Callable[[], float] | None = None) -> None:
         super().__init__()
         self.service = service
@@ -197,7 +224,7 @@ class HoldPillController(GObject.Object):
         self._ls = layer_shell
         self._monitor = monitor
         self._clearance = clearance
-        self._unit = unit
+        self._style = style
         self._now = now or (lambda: time.monotonic() * 1000)
         self._surface: HoldPillSurface | None = None
         self.detector = HoldDetector(self._lookup, self._on_fired,
@@ -265,9 +292,11 @@ class HoldPillController(GObject.Object):
         if self._surface is None:
             self._surface = HoldPillSurface(self._ls)
         monitor, height = self._monitor()
-        self._surface.place(monitor, bottom_margin(height, self._clearance()))
-        self._surface.flash(text, self._unit())
+        style = self._style()
+        self._surface.set_style(style)
+        self._surface.place(monitor, style.edge, edge_margin(height, self._clearance()))
+        self._surface.flash(text, style.unit)
 
 
 __all__ = ["ENABLED_KEY", "EXCLUDED_KEY", "HoldPillController", "HoldPillSurface",
-           "NAMESPACE", "bottom_margin", "key_width_units"]
+           "NAMESPACE", "PillStyle", "edge_margin", "key_width_units"]
