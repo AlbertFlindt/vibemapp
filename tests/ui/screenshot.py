@@ -118,8 +118,6 @@ def main() -> int:
         svc = app.service
         if args.record:
             svc.props.heatmap_recording = True
-            if args.page == "insights":
-                svc.props.pair_recording = True
         if args.overlay_layers is not None:
             app.settings.set_value("overlay-layers", GLib.Variant(
                 "ai", [int(v) for v in args.overlay_layers.split(",") if v]))

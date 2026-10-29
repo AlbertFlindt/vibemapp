@@ -199,12 +199,14 @@ pause and reset (confirmation dialog), and an App filter (hidden while no app ha
 - The mock's own Voyager geometry is row-interleaved, so it maps through `MOCK_TO_ORYX` before scoring. Report
   keys (`worst_same_finger`, which carries the `finger`) use the service's own indices, so the mock maps
   them back.
-- **Insights page** (sidebar, Ctrl+5): its own Period toggle and App filter. The score is shown as its
-  parts, then the total: Finger Load (bar per finger with a capacity line, warning colour above it, and
-  the hand split), Same-Finger Pairs (rate against the 1% target and the five worst pairs, labelled
-  from the layout), Reach, Layer Switches, then Score (each penalty and the total out of 100). A
-  Recording group holds both opt-ins (`pair-recording` insensitive while key presses are off). States:
-  no layout, recording off with no data (opt-in status page), no finger map, no presses yet.
+- **Insights page** (sidebar, Ctrl+5): Finger Load only (since 1.5.0), with its own Period toggle and
+  App filter: a bar per finger with a capacity line (warning colour above it) and the hand split, from
+  `ErgoReport.finger_load` and `left_share`. A Recording group holds the key-press opt-in. States: no
+  layout, recording off with no data (opt-in status page), no finger map, no presses yet.
+- **Not shown since 1.5.0:** same-finger pairs, reach, layer switches, the score and Alternative
+  Layouts. The backend still computes them (`ErgoReport`, `get_layout_comparisons`) so the contract
+  stays additive. `pair-recording` has no switch and the app no longer binds it, so the service
+  keeps its default (off) and no pairs are recorded; the GSettings key and stored pairs stay.
 - **Letters** (`backend/keykinds.py`, pure): a key is a letter when its tap resolves to one alphabetic
   character (incl. language variants and Æ Ø Å; home-row mods stay letters), from `KeyBinding.tap_code`
   (additive, filled by `oryx_api`), the label only as a fallback.
@@ -215,7 +217,7 @@ pause and reset (confirmation dialog), and an App filter (hidden while no app ha
   presses and pairs with their character, then scored with `ergo.report`. Non-ASCII letters (Æ on the
   `;` slot) stay put; a letter a layout wants there goes to that layout's `;` slot. Contract:
   `get_layout_comparisons(period, app)` → `list[LayoutComparison]`, best first; nothing below `COMPARISON_MIN_PRESSES` = 2,000 presses.
-  UI: an Alternative Layouts group after Score (score, delta, the parts that change most).
+  No UI since 1.5.0 (it was an Alternative Layouts group on the Insights page).
 
 ### 4.5 Tray and background
 Hyprland has no minimise, so with "Show in tray" on and a tray host present, closing the
