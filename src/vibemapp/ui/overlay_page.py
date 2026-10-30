@@ -36,6 +36,7 @@ SHORTCUT_SNIPPET = 'hl.bind("SUPER + O", hl.dsp.exec_cmd("vibemapp --toggle-over
 INSTALL_COMMAND = "sudo pacman -S gtk4-layer-shell"
 HOLD_PILL_KEY = "hold-pill"
 HOLD_EXCLUDED_KEY = "hold-pill-excluded"
+MODIFIER_PILL_KEY = "modifier-pill"
 
 
 # --- pure helpers (unit tested) -------------------------------------------
@@ -176,6 +177,7 @@ class OverlayPage(Adw.Bin):
     fade_row: Adw.SpinRow = Gtk.Template.Child()
     hold_pill_row: Adw.SwitchRow = Gtk.Template.Child()
     hold_keys_row: Adw.ExpanderRow = Gtk.Template.Child()
+    modifier_pill_row: Adw.SwitchRow = Gtk.Template.Child()
     snippet_label: Gtk.Label = Gtk.Template.Child()
 
     def __init__(self) -> None:
@@ -224,7 +226,8 @@ class OverlayPage(Adw.Bin):
                              ("overlay-opacity", self._sync_spins),
                              ("overlay-fade-ms", self._sync_spins),
                              (HOLD_PILL_KEY, self._sync_hold),
-                             (HOLD_EXCLUDED_KEY, self._sync_hold)):
+                             (HOLD_EXCLUDED_KEY, self._sync_hold),
+                             (MODIFIER_PILL_KEY, self._sync_hold)):
             connect((settings, settings.connect(f"changed::{key}",
                                                 lambda *_a, cb=refresh: cb())))
         for obj, signal in ((service, "layout-loaded"), (service, "disconnected"),
@@ -243,6 +246,7 @@ class OverlayPage(Adw.Bin):
             row.connect("notify::value", self._on_spin_value, key)
         self.preview_row.connect("notify::active", self._on_preview_active)
         self.hold_pill_row.connect("notify::active", self._on_hold_pill_active)
+        self.modifier_pill_row.connect("notify::active", self._on_modifier_pill_active)
 
         self._sync_mode()
         self._sync_layers()
@@ -315,6 +319,7 @@ class OverlayPage(Adw.Bin):
 
         def apply() -> None:
             self.hold_pill_row.set_active(self.settings.get_boolean(HOLD_PILL_KEY))
+            self.modifier_pill_row.set_active(self.settings.get_boolean(MODIFIER_PILL_KEY))
             for key, row in self._hold_rows.items():
                 row.set_active(key not in excluded)
 
@@ -445,6 +450,11 @@ class OverlayPage(Adw.Bin):
     def _on_hold_pill_active(self, row: Adw.SwitchRow, _pspec: object) -> None:
         if not self._syncing and row.get_active() != self.settings.get_boolean(HOLD_PILL_KEY):
             self.settings.set_boolean(HOLD_PILL_KEY, row.get_active())
+
+    def _on_modifier_pill_active(self, row: Adw.SwitchRow, _pspec: object) -> None:
+        if (not self._syncing
+                and row.get_active() != self.settings.get_boolean(MODIFIER_PILL_KEY)):
+            self.settings.set_boolean(MODIFIER_PILL_KEY, row.get_active())
 
     def _on_hold_key_active(self, row: Adw.SwitchRow, _pspec: object, key: str) -> None:
         if not self._syncing:

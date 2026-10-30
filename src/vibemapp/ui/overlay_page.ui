@@ -97,8 +97,20 @@
                     </child>
                     <child>
                       <object class="AdwPreferencesGroup">
+                        <property name="title" translatable="yes">Held Modifiers</property>
+                        <child>
+                          <object class="AdwSwitchRow" id="modifier_pill_row">
+                            <property name="title" translatable="yes">Show Held Mo_difiers</property>
+                            <property name="use-underline">True</property>
+                            <property name="subtitle" translatable="yes">Show the modifiers you hold, such as Ctrl, and the key you press with them. Shift alone isn't shown.</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="AdwPreferencesGroup">
                         <property name="title" translatable="yes">Appearance</property>
-                        <property name="description" translatable="yes">Also used for hold actions</property>
+                        <property name="description" translatable="yes">Also used for hold actions and held modifiers</property>
                         <child>
                           <object class="AdwSwitchRow" id="preview_row">
                             <property name="title" translatable="yes">_Preview Overlay</property>

@@ -175,6 +175,13 @@ class PageTests(unittest.TestCase):
         self.settings.set_value("hold-pill-excluded", GLib.Variant("as", []))
         self.assertTrue(row.get_active())
 
+    def test_held_modifiers(self) -> None:
+        self.assertFalse(self.page.modifier_pill_row.get_active())
+        self.page.modifier_pill_row.set_active(True)
+        self.assertTrue(self.settings.get_boolean("modifier-pill"))
+        self.settings.set_boolean("modifier-pill", False)
+        self.assertFalse(self.page.modifier_pill_row.get_active())
+
     def test_spins(self) -> None:
         self.assertEqual(int(self.page.size_row.get_value()),
                          self.settings.get_int("overlay-size"))

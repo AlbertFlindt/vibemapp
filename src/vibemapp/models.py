@@ -66,6 +66,12 @@ class KeyBinding:
     # This key's own Oryx tapping term in ms, None for the layout's global one.
     # Additive (1.5).
     tapping_term_ms: int | None = None
+    # The modifiers the key holds down: "Ctrl" for a Ctrl key (``modifier``),
+    # "Ctrl" for a mod-tap such as hold A = Ctrl (``hold_modifier``), "Ctrl+Shift"
+    # for several, in Ctrl, Shift, Alt, AltGr, Super order. Empty otherwise.
+    # Additive (1.8): the held-modifier pill shows them.
+    modifier: str = ""
+    hold_modifier: str = ""
 
 
 @dataclass(frozen=True)

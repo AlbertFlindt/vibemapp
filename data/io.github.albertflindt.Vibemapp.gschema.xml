@@ -124,6 +124,11 @@
       <summary>Hold actions not shown</summary>
       <description>Keys whose hold action is never shown, as "layer:key" with the layer position and the Oryx key index.</description>
     </key>
+    <key name="modifier-pill" type="b">
+      <default>false</default>
+      <summary>Show held modifiers</summary>
+      <description>While modifiers such as Ctrl are held, show them on screen with the last key pressed with them, such as Ctrl+Shift+T. Shift alone isn't shown. Needs gtk4-layer-shell, like the overlay.</description>
+    </key>
     <key name="window-width" type="i">
       <default>960</default>
       <summary>Window width</summary>

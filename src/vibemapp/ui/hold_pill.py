@@ -1,4 +1,5 @@
-"""Hold-action pill: a short on-screen "Ctrl+C" when a key's hold action fires.
+"""Hold-action pill: a short on-screen "Ctrl+C" when a key's hold action fires,
+and the held-modifier pill on the same surface: "Ctrl+Shift+T" while modifiers are held.
 
 It looks like a key of the overlay: a ``KeyboardView`` in overlay style
 (outline and label, light with a dark halo) showing one key, one key unit
@@ -9,7 +10,9 @@ the edge it's anchored to.
 ``HoldDetector`` (``ui/hold_actions.py``) decides that a hold fired;
 ``HoldPillController`` feeds it the service's key events and flashes a
 ``HoldPillSurface`` for ``VISIBLE_MS``. Off unless ``hold-pill`` is on; single
-keys can be left out with ``hold-pill-excluded``.
+keys can be left out with ``hold-pill-excluded``. ``ModifierTracker``
+(``ui/held_modifiers.py``) keeps the pill up while modifiers are held, then it
+lingers ``VISIBLE_MS``; off unless ``modifier-pill`` is on.
 
 Surface
     One gtk4-layer-shell surface, namespace ``vibemapp-hold-pill``, made the
@@ -39,6 +42,7 @@ from gi.repository import Adw, Gdk, GLib, GObject, Gtk  # noqa: E402
 
 from ..models import KeyBinding, KeyGeometry, Layer  # noqa: E402
 from ..service import KeyboardService  # noqa: E402
+from .held_modifiers import HeldKey, ModifierTracker, held_key  # noqa: E402
 from .hold_actions import HoldAction, HoldDetector, hold_action, key_id  # noqa: E402
 from .keyboard_view import KeyboardView  # noqa: E402
 
@@ -47,6 +51,7 @@ log = logging.getLogger(__name__)
 NAMESPACE = "vibemapp-hold-pill"
 ENABLED_KEY = "hold-pill"
 EXCLUDED_KEY = "hold-pill-excluded"
+MODIFIER_KEY = "modifier-pill"
 VISIBLE_MS = 900
 EDGE_FRACTION = 0.1
 GAP_PX = 12
@@ -146,11 +151,14 @@ class HoldPillSurface(Gtk.Window):
                             animate=False)
         self.view.set_fixed_size(round(width * unit), round(unit))
 
-    def flash(self, text: str, unit: float = DEFAULT_UNIT_PX) -> None:
+    def flash(self, text: str, unit: float = DEFAULT_UNIT_PX, linger: bool = True) -> None:
+        """Show ``text`` for ``VISIBLE_MS``; with ``linger`` False until ``release()``."""
         self.set_key(text, unit)
         if self._hide_id:
             GLib.source_remove(self._hide_id)
-        self._hide_id = GLib.timeout_add(VISIBLE_MS, self._on_hide_timeout)
+            self._hide_id = 0
+        if linger:
+            self._hide_id = GLib.timeout_add(VISIBLE_MS, self._on_hide_timeout)
         if self._showing:
             return
         self._showing = True
@@ -158,6 +166,11 @@ class HoldPillSurface(Gtk.Window):
         if not self.get_mapped():
             self.present()
         self._animate(1.0, self._fade_in_ms)
+
+    def release(self) -> None:
+        """Hide after ``VISIBLE_MS``, unless a hide is already on its way."""
+        if self._showing and not self._hide_id:
+            self._hide_id = GLib.timeout_add(VISIBLE_MS, self._on_hide_timeout)
 
     def hide_now(self) -> None:
         if self._hide_id:
@@ -227,17 +240,19 @@ class HoldPillController(GObject.Object):
         self._style = style
         self._now = now or (lambda: time.monotonic() * 1000)
         self._surface: HoldPillSurface | None = None
-        self.detector = HoldDetector(self._lookup, self._on_fired,
-                                     lambda ms, cb: GLib.timeout_add(ms, self._once(cb)),
+        self.detector = HoldDetector(self._lookup, self._on_fired, self._schedule,
                                      GLib.source_remove)
+        self.modifiers = ModifierTracker(self._lookup_held, self._on_modifiers, self._schedule,
+                                         GLib.source_remove)
         self._handlers: list[tuple[object, int]] = []
         if layer_shell is None:
             return
         self._handlers = [
             (service, service.connect("key-event", self._on_key_event)),
             (service, service.connect("disconnected", lambda *_a: self._reset())),
-            (service, service.connect("layout-loaded", lambda *_a: self.detector.reset())),
+            (service, service.connect("layout-loaded", lambda *_a: self._forget_keys())),
             (settings, settings.connect(f"changed::{ENABLED_KEY}", lambda *_a: self._reset())),
+            (settings, settings.connect(f"changed::{MODIFIER_KEY}", lambda *_a: self._reset())),
         ]
 
     @property
@@ -252,26 +267,31 @@ class HoldPillController(GObject.Object):
         for obj, handler in self._handlers:
             obj.disconnect(handler)
         self._handlers = []
-        self.detector.reset()
+        self._forget_keys()
         if self._surface is not None:
             self._surface.hide_now()
             self._surface.destroy()
             self._surface = None
 
     @staticmethod
-    def _once(cb: Callable[[], None]) -> Callable[[], bool]:
+    def _schedule(ms: int, cb: Callable[[], None]) -> int:
         def fire() -> bool:
             cb()
             return GLib.SOURCE_REMOVE
-        return fire
+        return GLib.timeout_add(ms, fire)
+
+    def _forget_keys(self) -> None:
+        self.detector.reset()
+        self.modifiers.reset()
 
     def _reset(self) -> None:
-        self.detector.reset()
+        self._forget_keys()
         if self._surface is not None and self._surface.showing:
             self._surface.hide_now()
 
     def _on_key_event(self, _service: object, index: int, pressed: bool) -> None:
         self.detector.key(index, pressed, self._now())
+        self.modifiers.key(index, pressed)
 
     def _lookup(self, index: int) -> HoldAction | None:
         if not self.settings.get_boolean(ENABLED_KEY):
@@ -282,11 +302,23 @@ class HoldPillController(GObject.Object):
         excluded = set(self.settings.get_value(EXCLUDED_KEY).unpack())
         return None if key_id(action.layer, action.index) in excluded else action
 
+    def _lookup_held(self, index: int) -> HeldKey | None:
+        if not self.settings.get_boolean(MODIFIER_KEY):
+            return None
+        return held_key(self.service.get_layout(), self.service.get_active_layer(), index)
+
     def _on_fired(self, action: HoldAction) -> None:
         self.show(action.combo)
 
-    def show(self, text: str) -> None:
-        """Flash ``text`` now (also used by the screenshot tool)."""
+    def _on_modifiers(self, text: str | None) -> None:
+        if text:
+            self.show(text, linger=False)
+        elif self._surface is not None:
+            self._surface.release()
+
+    def show(self, text: str, linger: bool = True) -> None:
+        """Show ``text`` now (also used by the screenshot tool): for ``VISIBLE_MS``,
+        or with ``linger`` False until the held modifiers are released."""
         if self._ls is None:
             return
         if self._surface is None:
@@ -295,8 +327,8 @@ class HoldPillController(GObject.Object):
         style = self._style()
         self._surface.set_style(style)
         self._surface.place(monitor, style.edge, edge_margin(height, self._clearance()))
-        self._surface.flash(text, style.unit)
+        self._surface.flash(text, style.unit, linger)
 
 
-__all__ = ["ENABLED_KEY", "EXCLUDED_KEY", "HoldPillController", "HoldPillSurface",
+__all__ = ["ENABLED_KEY", "EXCLUDED_KEY", "MODIFIER_KEY", "HoldPillController", "HoldPillSurface",
            "NAMESPACE", "PillStyle", "edge_margin", "key_width_units"]

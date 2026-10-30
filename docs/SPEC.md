@@ -208,6 +208,25 @@ up by the application next to the overlay; settings in the Overlay page's Hold A
   Keys expander lists every key with a hold action, all on by default), in the Overlay page's
   Hold Actions group above Appearance. Needs gtk4-layer-shell.
 
+#### 4.3.2 Held-modifier pill
+While modifiers are held, the hold-action pill's surface shows them and the last key pressed with
+them: `Ctrl`, `Ctrl+Shift`, `Ctrl+Shift+T`. Code: `ui/held_modifiers.py` (pure tracking,
+`ModifierTracker`), fed by `HoldPillController` (`ui/hold_pill.py`) next to the hold detector.
+- **Which keys:** `KeyBinding.modifier` (a lone modifier keycode such as `KC_LCTL`, `KC_MEH`) counts
+  from its press. `KeyBinding.hold_modifier` (a mod-tap, e.g. hold A = Ctrl, or QMK's `LCTL_T`)
+  counts once it's still down one tapping term after its press (the key's, else the layout's, else
+  200 ms), as QMK decides without permissive hold. Keys pressed within that term are sent with the
+  modifier, so the last of them shows when it resolves; released in time, the mod-tap was a tap and
+  its tap label is the key. Layer-only keys (`MO`, `TG`, …) add nothing; a transparent key uses the
+  base layer's. Both fields are additive (1.8) and come from `oryx_api.modifier_names`.
+- **Text:** modifiers in Ctrl, Shift, Alt, AltGr, Super order, then the last key; a new key replaces
+  it. Shift alone never shows (typing capitals). Keys typed before the first modifier are forgotten.
+- **Look and timing:** the hold pill's surface and style (4.3.1). It stays while modifiers are held
+  (no hide timer) and fades `VISIBLE_MS` after the last one is released. A hold action firing in
+  between flashes over it as usual.
+- **Setting:** `modifier-pill` (off by default), the Overlay page's Held Modifiers group, below
+  Hold Actions. Needs gtk4-layer-shell.
+
 ### 4.4 Heatmap
 Opt-in (`heatmap-recording`, default off). Stores only per-(local day, layer, key index)
 counts per layout in `$XDG_DATA_HOME/vibemapp/heatmap/<layout_id>.json`, flushed at most every

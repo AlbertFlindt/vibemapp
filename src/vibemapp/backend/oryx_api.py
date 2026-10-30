@@ -278,6 +278,48 @@ def hold_combo(action: dict[str, Any] | None) -> str:
     return "+".join([*names, label])
 
 
+# The modifiers a modifier keycode holds, by name in canonical order.
+MODIFIER_ORDER = ("Ctrl", "Shift", "Alt", "AltGr", "Super")
+_MOD_CODE_NAMES: dict[str, tuple[str, ...]] = {
+    **{n: ("Ctrl",) for n in ("LCTL", "LEFT_CTRL", "LCTRL", "RCTL", "RIGHT_CTRL", "RCTRL")},
+    **{n: ("Shift",) for n in ("LSFT", "LEFT_SHIFT", "LSHIFT", "RSFT", "RIGHT_SHIFT", "RSHIFT")},
+    **{n: ("Alt",) for n in ("LALT", "LEFT_ALT", "LOPT")},
+    **{n: ("AltGr",) for n in ("RALT", "RIGHT_ALT", "ROPT", "ALGR")},
+    **{n: ("Super",) for n in ("LGUI", "LEFT_GUI", "LCMD", "LWIN",
+                               "RGUI", "RIGHT_GUI", "RCMD", "RWIN")},
+    "MEH": ("Ctrl", "Shift", "Alt"), "HYPR": ("Ctrl", "Shift", "Alt", "Super"),
+}
+# Mod-tap keycodes as a whole (QMK's ``LCTL_T`` and friends), by their label.
+_MOD_TAP_LABEL_NAMES: dict[str, tuple[str, ...]] = {
+    "Ctrl": ("Ctrl",), "Shift": ("Shift",), "Alt": ("Alt",), "AltGr": ("AltGr",),
+    "Super": ("Super",), "Meh": ("Ctrl", "Shift", "Alt"),
+    "Hyper": ("Ctrl", "Shift", "Alt", "Super"), "Ctrl⇧": ("Ctrl", "Shift"),
+    "CtrlAlt": ("Ctrl", "Alt"), "CAG": ("Ctrl", "Alt", "Super"),
+    "Super⇧": ("Shift", "Super"), "Alt⇧": ("Shift", "Alt"),
+}
+
+
+def modifier_names(action: dict[str, Any] | None) -> str:
+    """``"Ctrl"`` when the action is a lone modifier (with any extra modifiers:
+    ``"Ctrl+Shift"``), in Ctrl, Shift, Alt, AltGr, Super order. Empty for
+    anything that sends a key or switches layers."""
+    if not isinstance(action, dict):
+        return ""
+    code = action.get("code")
+    if not isinstance(code, str):
+        return ""
+    if code in _MOD_TAPS:
+        held = set(_MOD_TAP_LABEL_NAMES[_MOD_TAPS[code]])
+    elif code.startswith("KC_") and code[3:] in _MOD_CODE_NAMES:
+        held = set(_MOD_CODE_NAMES[code[3:]])
+    else:
+        return ""
+    mods = action.get("modifiers")
+    if isinstance(mods, dict):
+        held.update(name for key, name in _MOD_NAMES if mods.get(key))
+    return "+".join(n for n in MODIFIER_ORDER if n in held)
+
+
 def tapping_term(value: Any) -> int | None:
     """A tapping term in ms from Oryx data, or None when unset or nonsense."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
@@ -347,7 +389,8 @@ def key_binding_from_json(index: int, key: Any) -> KeyBinding:
                       glyph=glyph, color=color,
                       tap_code=code if isinstance(code, str) and code else None,
                       hold_combo=hold_combo(hold),
-                      tapping_term_ms=tapping_term(key.get("tappingTerm")))
+                      tapping_term_ms=tapping_term(key.get("tappingTerm")),
+                      modifier=modifier_names(tap), hold_modifier=modifier_names(hold))
 
 
 def parse_layout(data: dict[str, Any], model: KeyboardModel | None = None) -> Layout:
@@ -588,6 +631,7 @@ class LayoutRepository:
 
 
 __all__ = ["GRAPHQL_URL", "LAYOUT_QUERY", "keycode_label", "keycode_glyph", "hold_label",
-           "hold_combo", "tapping_term", "key_binding_from_json", "parse_layout", "fetch_layout_json",
-           "fetch_latest_revision_id", "layout_sync", "LATEST_REVISION_QUERY", "LayoutCache",
+           "hold_combo", "modifier_names", "tapping_term", "key_binding_from_json",
+           "parse_layout", "fetch_layout_json", "fetch_latest_revision_id", "layout_sync",
+           "LATEST_REVISION_QUERY", "LayoutCache",
            "LayoutRepository", "LayoutFetchError", "normalize_color", "default_cache_dir"]
