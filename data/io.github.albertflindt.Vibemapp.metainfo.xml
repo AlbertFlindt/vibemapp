@@ -41,23 +41,23 @@
   <screenshots>
     <screenshot type="default">
       <caption>Your Oryx layout with the active layer</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.6.3/data/screenshots/layout.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.6.4/data/screenshots/layout.png</image>
     </screenshot>
     <screenshot>
       <caption>Smart Layers switches layers per app</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.6.3/data/screenshots/smart-layers.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.6.4/data/screenshots/smart-layers.png</image>
     </screenshot>
     <screenshot>
       <caption>An opt-in heatmap of your key presses</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.6.3/data/screenshots/heatmap.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.6.4/data/screenshots/heatmap.png</image>
     </screenshot>
     <screenshot>
       <caption>Overlay settings: which layers show it, where and how large</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.6.3/data/screenshots/overlay.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.6.4/data/screenshots/overlay.png</image>
     </screenshot>
     <screenshot>
       <caption>Insights: the load on each finger and the hand split</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.6.3/data/screenshots/insights.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.6.4/data/screenshots/insights.png</image>
     </screenshot>
   </screenshots>
   <branding>
@@ -74,6 +74,11 @@
     <keyword>layer</keyword>
   </keywords>
   <releases>
+    <release version="1.6.4" date="2026-10-30">
+      <description>
+        <p>The source now ships the full text of its GPL-3.0-or-later license.</p>
+      </description>
+    </release>
     <release version="1.6.3" date="2026-10-30">
       <description>
         <p>The screenshots show the overlay on a desktop and the thumb keys as they sit on the keyboard.</p>
