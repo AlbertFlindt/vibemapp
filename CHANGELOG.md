@@ -2,6 +2,13 @@
 
 All notable changes to Vibemapp. Each version is a tag and a GitHub release.
 
+## 1.9.0 (2026-10-30)
+
+### Added
+- **Click the focused app in Smart Layers** to edit the rule that matches it, or to add a rule
+  for it with the app already picked. Back in the dialog still offers the other rule kinds,
+  like All Steam Games.
+
 ## 1.8.0 (2026-10-30)
 
 ### Added
