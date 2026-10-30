@@ -58,7 +58,7 @@ symbols layer key and it appears, release it and it fades out. "Always" shows it
 layer. It never takes focus, and it follows the focused monitor or stays on a fixed one.
 
 <p align="center">
-  <img src="data/screenshots/overlay-view.png" alt="The overlay on the Symbols layer over a transparent backdrop, with F3 and { pressed">
+  <img src="data/screenshots/overlay-view.png" alt="The overlay on the Symbols layer over a text editor and a terminal, with F3 and { pressed">
 </p>
 
 - **Size** is a percentage of your keyboard's real size, so it looks the same on every

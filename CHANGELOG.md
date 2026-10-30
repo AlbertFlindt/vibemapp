@@ -2,6 +2,13 @@
 
 All notable changes to Vibemapp. Each version is a tag and a GitHub release.
 
+## 1.6.3 (2026-10-30)
+
+### Changed
+- The overlay screenshot shows the overlay on a desktop, over a text editor and a terminal.
+- The simulated keyboard (`VIBEMAPP_MOCK=1`) uses the real Voyager key positions, so its thumb
+  keys sit in a straight, tilted pair as on the keyboard. The Layout and Heatmap screenshots show this.
+
 ## 1.6.2 (2026-10-30)
 
 ### Changed

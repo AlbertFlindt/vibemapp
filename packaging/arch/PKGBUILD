@@ -1,6 +1,6 @@
 # Maintainer: Albert Flindt <Albert.Flindt@proton.me>
 pkgname=vibemapp
-pkgver=1.6.2
+pkgver=1.6.3
 pkgrel=1
 pkgdesc="GNOME-style companion app for ZSA keyboards with Smart Layers (app-aware layer switching)"
 arch=('any')

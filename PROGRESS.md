@@ -1,6 +1,6 @@
 # Progress / handoff
 
-**Last updated:** 2026-10-30. **Latest release:** 1.6.2 (details in `CHANGELOG.md`).
+**Last updated:** 2026-10-30. **Latest release:** 1.6.3 (details in `CHANGELOG.md`).
 How things work: `docs/SPEC.md`.
 
 ## Current state
@@ -55,8 +55,9 @@ How things work: `docs/SPEC.md`.
   `tray_menu_shot.py`; heatmap with `VIBEMAPP_MOCK_HEATMAP_SEED=1 --record --size 1000x1000`; insights the same with
   `--page insights --size 1000x700`;
   overlay page with `--page overlay --overlay-layers 1,2 --size 1000x1300`; tray with `--window-visible --overlay`;
-  `overlay-view.png` is `--overlay --size 1920x1080 --width-mm 530 --layer 1 --press 3,15` cropped to
-  880x400 at (520,670)): no personal data. Dark style, blue accent, Adwaita Sans, on a Wayland
+  `overlay-view.png` is `tests/ui/overlay_live.py --layer 1 --press 3,15` (the real layer-shell overlay)
+  over GNOME Text Editor and foot, tiled in sway at 1920x1080 on the `adwaita-d` wallpaper, taken with
+  `grim`): no personal data. The mock uses the real Voyager geometry (`geometries.py`), so thumbs match the app. Dark style, blue accent, Adwaita Sans, on a Wayland
   compositor with layer-shell (else the Overlay page shows "Overlay Unavailable"). Cloud sessions
   (Ubuntu, old libadwaita) rendered them in an Ubuntu 26.04 debootstrap chroot under headless sway
   with `ADW_DEBUG_COLOR_SCHEME=prefer-dark ADW_DEBUG_ACCENT_COLOR=blue` (Ubuntu's default accent is orange).
