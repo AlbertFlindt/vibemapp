@@ -5,6 +5,8 @@ pkgrel=1
 pkgdesc="GNOME-style companion app for ZSA keyboards with Smart Layers (app-aware layer switching)"
 arch=('any')
 url="https://github.com/AlbertFlindt/vibemapp"
+# Full text in the repo's LICENSE; Arch's licenses package already ships GPL-3.0-or-later,
+# so it isn't installed again.
 license=('GPL-3.0-or-later')
 depends=('python' 'python-gobject' 'python-cairo' 'gtk4' 'libadwaita' 'glib2')
 makedepends=('meson' 'git')
