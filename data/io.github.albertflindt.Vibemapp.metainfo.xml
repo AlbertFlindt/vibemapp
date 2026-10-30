@@ -79,6 +79,11 @@
         <p>The Layout page tells you when Oryx has changes that aren't flashed to the keyboard yet, or when the layout shown isn't the one on the keyboard.</p>
       </description>
     </release>
+    <release version="1.6.4" date="2026-10-30">
+      <description>
+        <p>The source now ships the full text of its GPL-3.0-or-later license.</p>
+      </description>
+    </release>
     <release version="1.6.3" date="2026-10-30">
       <description>
         <p>The screenshots show the overlay on a desktop and the thumb keys as they sit on the keyboard.</p>

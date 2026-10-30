@@ -10,6 +10,12 @@ All notable changes to Vibemapp. Each version is a tag and a GitHub release.
 - A warning banner when the layout shown isn't the revision flashed on the keyboard (for example
   offline with only another revision saved), so some keys may be wrong. "Try Again" reloads it.
 
+## 1.6.4 (2026-10-30)
+
+### Added
+- The repository now includes the full GPL-3.0 license text in `LICENSE`, matching the
+  GPL-3.0-or-later license the app and package already declare.
+
 ## 1.6.3 (2026-10-30)
 
 ### Changed
