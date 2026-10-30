@@ -8,6 +8,7 @@ title pattern. Editing opens straight on the details page.
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from typing import Callable
 
 import gi
@@ -132,6 +133,8 @@ class RuleDialog(Adw.Dialog):
     pattern_row: Adw.EntryRow = Gtk.Template.Child()
     pattern_hint: Gtk.Label = Gtk.Template.Child()
     remove_group: Adw.PreferencesGroup = Gtk.Template.Child()
+    hold_actions_row: Adw.SwitchRow = Gtk.Template.Child()
+    held_modifiers_row: Adw.SwitchRow = Gtk.Template.Child()
 
     def __init__(self, *, layout: Layout, running: list[RunningApp],
                  existing: list[AppRule], on_done: Callable[[AppRule], None],
@@ -166,6 +169,8 @@ class RuleDialog(Adw.Dialog):
             self._load_rule(rule)
             self.layer_row.set_selected(min(rule.layer_index, len(layout.layers) - 1))
             self.pattern_row.set_text(rule.title_pattern or "")
+            self.hold_actions_row.set_active(rule.show_hold_actions)
+            self.held_modifiers_row.set_active(rule.show_held_modifiers)
             self.nav.replace([self.details_page])
         self._validate()
 
@@ -376,6 +381,13 @@ class RuleDialog(Adw.Dialog):
         self._validate()
 
     def build_rule(self) -> AppRule | None:
+        rule = self._build_target()
+        if rule is None:
+            return None
+        return replace(rule, show_hold_actions=self.hold_actions_row.get_active(),
+                       show_held_modifiers=self.held_modifiers_row.get_active())
+
+    def _build_target(self) -> AppRule | None:
         if not self._validate():
             return None
         title_pattern = self.pattern_row.get_text().strip() or None

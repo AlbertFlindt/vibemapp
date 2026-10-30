@@ -74,6 +74,8 @@ def rule_from_json(obj: Any) -> AppRule | None:
         enabled=bool(obj.get("enabled", True)),
         icon_name=icon if isinstance(icon, str) and icon else None,
         match=match,
+        show_hold_actions=bool(obj.get("show_hold_actions", True)),
+        show_held_modifiers=bool(obj.get("show_held_modifiers", True)),
     )
 
 

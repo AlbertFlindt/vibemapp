@@ -178,6 +178,10 @@ class OverlayPage(Adw.Bin):
     hold_pill_row: Adw.SwitchRow = Gtk.Template.Child()
     hold_keys_row: Adw.ExpanderRow = Gtk.Template.Child()
     modifier_pill_row: Adw.SwitchRow = Gtk.Template.Child()
+    hold_linger_row: Adw.SpinRow = Gtk.Template.Child()
+    hold_fade_row: Adw.SpinRow = Gtk.Template.Child()
+    modifier_linger_row: Adw.SpinRow = Gtk.Template.Child()
+    modifier_fade_row: Adw.SpinRow = Gtk.Template.Child()
     snippet_label: Gtk.Label = Gtk.Template.Child()
 
     def __init__(self) -> None:
@@ -225,6 +229,10 @@ class OverlayPage(Adw.Bin):
                              ("overlay-half-spacing", self._sync_spins),
                              ("overlay-opacity", self._sync_spins),
                              ("overlay-fade-ms", self._sync_spins),
+                             ("hold-pill-linger-ms", self._sync_spins),
+                             ("hold-pill-fade-ms", self._sync_spins),
+                             ("modifier-pill-linger-ms", self._sync_spins),
+                             ("modifier-pill-fade-ms", self._sync_spins),
                              (HOLD_PILL_KEY, self._sync_hold),
                              (HOLD_EXCLUDED_KEY, self._sync_hold),
                              (MODIFIER_PILL_KEY, self._sync_hold)):
@@ -404,7 +412,11 @@ class OverlayPage(Adw.Bin):
                 (self.size_row, "overlay-size"),
                 (self.half_spacing_row, "overlay-half-spacing"),
                 (self.opacity_row, "overlay-opacity"),
-                (self.fade_row, "overlay-fade-ms"))
+                (self.fade_row, "overlay-fade-ms"),
+                (self.hold_linger_row, "hold-pill-linger-ms"),
+                (self.hold_fade_row, "hold-pill-fade-ms"),
+                (self.modifier_linger_row, "modifier-pill-linger-ms"),
+                (self.modifier_fade_row, "modifier-pill-fade-ms"))
 
     def _sync_spins(self) -> None:
         def apply() -> None:

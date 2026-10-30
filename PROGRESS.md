@@ -56,6 +56,9 @@ How things work: `docs/SPEC.md`.
   `VISIBLE_MS` after release. Mod-taps count once held a tapping term (Albert's pick: what QMK
   decides by default; a quick home-row Ctrl+C released within the term is missed). Shift alone is
   typing, so it never shows. Not verified on hardware.
+- **Pills: own timing, off per Smart Layers rule** (2026-10-30, Albert): each pill has its own
+  Stay Visible (after release, 0 = at once) and Fade Duration, not the overlay's fade. Per-rule
+  switches (not per layer) turn them off, e.g. Ctrl isn't wanted while gaming.
 - **Overlay shows whenever a selected layer is active**, not only while a layer key is held.
 - **Overlay size is % of the real keyboard size** (same look on every monitor), default 80;
   half spacing is a 0–100 % value, not a toggle.

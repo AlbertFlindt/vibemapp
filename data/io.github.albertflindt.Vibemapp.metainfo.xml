@@ -76,7 +76,7 @@
   <releases>
     <release version="1.8.0" date="2026-10-30">
       <description>
-        <p>The overlay can show the modifiers you hold, such as Ctrl, and the key you press with them.</p>
+        <p>The overlay can show the modifiers you hold, such as Ctrl, and the key you press with them. Smart Layers rules can turn these and hold actions off, e.g. in games, and both have their own timing.</p>
       </description>
     </release>
     <release version="1.7.0" date="2026-10-30">

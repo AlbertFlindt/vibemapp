@@ -128,6 +128,9 @@ class AppRule:
     a Python regex that must also ``re.search`` the window title.
     Rules are evaluated in list order; the first enabled match wins, so
     specific rules should come before catch-all ones.
+    ``show_hold_actions`` and ``show_held_modifiers`` (additive, 1.8) turn the
+    on-screen hold-action and held-modifier keys off while it matches, e.g.
+    in games.
     """
     app_class: str
     display_name: str
@@ -136,6 +139,8 @@ class AppRule:
     enabled: bool = True
     icon_name: str | None = None
     match: RuleMatch = RuleMatch.APP
+    show_hold_actions: bool = True
+    show_held_modifiers: bool = True
 
 
 @dataclass(frozen=True)
