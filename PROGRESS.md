@@ -1,6 +1,6 @@
 # Progress / handoff
 
-**Last updated:** 2026-10-29. **Latest release:** 1.6.1 (details in `CHANGELOG.md`).
+**Last updated:** 2026-10-30. **Latest release:** 1.6.2 (details in `CHANGELOG.md`).
 How things work: `docs/SPEC.md`.
 
 ## Current state
@@ -54,7 +54,12 @@ How things work: `docs/SPEC.md`.
 - **Screenshots come from the mock service** (`data/screenshots/`, `tests/ui/screenshot.py` and
   `tray_menu_shot.py`; heatmap with `VIBEMAPP_MOCK_HEATMAP_SEED=1 --record --size 1000x1000`; insights the same with
   `--page insights --size 1000x700`;
-  overlay page with `--page overlay --overlay-layers 1,2 --size 1000x1300`): no personal data.
+  overlay page with `--page overlay --overlay-layers 1,2 --size 1000x1300`; tray with `--window-visible --overlay`;
+  `overlay-view.png` is `--overlay --size 1920x1080 --width-mm 530 --layer 1 --press 3,15` cropped to
+  880x400 at (520,670)): no personal data. Dark style, blue accent, Adwaita Sans, on a Wayland
+  compositor with layer-shell (else the Overlay page shows "Overlay Unavailable"). Cloud sessions
+  (Ubuntu, old libadwaita) rendered them in an Ubuntu 26.04 debootstrap chroot under headless sway
+  with `ADW_DEBUG_COLOR_SCHEME=prefer-dark ADW_DEBUG_ACCENT_COLOR=blue` (Ubuntu's default accent is orange).
 - **PKGBUILD builds the GitHub tag, not the working tree:** reproducible packages. Tag and push
   before `makepkg`; use `./run-dev.sh` for untagged work.
 - **Distribution, if any, is the AUR** (2026-10-18): no AppImage or Flatpak (GTK4 bundling; the sandbox

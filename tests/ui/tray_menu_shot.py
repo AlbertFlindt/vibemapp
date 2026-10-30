@@ -1,7 +1,7 @@
 """Render the real tray menu to a PNG (dev tool, not a test).
 
     PYTHONPATH=src python3 tests/ui/tray_menu_shot.py OUT.png
-        [--state no-keyboard|ready|smart-off] [--layer N] [--window-visible] [--demo]
+        [--state no-keyboard|ready|smart-off] [--layer N] [--window-visible] [--overlay] [--demo]
 
 There's no grim or screenshot portal, and tray hosts draw the menu themselves,
 so the menu can't be screenshotted. Instead this starts a private
@@ -121,7 +121,7 @@ def call(conn: Gio.DBusConnection, name: str, path: str, iface: str, method: str
 
 
 def fetch_tray(state: str, layer: int | None,
-               window_visible: bool = False) -> tuple[tuple, tuple[str, str]]:
+               window_visible: bool = False, overlay: bool = False) -> tuple[tuple, tuple[str, str]]:
     """Run the real tray on a private bus; return (dbusmenu layout, (tip title, body))."""
     daemon = subprocess.Popen(["dbus-daemon", "--session", "--nofork", "--print-address=1"],
                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
@@ -139,7 +139,8 @@ def fetch_tray(state: str, layer: int | None,
         settings = MemorySettings()
         device = DeviceController(svc, settings)
         ctl = tc.TrayController(svc, device, settings, on_toggle_window=lambda: None,
-                                on_show_window=lambda: None, on_quit=lambda: None)
+                                on_show_window=lambda: None, on_quit=lambda: None,
+                                on_toggle_overlay=(lambda: None) if overlay else None)
         # As the app does at startup (main.py).
         svc.props.smart_layers_enabled = (state != "smart-off"
                                           and settings.get_boolean("smart-layers-on-startup"))
@@ -264,6 +265,8 @@ def main() -> int:
     parser.add_argument("--layer", type=int, help="active keyboard layer (mock)")
     parser.add_argument("--window-visible", action="store_true",
                         help="menu as shown while the main window is open")
+    parser.add_argument("--overlay", action="store_true",
+                        help="menu as shown when gtk4-layer-shell is installed (Show Overlay)")
     parser.add_argument("--demo", action="store_true",
                         help="render a built-in layout that uses every feature")
     args = parser.parse_args()
@@ -274,7 +277,7 @@ def main() -> int:
         if not shutil.which("dbus-daemon"):
             print("dbus-daemon not installed", file=sys.stderr)
             return 1
-        layout, tooltip = fetch_tray(args.state, args.layer, args.window_visible)
+        layout, tooltip = fetch_tray(args.state, args.layer, args.window_visible, args.overlay)
     dump(layout[2])
     print(f"tooltip: {tooltip!r}")
 

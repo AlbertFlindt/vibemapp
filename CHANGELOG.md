@@ -2,6 +2,13 @@
 
 All notable changes to Vibemapp. Each version is a tag and a GitHub release.
 
+## 1.6.2 (2026-10-30)
+
+### Changed
+- New screenshots that match the current app: the sidebar with Overlay and Insights, the
+  Overlay settings, and the tray menu with Show Overlay. A new screenshot shows the overlay itself.
+- The README has a short overview at the top.
+
 ## 1.6.1 (2026-10-29)
 
 ### Changed

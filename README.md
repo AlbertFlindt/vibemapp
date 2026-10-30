@@ -1,6 +1,38 @@
-# Vibemapp
+<p align="center">
+  <img src="data/icons/hicolor/scalable/apps/io.github.albertflindt.Vibemapp.svg" alt="" width="128">
+</p>
 
-A GNOME/libadwaita take on ZSA Keymapp for Linux, written in Python with PyGObject.
+<h1 align="center">Vibemapp</h1>
+
+<p align="center">
+  A GNOME/libadwaita take on ZSA Keymapp for Linux, written in Python with PyGObject.<br>
+  See your Oryx layout live, and let your keyboard switch layers when you switch apps.
+</p>
+
+<p align="center">
+  <a href="https://github.com/AlbertFlindt/vibemapp/releases/latest"><img src="https://img.shields.io/github/v/release/AlbertFlindt/vibemapp?label=release" alt="Latest release"></a>
+  <a href="https://github.com/AlbertFlindt/vibemapp/actions/workflows/ci.yml"><img src="https://github.com/AlbertFlindt/vibemapp/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="#license"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue" alt="License: GPL-3.0-or-later"></a>
+</p>
+
+<p align="center">
+  <a href="#features">Features</a> ·
+  <a href="#requirements">Requirements</a> ·
+  <a href="#installation-arch-linux">Installation</a> ·
+  <a href="#running-from-source">Running from source</a>
+</p>
+
+<p align="center">
+  <img src="data/screenshots/layout.png" alt="Vibemapp's layout view, showing a Voyager layout with layer tabs">
+</p>
+
+| Feature | What it does |
+|---|---|
+| **Live Layout** | Your Oryx layout, the active layer and the keys you press, live. |
+| **Smart Layers** | Switches the keyboard's layer when the focused app changes (Hyprland). |
+| **Overlay** | A see-through, click-through view of the layer you're on. |
+| **Heatmap and Insights** | Opt-in key-press counts and finger load. Counts only, never what you type. |
+| **Tray Icon** | Keeps Smart Layers running with the window closed. |
 
 Vibemapp never flashes firmware or writes to the keyboard's EEPROM.
 
@@ -9,9 +41,7 @@ Vibemapp never flashes firmware or writes to the keyboard's EEPROM.
 ### Live Layout
 
 Shows your Oryx layout with the keyboard's active layer and the keys you press, live.
-Transparent keys show the key they fall through to.
-
-![Vibemapp's layout view, showing a Voyager layout with layer tabs](data/screenshots/layout.png)
+Transparent keys show the key they fall through to. Hover a key for details.
 
 ### Smart Layers
 
@@ -27,7 +57,9 @@ In "selected" mode it shows only while one of the layers you picked is active: h
 symbols layer key and it appears, release it and it fades out. "Always" shows it on every
 layer. It never takes focus, and it follows the focused monitor or stays on a fixed one.
 
-![Overlay settings with the symbols and media layers selected](data/screenshots/overlay.png)
+<p align="center">
+  <img src="data/screenshots/overlay-view.png" alt="The overlay on the Symbols layer over a transparent backdrop, with F3 and { pressed">
+</p>
 
 - **Size** is a percentage of your keyboard's real size, so it looks the same on every
   monitor (computed from each monitor's physical width).
@@ -37,6 +69,10 @@ layer. It never takes focus, and it follows the focused monitor or stays on a fi
   ```lua
   hl.bind("SUPER + O", hl.dsp.exec_cmd("vibemapp --toggle-overlay"))
   ```
+
+<p align="center">
+  <img src="data/screenshots/overlay.png" alt="Overlay settings with the Symbols and Media layers selected" width="600">
+</p>
 
 Needs `gtk4-layer-shell`: the overlay is a layer-shell surface (namespace `vibemapp-overlay`)
 that sits above fullscreen windows and panels. Without the package the overlay is off, its
@@ -64,7 +100,7 @@ Closing the window keeps Vibemapp, and Smart Layers, running in the tray. The me
 keyboard and current layer, and toggles Smart Layers and the overlay.
 
 <p align="center">
-  <img src="data/screenshots/tray.png" alt="Tray menu with the current layer, Hide Vibemapp, Smart Layers, Preferences and Quit" width="260">
+  <img src="data/screenshots/tray.png" alt="Tray menu with the current layer, Hide Vibemapp, Smart Layers, Show Overlay, Preferences and Quit" width="260">
 </p>
 
 ## Requirements
