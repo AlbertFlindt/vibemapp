@@ -153,4 +153,5 @@ See [CHANGELOG.md](CHANGELOG.md) and the [releases](https://github.com/AlbertFli
 
 ## License
 
-GPL-3.0-or-later.
+Vibemapp is free software, licensed under the GNU General Public License, version 3 or
+(at your option) any later version (GPL-3.0-or-later). The full text is in [LICENSE](LICENSE).

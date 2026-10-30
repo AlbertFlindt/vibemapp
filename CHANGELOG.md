@@ -2,6 +2,12 @@
 
 All notable changes to Vibemapp. Each version is a tag and a GitHub release.
 
+## 1.6.4 (2026-10-30)
+
+### Added
+- The repository now includes the full GPL-3.0 license text in `LICENSE`, matching the
+  GPL-3.0-or-later license the app and package already declare.
+
 ## 1.6.3 (2026-10-30)
 
 ### Changed
