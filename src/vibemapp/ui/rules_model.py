@@ -86,6 +86,22 @@ def target_layer(rules: list[AppRule], fallback: int | None, app_class: str, tit
     return fallback, None
 
 
+def rule_for_window(rules: list[AppRule], app_class: str, title: str,
+                    steam_app_id: str | None = None) -> int | None:
+    """Position of the rule to edit for a focused window, or ``None`` to add one.
+
+    The rule that wins, else a disabled app rule for exactly this class (so
+    clicking the window doesn't create a duplicate of a rule that is just off).
+    """
+    hit = find_matching_rule(rules, app_class, title, steam_app_id)
+    if hit is not None:
+        return hit[0]
+    for pos, rule in enumerate(rules):
+        if not rule.enabled and rule.match == RuleMatch.APP and rule.app_class == app_class:
+            return pos
+    return None
+
+
 def is_catch_all(rule: AppRule) -> bool:
     """Group rules that can match many apps: All Steam Games and class patterns."""
     return (rule.match == RuleMatch.CLASS_PATTERN

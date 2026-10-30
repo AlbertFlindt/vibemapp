@@ -13,7 +13,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk, Pango  # noqa: E402
 from ..models import AppRule, FocusedWindow, Layout  # noqa: E402
 from ..service import KeyboardService  # noqa: E402
 from . import rules_model as rm  # noqa: E402
-from .apps import AppIndex  # noqa: E402
+from .apps import AppEntry, AppIndex  # noqa: E402
 from .controller import DeviceController  # noqa: E402
 from .i18n import _  # noqa: E402
 from .resources import ui_file  # noqa: E402
@@ -282,6 +282,7 @@ class SmartLayersPage(Adw.Bin):
     status_row: Adw.ActionRow = Gtk.Template.Child()
     status_icon: Gtk.Image = Gtk.Template.Child()
     status_target: Gtk.Label = Gtk.Template.Child()
+    status_chevron: Gtk.Image = Gtk.Template.Child()
     rules_group: Adw.PreferencesGroup = Gtk.Template.Child()
     rules_list: Gtk.ListBox = Gtk.Template.Child()
     fallback_group: Adw.PreferencesGroup = Gtk.Template.Child()
@@ -308,6 +309,7 @@ class SmartLayersPage(Adw.Bin):
         self.rules_list.set_placeholder(placeholder)
         self._default_description = self.rules_group.get_description()
         self._compact = False
+        self.status_row.connect("activated", lambda *_a: self.edit_focused())
 
     def set_compact(self, compact: bool) -> None:
         self._compact = compact
@@ -479,6 +481,7 @@ class SmartLayersPage(Adw.Bin):
                              else _("Focus tracking is unavailable"))
             self.status_icon.set_from_icon_name("focus-windows-symbolic")
             target_label.set_label("")
+            self._set_status_action(None)
             for rule_row in self._rows():
                 rule_row.set_matching(False)
             return
@@ -516,8 +519,20 @@ class SmartLayersPage(Adw.Bin):
                 target_label.set_tooltip_text(_("Smart Layers is off"))
             else:
                 target_label.set_tooltip_text(None)
+        self._set_status_action(
+            None if not self.editable
+            else rm.rule_for_window(self._rules, app_class, title, steam_id) is not None)
         for rule_row in self._rows():
             rule_row.set_matching(rule_row.position == match_pos)
+
+    def _set_status_action(self, has_rule: bool | None) -> None:
+        """Make the focused-window row open its rule (``True``), a new rule
+        for it (``False``), or nothing (``None``)."""
+        row = self.status_row
+        row.set_activatable(has_rule is not None)
+        self.status_chevron.set_visible(has_rule is not None)
+        row.set_tooltip_text(None if has_rule is None
+                             else _("Edit Rule") if has_rule else _("Add Rule for This App"))
 
     # --- rule editing (called by rows / window actions) ------------------
 
@@ -573,7 +588,25 @@ class SmartLayersPage(Adw.Bin):
         toast.connect("button-clicked", undo)
         self._toast(toast)
 
-    def add_rule(self) -> None:
+    def edit_focused(self) -> None:
+        """Open the focused window's rule, or a new rule prefilled for it."""
+        focus = self._focus
+        if focus is None or not self.editable:
+            return
+        pos = rm.rule_for_window(self._rules, focus.app_class, focus.title,
+                                 focus.steam_app_id)
+        if pos is not None:
+            self.edit_rule(pos)
+            return
+        entry = AppIndex.get().entry_for(focus.app_class)
+        if focus.steam_app_id:
+            # A Steam game's class (steam_app_<id>, or the game's own) makes a
+            # plain app rule; Back in the dialog offers All Steam Games.
+            name = focus.steam_game_name or _("Steam Game {id}").format(id=focus.steam_app_id)
+            entry = AppEntry(focus.app_class, name, steam_game_icon(focus.steam_app_id))
+        self.add_rule(app=entry)
+
+    def add_rule(self, app: AppEntry | None = None) -> None:
         if not self.editable or self._layout is None or self.service is None:
             if self.controller is not None:
                 self._toast(Adw.Toast(title=_("Connect your keyboard to add rules")))
@@ -585,7 +618,7 @@ class SmartLayersPage(Adw.Bin):
 
         present_rule_dialog(self, layout=self._layout,
                             running=self.service.list_running_apps(),
-                            existing=self._rules, on_done=done)
+                            existing=self._rules, on_done=done, app=app)
 
     def edit_rule(self, position: int) -> None:
         if not self.editable or self._layout is None or self.service is None:

@@ -35,5 +35,23 @@ class OnScreenKeysTests(unittest.TestCase):
         self.assertEqual((built.match, built.layer_index), (RuleMatch.STEAM_GAME, 1))
 
 
+@unittest.skipUnless(HAVE_DISPLAY, "needs a display")
+class PrefilledAppTests(unittest.TestCase):
+    def test_opens_on_details_for_the_app(self) -> None:
+        from gi.repository import Gio
+        from vibemapp.ui.apps import AppEntry
+        from vibemapp.ui.rule_dialog import RuleDialog
+        layout = Layout("x", "X", (), (Layer(0, "Base", None, ()), Layer(1, "Code", None, ())))
+        entry = AppEntry("kitty", "Kitty", Gio.ThemedIcon.new("kitty"))
+        dialog = RuleDialog(layout=layout, running=[], existing=[],
+                            on_done=lambda _r: None, app=entry)
+        self.assertIs(dialog.nav.get_visible_page(), dialog.details_page)
+        self.assertIs(dialog.nav.get_previous_page(dialog.details_page), dialog.kind_page)
+        self.assertFalse(dialog.remove_group.get_visible())
+        built = dialog.build_rule()
+        self.assertEqual((built.match, built.app_class, built.display_name, built.layer_index),
+                         (RuleMatch.APP, "kitty", "Kitty", 1))
+
+
 if __name__ == "__main__":
     unittest.main()

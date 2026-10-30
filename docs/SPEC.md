@@ -153,7 +153,10 @@ exists but can't be opened.
   redistributables are filtered out.
 - **UI:** master `Adw.SwitchRow`, focus status row ("Focused: kitty → Layer 1", Steam game
   names), rules list (layer combo, enable switch, remove), fallback combo, `Adw.Banner` when
-  Hyprland isn't found. Add Rule offers **App** (running or installed apps), **All Steam
+  Hyprland isn't found. Clicking the focus status row (when rules are editable) opens the
+  window's rule (`rules_model.rule_for_window`: the winning rule, else a disabled app rule for
+  that exact class) or Add Rule on the details step prefilled with the window's class (a Steam
+  game keeps its name and icon; Back leads to the rule kinds, e.g. All Steam Games). Add Rule offers **App** (running or installed apps), **All Steam
   Games** and **Window Class Pattern** (live regex validation and "matches: …" preview). New
   specific rules go above catch-all rules.
 
