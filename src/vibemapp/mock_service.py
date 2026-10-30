@@ -14,6 +14,8 @@ like the real backend. Behaviour can be tuned with environment variables:
 ``VIBEMAPP_MOCK_NO_RULES=1``  start without the demo rules
 ``VIBEMAPP_MOCK_NO_STEAM=1``  Steam not installed (no games)
 ``VIBEMAPP_MOCK_HEATMAP_SEED=1`` pre-fill 30 days of plausible heatmap counts
+``VIBEMAPP_MOCK_LAYOUT_SYNC``  ``LayoutSync`` value once the layout loads
+                               (default ``flashed``; ``oryx-newer``, ``not-flashed``)
 
 Tests construct it with ``autostart=False`` and drive it through the
 ``simulate_*`` methods.
@@ -32,7 +34,7 @@ from typing import Callable
 from gi.repository import Gio, GLib
 
 from .models import (AppRule, Device, ErgoReport, LayoutComparison, FocusedWindow, HeatmapApp, HeatmapPeriod, RuleMatch, SteamGame, KeyBinding, KeyboardModel, KeyGeometry,
-                     Layer, Layout, RunningApp)
+                     Layer, Layout, LayoutSync, RunningApp)
 from .backend import ergo, geometries, layouts
 from .service import KeyboardService
 from .ui.i18n import _
@@ -298,6 +300,11 @@ class MockKeyboardService(KeyboardService):
         self._focus_available = not _env_flag("VIBEMAPP_MOCK_NO_HYPRLAND", False)
         self._device: Device | None = None
         self._layout: Layout | None = None
+        self._layout_sync = LayoutSync.UNKNOWN
+        try:
+            self._loaded_sync = LayoutSync(os.environ.get("VIBEMAPP_MOCK_LAYOUT_SYNC") or "flashed")
+        except ValueError:
+            self._loaded_sync = LayoutSync.FLASHED
         self._active_layer = 0
         self._pressed: set[int] = set()
         self._monitor: str | None = None
@@ -420,12 +427,18 @@ class MockKeyboardService(KeyboardService):
         self._prev_press = None
         self._device = None
         self._layout = None
+        self.simulate_layout_sync(LayoutSync.UNKNOWN)
         self._active_layer = 0
         self._pressed.clear()
         self._last_sent = None
         self.emit("disconnected")
 
     # --- public simulation hooks (tests) ---------------------------------
+
+    def simulate_layout_sync(self, sync: LayoutSync) -> None:
+        if sync != self._layout_sync:
+            self._layout_sync = sync
+            self.emit("layout-sync-changed")
 
     def simulate_plug(self) -> None:
         self._plug()
@@ -823,6 +836,7 @@ class MockKeyboardService(KeyboardService):
             if self._seed_heatmap and self._layout.id not in self._counts:
                 self._seed_counts(self._layout)
             self.emit("layout-loaded", self._layout)
+            self.simulate_layout_sync(self._loaded_sync)
             callback(self._layout, None)
             self._evaluate()
 
@@ -830,6 +844,9 @@ class MockKeyboardService(KeyboardService):
 
     def get_layout(self) -> Layout | None:
         return self._layout
+
+    def get_layout_sync(self) -> LayoutSync:
+        return self._layout_sync
 
     def get_active_layer(self) -> int:
         return self._active_layer

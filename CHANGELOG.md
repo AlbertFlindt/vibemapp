@@ -2,6 +2,14 @@
 
 All notable changes to Vibemapp. Each version is a tag and a GitHub release.
 
+## 1.7.0 (2026-10-30)
+
+### Added
+- The Layout page shows a banner when Oryx has changes that aren't flashed to the keyboard yet.
+  The keys shown are still the ones on the keyboard, since Vibemapp loads the flashed revision.
+- A warning banner when the layout shown isn't the revision flashed on the keyboard (for example
+  offline with only another revision saved), so some keys may be wrong. "Try Again" reloads it.
+
 ## 1.6.4 (2026-10-30)
 
 ### Added

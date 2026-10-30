@@ -9,10 +9,10 @@ import unittest
 from vibemapp.appid import DEVEL_APP_ID
 from vibemapp.backend.focus.base import FocusWatcher
 from vibemapp.backend.oryx import OryxConnection, OryxError
-from vibemapp.backend.oryx_api import LayoutCache, LayoutRepository
+from vibemapp.backend.oryx_api import LayoutCache, LayoutFetchError, LayoutRepository
 from vibemapp.backend.smart_layers import APP_ID
 from vibemapp.backend.zsa_service import ZsaKeyboardService
-from vibemapp.models import AppRule, RunningApp
+from vibemapp.models import AppRule, LayoutSync, RunningApp
 
 from ._util import FakeFirmware, drain, spin
 from .test_devices import KBD_DESC, RAW_DESC, make_node
@@ -185,6 +185,70 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(self.names()[-1], "disconnected")
         self.assertEqual(self.svc.list_running_apps(), [RunningApp("kitty", "shell")])
         self.assertTrue(self.svc.focus_source_available())
+
+
+class LayoutSyncServiceTests(unittest.TestCase):
+    """The flashed revision (firmware serial) against the shown one and Oryx's newest."""
+
+    def make(self, serial: str, layout_rev: str, latest: str | None):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = tmp.name
+        make_node(root, 9, "5-2.2", 0, 0x3297, 0x1977, KBD_DESC)
+        make_node(root, 10, "5-2.2", 1, 0x3297, 0x1977, RAW_DESC)
+        fw = FakeFirmware(serial=serial, layer=0)
+        self.addCleanup(fw.unplug)
+        data = dict(SAMPLE, revision=dict(SAMPLE["revision"], hashId=layout_rev))
+        self.fetched: list[str | None] = []
+
+        def fetch(lid, rev, geo):
+            self.fetched.append(rev)
+            return data
+
+        def fetch_latest(lid, geo):
+            if latest is None:
+                raise LayoutFetchError("offline", offline=True)
+            return latest
+
+        svc = ZsaKeyboardService(
+            sysfs_root=os.path.join(root, "sys"), dev_root=os.path.join(root, "dev"),
+            rules_path=os.path.join(root, "config", "smart-layers.json"),
+            focus_watcher=FakeWatcher(),
+            repository=LayoutRepository(LayoutCache(os.path.join(root, "c")), fetch, fetch_latest),
+            connection_factory=lambda p, e, c: OryxConnection(p, e, c, opener=fw.opener),
+            poll_interval_ms=0, heatmap_dir=os.path.join(root, "hm"))
+        self.addCleanup(lambda: (svc.shutdown(), drain(0.05)))
+        self.changes: list[LayoutSync] = []
+        svc.connect("layout-sync-changed", lambda s: self.changes.append(s.get_layout_sync()))
+        self.assertTrue(spin(lambda: svc.get_layout() is not None))
+        return svc
+
+    def test_flashed_and_nothing_newer(self) -> None:
+        svc = self.make("Bre9W/rbaBD4", "rbaBD4", "rbaBD4")
+        drain(0.2)
+        self.assertEqual(svc.get_layout_sync(), LayoutSync.FLASHED)
+        self.assertEqual(self.fetched, ["rbaBD4"])     # fetched by the flashed revision
+
+    def test_oryx_has_unflashed_changes(self) -> None:
+        svc = self.make("Bre9W/rbaBD4", "rbaBD4", "n3wRev")
+        self.assertTrue(spin(lambda: svc.get_layout_sync() == LayoutSync.ORYX_NEWER))
+        self.assertEqual(self.changes, [LayoutSync.FLASHED, LayoutSync.ORYX_NEWER])
+
+    def test_offline_check_keeps_flashed(self) -> None:
+        svc = self.make("Bre9W/rbaBD4", "rbaBD4", None)
+        drain(0.2)
+        self.assertEqual(svc.get_layout_sync(), LayoutSync.FLASHED)
+
+    def test_shown_revision_is_not_the_flashed_one(self) -> None:
+        svc = self.make("Bre9W/rbaBD4", "n3wRev", "n3wRev")
+        drain(0.2)
+        self.assertEqual(svc.get_layout_sync(), LayoutSync.NOT_FLASHED)
+
+    def test_reset_on_disconnect(self) -> None:
+        svc = self.make("Bre9W/rbaBD4", "rbaBD4", "n3wRev")
+        self.assertTrue(spin(lambda: svc.get_layout_sync() == LayoutSync.ORYX_NEWER))
+        svc.disconnect_device()
+        self.assertEqual(svc.get_layout_sync(), LayoutSync.UNKNOWN)
 
 
 if __name__ == "__main__":

@@ -7,8 +7,9 @@ import unittest
 
 from vibemapp.backend import oryx_api
 from vibemapp.backend.oryx_api import (LayoutCache, LayoutFetchError, LayoutRepository,
-                                              key_binding_from_json, keycode_label, parse_layout)
-from vibemapp.models import KeyboardModel
+                                              key_binding_from_json, keycode_label, layout_sync,
+                                              parse_layout)
+from vibemapp.models import KeyboardModel, LayoutSync
 
 
 def _key(code, hold=None, **extra):
@@ -217,6 +218,59 @@ class RepositoryTests(unittest.TestCase):
         for part in ("layout(hashId: $hashId, geometry: $geometry, revisionId: $revisionId)",
                      "layers { title color position keys }", " config "):
             self.assertIn(part, q)
+
+    def test_latest_revision_async(self) -> None:
+        from ._util import spin
+        repo = LayoutRepository(self.cache, self.fetch)
+        results = []
+        repo.latest_revision_async("Bre9W", KeyboardModel.VOYAGER, results.append)
+        self.assertTrue(spin(lambda: bool(results)))
+        self.assertEqual(results, ["rbaBD4"])
+        self.assertEqual(self.calls, [("Bre9W", "latest", "voyager")])
+        # Never cached, and offline means "don't know".
+        self.assertFalse(os.listdir(self.cache.directory) if os.path.isdir(self.cache.directory) else [])
+        self.offline = True
+        repo.latest_revision_async("Bre9W", KeyboardModel.VOYAGER, results.append)
+        self.assertTrue(spin(lambda: len(results) == 2))
+        self.assertIsNone(results[1])
+
+
+class FetchLatestRevisionTests(unittest.TestCase):
+    def test_request_and_answer(self) -> None:
+        import io
+        import json
+        from unittest import mock
+        sent = []
+
+        def urlopen(req, timeout):
+            sent.append(json.loads(req.data))
+            return io.BytesIO(json.dumps(
+                {"data": {"layout": {"revision": {"hashId": "n3wRev"}}}}).encode())
+
+        with mock.patch("urllib.request.urlopen", urlopen):
+            self.assertEqual(oryx_api.fetch_latest_revision_id("Bre9W", "voyager"), "n3wRev")
+        self.assertEqual(sent[0]["variables"], {"hashId": "Bre9W", "geometry": "voyager"})
+        self.assertIn('revisionId: \\"latest\\"', json.dumps(sent[0]["query"]))
+        self.assertIn("revision { hashId }", sent[0]["query"])
+
+    def test_missing_revision(self) -> None:
+        import io
+        import json
+        from unittest import mock
+        body = json.dumps({"data": {"layout": {"revision": None}}}).encode()
+        with mock.patch("urllib.request.urlopen", lambda req, timeout: io.BytesIO(body)):
+            self.assertIsNone(oryx_api.fetch_latest_revision_id("Bre9W", None))
+
+
+class LayoutSyncTests(unittest.TestCase):
+    def test_states(self) -> None:
+        self.assertEqual(layout_sync(None, "rbaBD4", "rbaBD4"), LayoutSync.UNKNOWN)
+        self.assertEqual(layout_sync("rbaBD4", None, None), LayoutSync.UNKNOWN)
+        self.assertEqual(layout_sync("rbaBD4", "rbaBD4", None), LayoutSync.FLASHED)
+        self.assertEqual(layout_sync("rbaBD4", "rbaBD4", "rbaBD4"), LayoutSync.FLASHED)
+        self.assertEqual(layout_sync("rbaBD4", "rbaBD4", "n3wRev"), LayoutSync.ORYX_NEWER)
+        # Showing another revision wins over anything Oryx says.
+        self.assertEqual(layout_sync("rbaBD4", "n3wRev", "n3wRev"), LayoutSync.NOT_FLASHED)
 
 
 if __name__ == "__main__":

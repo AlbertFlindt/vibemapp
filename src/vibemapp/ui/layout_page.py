@@ -8,7 +8,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib, GObject, Gtk, Pango  # noqa: E402
 
-from ..models import Layout  # noqa: E402
+from ..models import Layout, LayoutSync  # noqa: E402
 from ..service import KeyboardService  # noqa: E402
 from .controller import DeviceController  # noqa: E402
 from .i18n import _  # noqa: E402
@@ -26,6 +26,7 @@ class LayoutPage(Adw.Bin):
     __gtype_name__ = "KmlLayoutPage"
 
     window_title: Adw.WindowTitle = Gtk.Template.Child()
+    sync_banner: Adw.Banner = Gtk.Template.Child()
     device_button: Gtk.MenuButton = Gtk.Template.Child()
     stack: Gtk.Stack = Gtk.Template.Child()
     status_page: Adw.StatusPage = Gtk.Template.Child()
@@ -60,6 +61,7 @@ class LayoutPage(Adw.Bin):
                                           active=lambda: self._layout is not None)
         self._handlers = [
             (service, service.connect("layout-loaded", lambda *_a: self._sync())),
+            (service, service.connect("layout-sync-changed", lambda *_a: self._sync_banner())),
             (controller, controller.connect("notify::state", lambda *_a: self._sync())),
             (controller, controller.connect("notify::message", lambda *_a: self._sync())),
         ]
@@ -112,7 +114,27 @@ class LayoutPage(Adw.Bin):
         else:
             self._layout = None
             self._show_status(state)
+        self._sync_banner()
         self.emit("layers-changed")
+
+    def _sync_banner(self) -> None:
+        """Warn when the shown layout isn't what's flashed (SPEC 3.3)."""
+        assert self.controller is not None and self.service is not None
+        sync = self.service.get_layout_sync() if self.controller.state == "ready" else None
+        if sync == LayoutSync.NOT_FLASHED:
+            self.sync_banner.set_title(_("This isn't the layout flashed on the keyboard, "
+                                         "so some keys may be wrong"))
+            self.sync_banner.set_button_label(_("_Try Again"))
+        elif sync == LayoutSync.ORYX_NEWER:
+            self.sync_banner.set_title(_("Oryx has changes that aren't flashed yet. "
+                                         "This shows the keys on the keyboard"))
+            self.sync_banner.set_button_label(None)
+        self.sync_banner.set_revealed(sync in (LayoutSync.NOT_FLASHED, LayoutSync.ORYX_NEWER))
+
+    @Gtk.Template.Callback()
+    def on_sync_banner_button_clicked(self, _banner: Adw.Banner) -> None:
+        if self.controller is not None:
+            self.controller.reload_layout()
 
     def _show_status(self, state: str) -> None:
         assert self.controller is not None

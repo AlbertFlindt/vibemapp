@@ -1,6 +1,6 @@
 # Progress / handoff
 
-**Last updated:** 2026-10-30. **Latest release:** 1.6.4 (details in `CHANGELOG.md`).
+**Last updated:** 2026-10-30. **Latest release:** 1.7.0 (details in `CHANGELOG.md`).
 How things work: `docs/SPEC.md`.
 
 ## Current state
@@ -22,6 +22,9 @@ How things work: `docs/SPEC.md`.
 - Moonlander, ErgoDox EZ and Planck EZ: geometry and key order come from QMK data; thumb-key
   angles are estimates.
 - Overlay with fractional monitor scaling, and the overlay on a Planck (no halves).
+- Layout sync banners (1.7.0): that the firmware serial's revision equals Oryx's revision `hashId`
+  is assumed (fetching by it and the cache already rely on it), and the newest-revision query
+  wasn't run against the live Oryx API (blocked in the cloud session). Check with an unflashed edit.
 - A changed layout-wide tapping term: Oryx's `config` holds only non-default settings and no
   layout with a custom term has been seen, so its name there (`tappingTerm`) is a guess. Check
   the cached layout JSON after changing it in Oryx. Per-key terms are verified to exist.

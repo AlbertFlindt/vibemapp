@@ -72,6 +72,15 @@ The full, verified notes are in the `backend/oryx.py` module docstring. The sour
   Oryx's defaults; the name of a changed global term in it (`tappingTerm`) is a guess, since no
   layout with one has been seen. Unset means QMK's 200 ms.
 - Cached at `$XDG_CACHE_HOME/vibemapp/layouts/<layout>-<revision>.json` and used offline.
+- **Flashed revision:** the layout is fetched by the revision in the firmware's serial
+  (`GET_FW_VERSION`), so the view shows what's on the keyboard, not Oryx's newest edits. After a load,
+  `KeyboardService.get_layout_sync()` (`models.LayoutSync`, signal `layout-sync-changed`) compares the
+  flashed revision with the shown one (`oryx_api.layout_sync`). When they match, one small query
+  (`LATEST_REVISION_QUERY`, never cached) asks Oryx for its newest revision. The Layout page shows a
+  banner for `ORYX_NEWER` (Oryx has unflashed changes; the keys shown are right) and for `NOT_FLASHED`
+  (Oryx sent another revision, or offline with only another one cached; "Try Again" reloads).
+  Offline or without a firmware revision there is no banner. Checked once per load; flashing
+  reconnects the keyboard, which loads again.
 - **Transparent keys:** Oryx stores them as all-null key objects (`KC_TRNS` counts too,
   `KC_NO` doesn't); `KeyBinding.transparent` marks them. They fall through to the base layer
   only (`ui/transparency.py`), because set-layer is `layer_move`.

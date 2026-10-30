@@ -8,7 +8,7 @@ from gi.repository import GLib
 from vibemapp.backend import geometries
 from vibemapp.mock_service import (MOCK_TO_ORYX, MockKeyboardService, voyager_layout,
                                     voyager_geometry)
-from vibemapp.models import AppRule, Finger, HeatmapPeriod, KeyboardModel, RuleMatch
+from vibemapp.models import AppRule, Finger, HeatmapPeriod, KeyboardModel, LayoutSync, RuleMatch
 from vibemapp.service import KeyboardService
 
 
@@ -86,6 +86,13 @@ class MockServiceTests(unittest.TestCase):
         self.assertIsNone(self.svc.get_layout())
         self.assertIn("disconnected", self.rec.names())
         self.assertEqual(self.svc.get_rules(), [])
+
+    def test_layout_sync(self) -> None:
+        self.assertEqual(self.svc.get_layout_sync(), LayoutSync.UNKNOWN)
+        self.connect_and_load()
+        self.assertEqual(self.svc.get_layout_sync(), LayoutSync.FLASHED)
+        self.svc.simulate_unplug()
+        self.assertEqual(self.svc.get_layout_sync(), LayoutSync.UNKNOWN)
 
     def test_request_layer(self) -> None:
         self.connect_and_load()
