@@ -1,7 +1,7 @@
 """Render the app window (with the mock service) to a PNG — a dev tool, not a test.
 
     PYTHONPATH=src python3 tests/ui/screenshot.py OUT.png [--page smart-layers|heatmap|overlay|insights]
-        [--dialog add-rule|edit-rule|preferences|device|about|shortcuts] [--silent-layers 3]
+        [--dialog add-rule|edit-rule|focused-rule|preferences|device|about|shortcuts] [--silent-layers 3]
         [--size 1000x680] [--delay 2500] [--layer 2] [--press 3,15]
     PYTHONPATH=src python3 tests/ui/screenshot.py OUT.png --overlay
         [--backdrop checker|busy] [--half-spacing 0] [--anchor bottom]
@@ -157,6 +157,9 @@ def main() -> int:
                 dlg.pattern_row.set_text(args.pattern)
         elif args.dialog == "edit-rule":
             win.smart_layers_page.edit_rule(0)
+        elif args.dialog == "focused-rule":
+            # Clicking the focused-window row (use --focus to pick the window).
+            win.smart_layers_page.status_row.activate()
         elif args.dialog:
             app.activate_action({"preferences": "preferences", "about": "about",
                                  "shortcuts": "shortcuts"}.get(args.dialog, "about"), None) \

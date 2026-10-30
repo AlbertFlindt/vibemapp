@@ -139,7 +139,8 @@ class RuleDialog(Adw.Dialog):
     def __init__(self, *, layout: Layout, running: list[RunningApp],
                  existing: list[AppRule], on_done: Callable[[AppRule], None],
                  rule: AppRule | None = None,
-                 on_remove: Callable[[], None] | None = None) -> None:
+                 on_remove: Callable[[], None] | None = None,
+                 app: AppEntry | None = None) -> None:
         super().__init__()
         self._layout = layout
         self._running = [r for r in running if r.app_class and not is_own_app_class(r.app_class)]
@@ -162,6 +163,12 @@ class RuleDialog(Adw.Dialog):
 
         if rule is None:
             self.layer_row.set_selected(min(1, len(layout.layers) - 1))
+            if app is not None:
+                # Prefilled (the focused window): Back still leads to the kinds.
+                self._show_details(RuleMatch.APP, app.app_class, app,
+                                   subtitle=app.app_class, push=False)
+                self.nav.replace([self.kind_page, self.details_page])
+                self.set_focus(self.layer_row)
         else:
             self.set_title(_("Edit Rule"))
             self.details_page.set_title(_("Edit Rule"))
@@ -426,8 +433,9 @@ def present_rule_dialog(parent: Gtk.Widget, *, layout: Layout,
                         running: list[RunningApp], existing: list[AppRule],
                         on_done: Callable[[AppRule], None],
                         rule: AppRule | None = None,
-                        on_remove: Callable[[], None] | None = None) -> RuleDialog:
+                        on_remove: Callable[[], None] | None = None,
+                        app: AppEntry | None = None) -> RuleDialog:
     dialog = RuleDialog(layout=layout, running=running, existing=existing,
-                        on_done=on_done, rule=rule, on_remove=on_remove)
+                        on_done=on_done, rule=rule, on_remove=on_remove, app=app)
     dialog.present(parent)
     return dialog

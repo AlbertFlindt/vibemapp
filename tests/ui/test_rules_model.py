@@ -33,6 +33,17 @@ class MatchingTests(unittest.TestCase):
     def test_invalid_pattern_never_matches(self) -> None:
         self.assertFalse(rm.rule_matches(rule("a", 1, "("), "a", "("))
 
+    def test_rule_for_window(self) -> None:
+        any_game = AppRule("", "All Steam Games", 2, match=RuleMatch.STEAM_GAME)
+        rules = [rule("kitty", 3, enabled=False), rule("firefox", 1, "YouTube"), any_game]
+        self.assertEqual(rm.rule_for_window(rules, "firefox", "YouTube"), 1)
+        # The winner, not the first rule for the class.
+        self.assertEqual(rm.rule_for_window(rules, "steam_app_570", "", "570"), 2)
+        # A disabled rule for the class is edited rather than duplicated.
+        self.assertEqual(rm.rule_for_window(rules, "kitty", "fish"), 0)
+        self.assertIsNone(rm.rule_for_window(rules, "firefox", "Docs"))
+        self.assertIsNone(rm.rule_for_window(rules, "gedit", ""))
+
     def test_validate_pattern(self) -> None:
         self.assertIsNone(rm.validate_pattern(None))
         self.assertIsNone(rm.validate_pattern(""))
