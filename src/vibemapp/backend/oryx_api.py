@@ -20,6 +20,11 @@ tapping term has no tapping-term entry). Each key object also has its own
 
 ``revisionId`` may be ``"latest"``. Fetches run on a worker thread with
 urllib, and results come back on the GLib main loop.
+
+The firmware reports the revision it was built from (``oryx.py``), so the layout
+is fetched by that revision. ``LATEST_REVISION_QUERY`` asks only for the newest
+revision's hash, to tell whether Oryx holds edits that aren't flashed yet
+(``layout_sync``).
 """
 
 from __future__ import annotations
@@ -34,7 +39,7 @@ import urllib.error
 import urllib.request
 from typing import Any, Callable
 
-from ..models import KeyBinding, KeyboardModel, Layer, Layout
+from ..models import KeyBinding, KeyboardModel, Layer, Layout, LayoutSync
 from . import geometries
 from ._i18n import _
 
@@ -48,6 +53,12 @@ LAYOUT_QUERY = (
     " hashId title geometry"
     " revision { hashId qmkVersion title config layers { title color position keys } }"
     " } }"
+)
+
+LATEST_REVISION_QUERY = (
+    "query getLatestRevision($hashId: String!, $geometry: String) {"
+    " layout(hashId: $hashId, geometry: $geometry, revisionId: \"latest\") {"
+    " revision { hashId } } }"
 )
 
 USER_AGENT = "Vibemapp/1 (+https://github.com/AlbertFlindt/vibemapp)"
@@ -390,9 +401,23 @@ def fetch_layout_json(layout_id: str, revision_id: str | None, geometry: str | N
                       timeout: float = 15.0, url: str = GRAPHQL_URL) -> dict[str, Any]:
     """Blocking GraphQL request. Returns ``data.layout``."""
     variables: dict[str, Any] = {"hashId": layout_id, "revisionId": revision_id or "latest"}
+    return _query_layout(LAYOUT_QUERY, variables, geometry, timeout, url)
+
+
+def fetch_latest_revision_id(layout_id: str, geometry: str | None,
+                             timeout: float = 15.0, url: str = GRAPHQL_URL) -> str | None:
+    """Blocking GraphQL request for the hash of the layout's newest revision."""
+    layout = _query_layout(LATEST_REVISION_QUERY, {"hashId": layout_id}, geometry, timeout, url)
+    revision = layout.get("revision")
+    hash_id = revision.get("hashId") if isinstance(revision, dict) else None
+    return hash_id if isinstance(hash_id, str) and hash_id else None
+
+
+def _query_layout(query: str, variables: dict[str, Any], geometry: str | None,
+                  timeout: float, url: str) -> dict[str, Any]:
     if geometry:
         variables["geometry"] = geometry
-    body = json.dumps({"query": LAYOUT_QUERY, "variables": variables}).encode()
+    body = json.dumps({"query": query, "variables": variables}).encode()
     req = urllib.request.Request(url, data=body, method="POST", headers={
         "Content-Type": "application/json", "Accept": "application/json",
         "User-Agent": USER_AGENT})
@@ -412,6 +437,18 @@ def fetch_layout_json(layout_id: str, revision_id: str | None, geometry: str | N
     if not isinstance(layout, dict):
         raise LayoutFetchError(_("Layout not found on Oryx"))
     return layout
+
+
+def layout_sync(flashed: str | None, shown: str | None, latest: str | None) -> LayoutSync:
+    """How the ``shown`` layout revision relates to the ``flashed`` one (from the
+    firmware) and Oryx's ``latest`` (None when unknown, e.g. offline)."""
+    if not flashed or not shown:
+        return LayoutSync.UNKNOWN
+    if shown != flashed:
+        return LayoutSync.NOT_FLASHED
+    if latest and latest != flashed:
+        return LayoutSync.ORYX_NEWER
+    return LayoutSync.FLASHED
 
 
 def default_cache_dir() -> str:
@@ -458,14 +495,25 @@ class LayoutCache:
 
 
 Fetcher = Callable[[str, str | None, str | None], dict[str, Any]]
+LatestFetcher = Callable[[str, str | None], str | None]
 
 
 class LayoutRepository:
     """Loads layouts from cache or Oryx on a worker thread."""
 
-    def __init__(self, cache: LayoutCache | None = None, fetcher: Fetcher | None = None) -> None:
+    def __init__(self, cache: LayoutCache | None = None, fetcher: Fetcher | None = None,
+                 latest_fetcher: LatestFetcher | None = None) -> None:
         self.cache = cache or LayoutCache()
         self._fetch = fetcher or (lambda lid, rev, geo: fetch_layout_json(lid, rev, geo))
+        if latest_fetcher is None:
+            if fetcher is None:
+                latest_fetcher = fetch_latest_revision_id
+            else:
+                # A custom (test) fetcher answers the newest-revision check too.
+                def latest_fetcher(lid: str, geo: str | None) -> str | None:
+                    revision = fetcher(lid, "latest", geo).get("revision") or {}
+                    return revision.get("hashId") or None
+        self._latest = latest_fetcher
 
     def load_blocking(self, layout_id: str, revision_id: str | None,
                       model: KeyboardModel) -> Layout:
@@ -513,7 +561,33 @@ class LayoutRepository:
 
         threading.Thread(target=work, name="oryx-layout", daemon=True).start()
 
+    def latest_revision_async(self, layout_id: str, model: KeyboardModel,
+                              callback: Callable[[str | None], None]) -> None:
+        """Hash of Oryx's newest revision, or None when Oryx can't be asked.
+        Never cached: an offline answer is "unknown", not the last one seen."""
+        from gi.repository import GLib
+
+        geometry = model.value if model != KeyboardModel.UNKNOWN else None
+
+        def finish(revision_id: str | None) -> bool:
+            callback(revision_id)
+            return GLib.SOURCE_REMOVE
+
+        def work() -> None:
+            try:
+                revision_id = self._latest(layout_id, geometry)
+            except LayoutFetchError as exc:
+                log.info("Can't check Oryx for a newer revision: %s", exc)
+                revision_id = None
+            except Exception:     # noqa: BLE001 - a failed check only hides the notice
+                log.exception("newest-revision check failed")
+                revision_id = None
+            GLib.idle_add(finish, revision_id)
+
+        threading.Thread(target=work, name="oryx-latest", daemon=True).start()
+
 
 __all__ = ["GRAPHQL_URL", "LAYOUT_QUERY", "keycode_label", "keycode_glyph", "hold_label",
-           "hold_combo", "tapping_term", "key_binding_from_json", "parse_layout", "fetch_layout_json", "LayoutCache",
+           "hold_combo", "tapping_term", "key_binding_from_json", "parse_layout", "fetch_layout_json",
+           "fetch_latest_revision_id", "layout_sync", "LATEST_REVISION_QUERY", "LayoutCache",
            "LayoutRepository", "LayoutFetchError", "normalize_color", "default_cache_dir"]

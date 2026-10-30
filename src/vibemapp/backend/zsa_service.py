@@ -31,7 +31,7 @@ from typing import Any, Callable
 
 from gi.repository import Gio, GLib
 
-from ..models import (AppRule, Device, ErgoReport, LayoutComparison, FocusedWindow, HeatmapApp, HeatmapPeriod, Layout, RunningApp,
+from ..models import (AppRule, Device, ErgoReport, LayoutComparison, FocusedWindow, HeatmapApp, HeatmapPeriod, Layout, LayoutSync, RunningApp,
                       SteamGame)
 from ..service import KeyboardService
 from . import devices as devmod
@@ -42,7 +42,7 @@ from .heatmap import HeatmapStore
 from .steam import SteamLibrary
 from .migration import migrate_legacy_dirs
 from .oryx import Evt, HandshakeResult, OryxConnection, OryxError, OryxEvent
-from .oryx_api import LayoutCache, LayoutRepository
+from .oryx_api import LayoutCache, LayoutRepository, layout_sync
 from ..appid import is_own_app_class
 from .smart_layers import DEFAULT_LAYOUT_KEY, RulesStore, SmartLayersEngine
 
@@ -109,6 +109,7 @@ class ZsaKeyboardService(KeyboardService):
         self._connecting: str | None = None
         self._notified_denied: set[str] = set()
         self._layout: Layout | None = None
+        self._layout_sync = LayoutSync.UNKNOWN
         self._layout_waiters: dict[tuple[str, str | None], list[Callable]] = {}
         self._active_layer = 0
         self._pressed: set[int] = set()
@@ -282,6 +283,7 @@ class ZsaKeyboardService(KeyboardService):
         self._set_heatmap_layout(dev.layout_id or DEFAULT_LAYOUT_KEY)
         self._active_layer = result.layer if result.layer is not None else 0
         self._layout = None
+        self._set_layout_sync(LayoutSync.UNKNOWN)
         self._engine.layer_count = None
         self._engine.set_layout(dev.layout_id or DEFAULT_LAYOUT_KEY)
         self.emit("connected", dev)
@@ -321,6 +323,7 @@ class ZsaKeyboardService(KeyboardService):
         self._set_heatmap_layout(None)
         self._device = None
         self._layout = None
+        self._set_layout_sync(LayoutSync.UNKNOWN)
         self._active_layer = 0
         self._pressed.clear()
         self._engine.set_connected(False)
@@ -520,7 +523,10 @@ class ZsaKeyboardService(KeyboardService):
             if layout is not None and current:
                 self._layout = layout
                 self._engine.layer_count = len(layout.layers) or None
+                self._set_layout_sync(layout_sync(dev.revision_id, layout.revision_id, None))
                 self.emit("layout-loaded", layout)
+                if self._layout_sync == LayoutSync.FLASHED:
+                    self._check_latest_revision(dev, layout, generation)
             elif layout is None and current and all(cb is None for cb, _c in entries):
                 self.emit("error", error or _("Couldn't load the layout"))
             for cb, canc in entries:
@@ -535,8 +541,26 @@ class ZsaKeyboardService(KeyboardService):
 
         self._repo.load_async(dev.layout_id, dev.revision_id, dev.model, finish)
 
+    def _check_latest_revision(self, dev: Device, layout: Layout, generation: int) -> None:
+        """Ask Oryx whether it has a newer revision than the flashed one."""
+        assert dev.layout_id
+
+        def finish(latest: str | None) -> None:
+            if generation == self._generation and self._layout is layout:
+                self._set_layout_sync(layout_sync(dev.revision_id, layout.revision_id, latest))
+
+        self._repo.latest_revision_async(dev.layout_id, dev.model, finish)
+
+    def _set_layout_sync(self, sync: LayoutSync) -> None:
+        if sync != self._layout_sync:
+            self._layout_sync = sync
+            self.emit("layout-sync-changed")
+
     def get_layout(self) -> Layout | None:
         return self._layout
+
+    def get_layout_sync(self) -> LayoutSync:
+        return self._layout_sync
 
     def get_active_layer(self) -> int:
         return self._active_layer

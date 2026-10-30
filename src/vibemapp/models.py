@@ -88,6 +88,19 @@ class Layout:
     tapping_term_ms: int | None = None
 
 
+class LayoutSync(str, Enum):
+    """How the shown layout relates to the firmware on the keyboard. Additive (1.7)."""
+    # No firmware revision to compare with, or not known yet.
+    UNKNOWN = "unknown"
+    # The flashed revision, and Oryx has nothing newer (or couldn't be asked).
+    FLASHED = "flashed"
+    # The flashed revision is shown, but Oryx has a newer one that isn't flashed.
+    ORYX_NEWER = "oryx-newer"
+    # A different revision than the flashed one is shown (Oryx sent another one,
+    # or offline with only another revision cached), so keys may be wrong.
+    NOT_FLASHED = "not-flashed"
+
+
 class RuleMatch(str, Enum):
     """How an ``AppRule`` decides whether the focused window matches."""
     # ``app_class`` is compared exactly (case-sensitive) with the window class.

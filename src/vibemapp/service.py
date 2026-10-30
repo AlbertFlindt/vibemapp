@@ -20,7 +20,7 @@ from typing import Callable
 from gi.repository import Gio, GObject
 
 from .models import (AppRule, Device, ErgoReport, LayoutComparison, FocusedWindow, HeatmapApp, HeatmapPeriod, Layout,
-                     RunningApp, SteamGame)
+                     LayoutSync, RunningApp, SteamGame)
 
 
 class KeyboardService(GObject.Object):
@@ -63,6 +63,9 @@ class KeyboardService(GObject.Object):
         # "DP-1"). Additive (1.1): the overlay follows it. Never emitted
         # without a focus source.
         "focused-monitor-changed": (GObject.SignalFlags.RUN_LAST, None, (str,)),
+        # get_layout_sync() changed. Additive (1.7): the Layout page warns when
+        # the shown layout isn't what's flashed on the keyboard.
+        "layout-sync-changed": (GObject.SignalFlags.RUN_LAST, None, ()),
         # Human-readable, user-presentable error (shown as a toast).
         "error": (GObject.SignalFlags.RUN_LAST, None, (str,)),
     }
@@ -113,6 +116,13 @@ class KeyboardService(GObject.Object):
 
     def get_layout(self) -> Layout | None:
         raise NotImplementedError
+
+    def get_layout_sync(self) -> LayoutSync:
+        """How the loaded layout relates to the firmware on the keyboard: the
+        flashed revision (from the firmware's serial) against the shown one and
+        Oryx's newest. Settles after ``layout-loaded`` once Oryx answers; see
+        ``layout-sync-changed``. Additive (1.7): the default doesn't know."""
+        return LayoutSync.UNKNOWN
 
     def get_active_layer(self) -> int:
         raise NotImplementedError

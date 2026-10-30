@@ -21,6 +21,11 @@
             </child>
           </object>
         </child>
+        <child type="top">
+          <object class="AdwBanner" id="sync_banner">
+            <signal name="button-clicked" handler="on_sync_banner_button_clicked"/>
+          </object>
+        </child>
         <property name="content">
           <object class="GtkStack" id="stack">
             <property name="transition-type">crossfade</property>
