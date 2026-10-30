@@ -2,6 +2,15 @@
 
 All notable changes to Vibemapp. Each version is a tag and a GitHub release.
 
+## 1.8.0 (2026-10-30)
+
+### Added
+- **Held modifiers on screen** (Overlay page, Held Modifiers group, off by default): while you
+  hold Ctrl, Alt, AltGr or Super, a key like the hold-action one shows them, then the key you
+  press with them, e.g. `Ctrl+Shift+T`. Each new key replaces the last, and it fades out shortly
+  after you let go. Mod-taps such as hold A = Ctrl count once held one tapping term, as the
+  keyboard decides by default. Shift alone isn't shown, since that's typing capitals.
+
 ## 1.7.0 (2026-10-30)
 
 ### Added

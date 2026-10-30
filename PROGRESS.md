@@ -1,6 +1,6 @@
 # Progress / handoff
 
-**Last updated:** 2026-10-30. **Latest release:** 1.7.0 (details in `CHANGELOG.md`).
+**Last updated:** 2026-10-30. **Latest release:** 1.8.0 (details in `CHANGELOG.md`).
 How things work: `docs/SPEC.md`.
 
 ## Current state
@@ -51,6 +51,11 @@ How things work: `docs/SPEC.md`.
   holds C for Ctrl+C every few seconds; a notification would pile up and may play a sound.
   The firmware never says tap or hold, so it's inferred from tap-dance timing (SPEC 4.3.1).
   Its settings sit on the Overlay page (same layer-shell requirement). Not verified on hardware.
+- **Held modifiers share the hold-action pill** (2026-10-30): one surface, so the two never
+  overlap. It stays up while modifiers are held, shows the last key pressed with them, and lingers
+  `VISIBLE_MS` after release. Mod-taps count once held a tapping term (Albert's pick: what QMK
+  decides by default; a quick home-row Ctrl+C released within the term is missed). Shift alone is
+  typing, so it never shows. Not verified on hardware.
 - **Overlay shows whenever a selected layer is active**, not only while a layer key is held.
 - **Overlay size is % of the real keyboard size** (same look on every monitor), default 80;
   half spacing is a 0–100 % value, not a toggle.
