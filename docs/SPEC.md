@@ -119,6 +119,11 @@ exists but can't be opened.
   - `CLASS_PATTERN`: regex that must `re.fullmatch` the class.
   - `STEAM_GAME`: empty `app_class` means any Steam game; an app id means that game (still
     matched and editable, no longer creatable from the UI).
+- **On-screen keys per rule** (additive, 1.8): `show_hold_actions` and `show_held_modifiers`
+  (missing = true). While the focused window matches an enabled rule with one off, that pill
+  (4.3.1, 4.3.2) doesn't show, e.g. no Ctrl in games via All Steam Games. Checked at key press
+  from the focused window, also while Smart Layers itself is paused. Switches in the rule dialog's
+  On-Screen Keys group.
 - First enabled matching rule wins; no match → fallback layer (`None` = don't change, the
   default). Set-layer is only sent when the target differs from the keyboard's layer; focus
   flips are debounced ~50 ms.
@@ -196,17 +201,40 @@ up by the application next to the overlay; settings in the Overlay page's Hold A
 - **Look:** an overlay key. A `KeyboardView` in overlay style shows one key labelled with the
   combo, one key unit tall, 1u wide for two characters and wider in quarter units for longer
   labels. It follows the overlay's Appearance settings (`OverlayController.pill_style`): key
-  size from Size, Opacity as its strength, Fade Duration (in, and three quarters of it out;
-  0 = instant), Monitor, and the anchor's top or bottom edge.
+  size from Size, Opacity as its strength, Monitor, and the anchor's top or bottom edge. Its
+  fade is its own (`hold-pill-fade-ms`, default 200: in, and three quarters of it out; 0 = instant).
 - **Surface:** one layer-shell surface like the overlay's (OVERLAY layer, keyboard mode NONE,
   exclusive zone -1, empty input region, never unmapped once shown; hidden it parks on
   BACKGROUND), namespace `vibemapp-hold-pill`, anchored to the overlay's top or bottom edge
   only, so it's centred. 10 % of the monitor height in from that edge, or 12 px past the
-  overlay while that is shown. Visible 900 ms; another hold replaces the text and restarts
-  the timer. Shown also while the Vibemapp window is active.
-- **Settings:** `hold-pill` (off by default) and `hold-pill-excluded` (`"layer:index"` ids; the
-  Keys expander lists every key with a hold action, all on by default), in the Overlay page's
-  Hold Actions group above Appearance. Needs gtk4-layer-shell.
+  overlay while that is shown. Visible while the key stays down, then `hold-pill-linger-ms`
+  (default 900, 0 = fade at once); another hold replaces the text. Shown also while the
+  Vibemapp window is active.
+- **Settings:** `hold-pill` (off by default), Stay Visible and Fade Duration, and
+  `hold-pill-excluded` (`"layer:index"` ids; the Keys expander lists every key with a hold action,
+  all on by default), in the Overlay page's Hold Actions group above Appearance. A Smart Layers
+  rule can turn it off (4.2). Needs gtk4-layer-shell.
+
+#### 4.3.2 Held-modifier pill
+While modifiers are held, the hold-action pill's surface shows them and the last key pressed with
+them: `Ctrl`, `Ctrl+Shift`, `Ctrl+Shift+T`. Code: `ui/held_modifiers.py` (pure tracking,
+`ModifierTracker`), fed by `HoldPillController` (`ui/hold_pill.py`) next to the hold detector.
+- **Which keys:** `KeyBinding.modifier` (a lone modifier keycode such as `KC_LCTL`, `KC_MEH`) counts
+  from its press. `KeyBinding.hold_modifier` (a mod-tap, e.g. hold A = Ctrl, or QMK's `LCTL_T`)
+  counts once it's still down one tapping term after its press (the key's, else the layout's, else
+  200 ms), as QMK decides without permissive hold. Keys pressed within that term are sent with the
+  modifier, so the last of them shows when it resolves; released in time, the mod-tap was a tap and
+  its tap label is the key. Layer-only keys (`MO`, `TG`, …) add nothing; a transparent key uses the
+  base layer's. Both fields are additive (1.8) and come from `oryx_api.modifier_names`.
+- **Text:** modifiers in Ctrl, Shift, Alt, AltGr, Super order, then the last key; a new key replaces
+  it. Shift alone never shows (typing capitals). Keys typed before the first modifier are forgotten.
+- **Look and timing:** the hold pill's surface and style (4.3.1), with its own fade
+  (`modifier-pill-fade-ms`, default 200). It stays while modifiers are held and fades
+  `modifier-pill-linger-ms` (default 900, 0 = at once) after the last one is released. A hold
+  action firing in between shows over it while its key is down, then the modifiers come back.
+- **Settings:** `modifier-pill` (off by default), Stay Visible and Fade Duration, in the Overlay
+  page's Held Modifiers group, below Hold Actions. A Smart Layers rule can turn it off (4.2).
+  Needs gtk4-layer-shell.
 
 ### 4.4 Heatmap
 Opt-in (`heatmap-recording`, default off). Stores only per-(local day, layer, key index)

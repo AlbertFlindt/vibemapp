@@ -45,6 +45,11 @@ _DEFAULTS: dict[str, object] = {
     "overlay-idle-seconds": 0,
     "hold-pill": False,
     "hold-pill-excluded": [],
+    "hold-pill-linger-ms": 900,
+    "hold-pill-fade-ms": 200,
+    "modifier-pill": False,
+    "modifier-pill-linger-ms": 900,
+    "modifier-pill-fade-ms": 200,
 }
 
 # List keys of type "as"; every other list is "ai".

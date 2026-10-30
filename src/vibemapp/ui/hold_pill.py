@@ -1,15 +1,19 @@
-"""Hold-action pill: a short on-screen "Ctrl+C" when a key's hold action fires.
+"""Hold-action pill: a short on-screen "Ctrl+C" when a key's hold action fires,
+and the held-modifier pill on the same surface: "Ctrl+Shift+T" while modifiers are held.
 
 It looks like a key of the overlay: a ``KeyboardView`` in overlay style
 (outline and label, light with a dark halo) showing one key, one key unit
 tall and as wide as its label needs. It follows the overlay's appearance
-settings (``PillStyle``): its key size, opacity, fade duration, monitor and
-the edge it's anchored to.
+settings (``PillStyle``): its key size, opacity, monitor and the edge it's
+anchored to. Each feature has its own fade and its own time to stay visible.
 
 ``HoldDetector`` (``ui/hold_actions.py``) decides that a hold fired;
-``HoldPillController`` feeds it the service's key events and flashes a
-``HoldPillSurface`` for ``VISIBLE_MS``. Off unless ``hold-pill`` is on; single
-keys can be left out with ``hold-pill-excluded``.
+``HoldPillController`` feeds it the service's key events and shows a
+``HoldPillSurface`` while the key stays down, then for ``hold-pill-linger-ms``.
+Off unless ``hold-pill`` is on; single keys can be left out with
+``hold-pill-excluded``. ``ModifierTracker`` (``ui/held_modifiers.py``) keeps the
+pill up while modifiers are held, then for ``modifier-pill-linger-ms``; off
+unless ``modifier-pill`` is on.
 
 Surface
     One gtk4-layer-shell surface, namespace ``vibemapp-hold-pill``, made the
@@ -28,7 +32,7 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import cairo
 import gi
@@ -37,8 +41,10 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, GLib, GObject, Gtk  # noqa: E402
 
-from ..models import KeyBinding, KeyGeometry, Layer  # noqa: E402
+from ..backend.smart_layers import match_rule  # noqa: E402
+from ..models import AppRule, KeyBinding, KeyGeometry, Layer  # noqa: E402
 from ..service import KeyboardService  # noqa: E402
+from .held_modifiers import HeldKey, ModifierTracker, held_key  # noqa: E402
 from .hold_actions import HoldAction, HoldDetector, hold_action, key_id  # noqa: E402
 from .keyboard_view import KeyboardView  # noqa: E402
 
@@ -47,7 +53,10 @@ log = logging.getLogger(__name__)
 NAMESPACE = "vibemapp-hold-pill"
 ENABLED_KEY = "hold-pill"
 EXCLUDED_KEY = "hold-pill-excluded"
-VISIBLE_MS = 900
+MODIFIER_KEY = "modifier-pill"
+# Per feature: (time it stays after release, fade duration) settings, in ms.
+HOLD_TIMING_KEYS = ("hold-pill-linger-ms", "hold-pill-fade-ms")
+MODIFIER_TIMING_KEYS = ("modifier-pill-linger-ms", "modifier-pill-fade-ms")
 EDGE_FRACTION = 0.1
 GAP_PX = 12
 # Room around the key for the overlay's halo, which is drawn outside it.
@@ -63,8 +72,14 @@ class PillStyle:
     edge: str = "bottom"            # "top" or "bottom", the overlay's anchor edge
     unit: float = DEFAULT_UNIT_PX   # logical px per key unit (overlay Size)
     opacity: float = 0.6            # overlay Opacity, 0..1
-    fade_in_ms: int = 200           # overlay Fade Duration
+    fade_in_ms: int = 200           # the feature's Fade Duration
     fade_out_ms: int = 150
+
+
+def fade_pair(fade_ms: int) -> tuple[int, int]:
+    """(fade-in, fade-out): out takes three quarters of in, as the overlay's."""
+    fade_in = max(0, fade_ms)
+    return fade_in, (fade_in * 3 + 2) // 4
 
 
 # (monitor, its logical height) to show on; the px to keep free at the edge
@@ -147,10 +162,11 @@ class HoldPillSurface(Gtk.Window):
         self.view.set_fixed_size(round(width * unit), round(unit))
 
     def flash(self, text: str, unit: float = DEFAULT_UNIT_PX) -> None:
+        """Show ``text`` until ``release()``."""
         self.set_key(text, unit)
         if self._hide_id:
             GLib.source_remove(self._hide_id)
-        self._hide_id = GLib.timeout_add(VISIBLE_MS, self._on_hide_timeout)
+            self._hide_id = 0
         if self._showing:
             return
         self._showing = True
@@ -158,6 +174,18 @@ class HoldPillSurface(Gtk.Window):
         if not self.get_mapped():
             self.present()
         self._animate(1.0, self._fade_in_ms)
+
+    def release(self, linger_ms: int) -> None:
+        """Fade out after ``linger_ms`` (0: now), restarting a hide on its way."""
+        if self._hide_id:
+            GLib.source_remove(self._hide_id)
+            self._hide_id = 0
+        if not self._showing:
+            return
+        if linger_ms <= 0:
+            self._on_hide_timeout()
+        else:
+            self._hide_id = GLib.timeout_add(linger_ms, self._on_hide_timeout)
 
     def hide_now(self) -> None:
         if self._hide_id:
@@ -227,17 +255,21 @@ class HoldPillController(GObject.Object):
         self._style = style
         self._now = now or (lambda: time.monotonic() * 1000)
         self._surface: HoldPillSurface | None = None
-        self.detector = HoldDetector(self._lookup, self._on_fired,
-                                     lambda ms, cb: GLib.timeout_add(ms, self._once(cb)),
+        self._hold_index: int | None = None     # key whose hold action is shown
+        self._shown_timing = HOLD_TIMING_KEYS
+        self.detector = HoldDetector(self._lookup, self._on_fired, self._schedule,
                                      GLib.source_remove)
+        self.modifiers = ModifierTracker(self._lookup_held, self._on_modifiers, self._schedule,
+                                         GLib.source_remove)
         self._handlers: list[tuple[object, int]] = []
         if layer_shell is None:
             return
         self._handlers = [
             (service, service.connect("key-event", self._on_key_event)),
             (service, service.connect("disconnected", lambda *_a: self._reset())),
-            (service, service.connect("layout-loaded", lambda *_a: self.detector.reset())),
+            (service, service.connect("layout-loaded", lambda *_a: self._forget_keys())),
             (settings, settings.connect(f"changed::{ENABLED_KEY}", lambda *_a: self._reset())),
+            (settings, settings.connect(f"changed::{MODIFIER_KEY}", lambda *_a: self._reset())),
         ]
 
     @property
@@ -252,29 +284,50 @@ class HoldPillController(GObject.Object):
         for obj, handler in self._handlers:
             obj.disconnect(handler)
         self._handlers = []
-        self.detector.reset()
+        self._forget_keys()
         if self._surface is not None:
             self._surface.hide_now()
             self._surface.destroy()
             self._surface = None
 
     @staticmethod
-    def _once(cb: Callable[[], None]) -> Callable[[], bool]:
+    def _schedule(ms: int, cb: Callable[[], None]) -> int:
         def fire() -> bool:
             cb()
             return GLib.SOURCE_REMOVE
-        return fire
+        return GLib.timeout_add(ms, fire)
+
+    def _forget_keys(self) -> None:
+        self.detector.reset()
+        self.modifiers.reset()
+        self._hold_index = None
 
     def _reset(self) -> None:
-        self.detector.reset()
+        self._forget_keys()
         if self._surface is not None and self._surface.showing:
             self._surface.hide_now()
 
     def _on_key_event(self, _service: object, index: int, pressed: bool) -> None:
         self.detector.key(index, pressed, self._now())
+        self.modifiers.key(index, pressed)
+        if not pressed and index == self._hold_index:
+            self._hold_index = None
+            self._after_release()
+
+    def _focused_rule(self) -> AppRule | None:
+        """The Smart Layers rule matching the focused window: its switches can
+        turn the pills off there (e.g. in games)."""
+        window = self.service.get_focused_window()
+        if window is None:
+            return None
+        return match_rule(self.service.get_rules(), window.app_class, window.title,
+                          window.steam_app_id)
 
     def _lookup(self, index: int) -> HoldAction | None:
         if not self.settings.get_boolean(ENABLED_KEY):
+            return None
+        rule = self._focused_rule()
+        if rule is not None and not rule.show_hold_actions:
             return None
         action = hold_action(self.service.get_layout(), self.service.get_active_layer(), index)
         if action is None:
@@ -282,21 +335,48 @@ class HoldPillController(GObject.Object):
         excluded = set(self.settings.get_value(EXCLUDED_KEY).unpack())
         return None if key_id(action.layer, action.index) in excluded else action
 
-    def _on_fired(self, action: HoldAction) -> None:
-        self.show(action.combo)
+    def _lookup_held(self, index: int) -> HeldKey | None:
+        if not self.settings.get_boolean(MODIFIER_KEY):
+            return None
+        rule = self._focused_rule()
+        if rule is not None and not rule.show_held_modifiers:
+            return None
+        return held_key(self.service.get_layout(), self.service.get_active_layer(), index)
 
-    def show(self, text: str) -> None:
-        """Flash ``text`` now (also used by the screenshot tool)."""
+    def _on_fired(self, action: HoldAction) -> None:
+        self._hold_index = action.index
+        self.show(action.combo, HOLD_TIMING_KEYS)
+
+    def _on_modifiers(self, text: str | None) -> None:
+        if text:
+            self.show(text, MODIFIER_TIMING_KEYS)
+        elif self._hold_index is None:
+            self._after_release()
+
+    def _after_release(self) -> None:
+        """A shown key was let go: back to the held modifiers, else fade out."""
+        if self.modifiers.text:
+            self.show(self.modifiers.text, MODIFIER_TIMING_KEYS)
+        elif self._surface is not None:
+            linger_key = self._shown_timing[0]
+            self._surface.release(self.settings.get_int(linger_key))
+
+    def show(self, text: str, timing: tuple[str, str] = HOLD_TIMING_KEYS) -> None:
+        """Show ``text`` until a release (also used by the screenshot tool), with
+        the fade of the feature whose ``timing`` settings keys are given."""
         if self._ls is None:
             return
         if self._surface is None:
             self._surface = HoldPillSurface(self._ls)
+        self._shown_timing = timing
         monitor, height = self._monitor()
-        style = self._style()
+        fade_in, fade_out = fade_pair(self.settings.get_int(timing[1]))
+        style = replace(self._style(), fade_in_ms=fade_in, fade_out_ms=fade_out)
         self._surface.set_style(style)
         self._surface.place(monitor, style.edge, edge_margin(height, self._clearance()))
         self._surface.flash(text, style.unit)
 
 
-__all__ = ["ENABLED_KEY", "EXCLUDED_KEY", "HoldPillController", "HoldPillSurface",
-           "NAMESPACE", "PillStyle", "edge_margin", "key_width_units"]
+__all__ = ["ENABLED_KEY", "EXCLUDED_KEY", "HOLD_TIMING_KEYS", "MODIFIER_KEY",
+           "MODIFIER_TIMING_KEYS", "HoldPillController", "HoldPillSurface", "NAMESPACE",
+           "PillStyle", "edge_margin", "fade_pair", "key_width_units"]

@@ -101,6 +101,14 @@ _MOCK_CODES: dict[str, str] = {
 }
 
 
+# Mock labels that are lone modifiers (``KeyBinding.modifier``/``hold_modifier``).
+_MOCK_MODIFIERS = frozenset({"Ctrl", "Shift", "Alt", "Super"})
+
+
+def _mock_modifier(label: str) -> str:
+    return label if label in _MOCK_MODIFIERS else ""
+
+
 def _mock_code(label: str) -> str | None:
     if not label:
         return "KC_NO"
@@ -131,11 +139,14 @@ def _layer_keys(rows: list[list[object]], thumbs: list[object],
                                           **entry}))
         elif isinstance(entry, tuple):
             out.append(KeyBinding(idx, tap_label=entry[0], hold_label=entry[1],
-                                  color=color, tap_code=_mock_code(entry[0])))
+                                  color=color, tap_code=_mock_code(entry[0]),
+                                  modifier=_mock_modifier(entry[0]),
+                                  hold_modifier=_mock_modifier(entry[1])))
         else:
             out.append(KeyBinding(idx, tap_label=str(entry),
                                   color=color if entry else None,
-                                  tap_code=_mock_code(str(entry))))
+                                  tap_code=_mock_code(str(entry)),
+                                  modifier=_mock_modifier(str(entry))))
 
     for row in rows:
         for entry in row:

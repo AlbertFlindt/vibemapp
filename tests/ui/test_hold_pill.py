@@ -46,7 +46,10 @@ class ControllerTests(unittest.TestCase):
         self.hold_pill = hold_pill
         self._flash = hold_pill.HoldPillSurface.flash
         self.flashes: list[str] = []
+        self.releases: list[int] = []
+        self._release = hold_pill.HoldPillSurface.release
         hold_pill.HoldPillSurface.flash = lambda _s, text, unit: self.flashes.append(text)
+        hold_pill.HoldPillSurface.release = lambda _s, ms: self.releases.append(ms)
         self.svc = MockKeyboardService(speed=50, autostart=False)
         self.settings = MemorySettings()
         self.ls = FakeLayerShell()
@@ -65,6 +68,7 @@ class ControllerTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.ctl.destroy()
         self.hold_pill.HoldPillSurface.flash = self._flash
+        self.hold_pill.HoldPillSurface.release = self._release
         self.svc.shutdown()
 
     @staticmethod
@@ -126,7 +130,73 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual((state["anchor"]["top"], state["anchor"]["bottom"]), (True, False))
         self.assertEqual((state["margin"]["top"], state["margin"]["bottom"]), (100, 0))
         self.assertEqual(surface.view._rest_opacity, 0.3)
+        # The fade is the feature's own, not the overlay's.
+        self.assertEqual((surface._fade_in_ms, surface._fade_out_ms), (200, 150))
+
+    def test_held_modifier_stays_until_released(self) -> None:
+        layer = self.svc.get_layout().layers[0]
+        a_key = next(k.index for k in layer.keys if k.hold_modifier == "Ctrl")
+        self.svc.simulate_key(a_key, True)
+        self.wait(300)
+        self.assertEqual(self.flashes, [])           # off by default
+        self.svc.simulate_key(a_key, False)
+        self.settings.set_boolean("modifier-pill", True)
+        self.settings.set_int("modifier-pill-linger-ms", 0)
+        self.svc.simulate_key(a_key, True)
+        self.wait(300)                               # past the mod-tap's term
+        self.svc.simulate_key(self.c_key, True)
+        self.svc.simulate_key(self.c_key, False)
+        self.assertTrue(spin(lambda: len(self.flashes) == 2, timeout=2))
+        self.assertEqual(self.flashes, ["Ctrl", "Ctrl+C"])
+        self.assertEqual(self.releases, [])          # still held
+        self.svc.simulate_key(a_key, False)
+        self.assertTrue(spin(lambda: self.releases == [0], timeout=2))
+
+    def test_hold_action_stays_while_held_with_its_own_timing(self) -> None:
+        self.settings.set_boolean("hold-pill", True)
+        self.settings.set_int("hold-pill-linger-ms", 400)
+        self.settings.set_int("hold-pill-fade-ms", 0)
+        self.svc.simulate_key(self.c_key, True)
+        self.wait(300)
+        self.assertEqual((self.flashes, self.releases), (["Ctrl+C"], []))
+        surface = self.ctl.surface
         self.assertEqual((surface._fade_in_ms, surface._fade_out_ms), (0, 0))
+        self.svc.simulate_key(self.c_key, False)
+        self.assertTrue(spin(lambda: self.releases == [400], timeout=2))
+
+    def test_smart_layers_rule_turns_pills_off(self) -> None:
+        from vibemapp.models import AppRule
+        self.settings.set_boolean("hold-pill", True)
+        self.settings.set_boolean("modifier-pill", True)
+        self.svc.simulate_focus("steam_app_570", "Game")
+        window = self.svc.get_focused_window()
+        rule = AppRule(window.app_class, "Game", 0, show_hold_actions=False,
+                       show_held_modifiers=False)
+        self.svc.set_rules([rule])
+        self.hold_c()
+        layer = self.svc.get_layout().layers[0]
+        a_key = next(k.index for k in layer.keys if k.hold_modifier == "Ctrl")
+        self.svc.simulate_key(a_key, True)
+        self.wait(300)
+        self.svc.simulate_key(a_key, False)
+        self.assertEqual(self.flashes, [])
+        self.svc.set_rules([AppRule(window.app_class, "Game", 0, show_held_modifiers=False)])
+        self.hold_c()
+        self.assertEqual(self.flashes, ["Ctrl+C"])
+
+    def test_release_lingers_then_hides(self) -> None:
+        from vibemapp.ui.hold_pill import HoldPillSurface
+        surface = HoldPillSurface(self.ls)
+        surface._showing = True                      # as after flash()
+        self._release(surface, 500)
+        hide_id = surface._hide_id
+        self.assertNotEqual(hide_id, 0)
+        self._release(surface, 500)                  # restarts the wait
+        self.assertNotEqual(surface._hide_id, hide_id)
+        self._release(surface, 0)                    # at once
+        self.assertEqual((surface._hide_id, surface.showing), (0, False))
+        surface.hide_now()
+        surface.destroy()
 
     def test_no_layer_shell_does_nothing(self) -> None:
         ctl = self.hold_pill.HoldPillController(self.svc, self.settings, None,

@@ -319,6 +319,26 @@
                     </child>
                     <child>
                       <object class="AdwPreferencesGroup">
+                        <property name="title" translatable="yes">On-Screen Keys</property>
+                        <property name="description" translatable="yes">While a matching window is focused. Needs Show Hold Actions or Show Held Modifiers on the Overlay page.</property>
+                        <child>
+                          <object class="AdwSwitchRow" id="hold_actions_row">
+                            <property name="title" translatable="yes">Show _Hold Actions</property>
+                            <property name="use-underline">True</property>
+                            <property name="active">True</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwSwitchRow" id="held_modifiers_row">
+                            <property name="title" translatable="yes">Show Held _Modifiers</property>
+                            <property name="use-underline">True</property>
+                            <property name="active">True</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="AdwPreferencesGroup">
                         <property name="title" translatable="yes">Window Title</property>
                         <property name="description" translatable="yes">Optional. A regular expression the window title must contain. Leave empty to ignore the title.</property>
                         <child>

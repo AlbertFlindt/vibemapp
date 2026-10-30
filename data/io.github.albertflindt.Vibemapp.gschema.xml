@@ -124,6 +124,35 @@
       <summary>Hold actions not shown</summary>
       <description>Keys whose hold action is never shown, as "layer:key" with the layer position and the Oryx key index.</description>
     </key>
+    <key name="hold-pill-linger-ms" type="i">
+      <range min="0" max="5000"/>
+      <default>900</default>
+      <summary>Hold action display time</summary>
+      <description>How long a hold action stays on screen after its key is released, in milliseconds, before it fades out. 0 hides it at once.</description>
+    </key>
+    <key name="hold-pill-fade-ms" type="i">
+      <range min="0" max="1000"/>
+      <default>200</default>
+      <summary>Hold action fade duration</summary>
+      <description>How long a hold action takes to fade in, in milliseconds. Fading out takes three quarters of this. 0 shows and hides it at once.</description>
+    </key>
+    <key name="modifier-pill" type="b">
+      <default>false</default>
+      <summary>Show held modifiers</summary>
+      <description>While modifiers such as Ctrl are held, show them on screen with the last key pressed with them, such as Ctrl+Shift+T. Shift alone isn't shown. Needs gtk4-layer-shell, like the overlay.</description>
+    </key>
+    <key name="modifier-pill-linger-ms" type="i">
+      <range min="0" max="5000"/>
+      <default>900</default>
+      <summary>Held modifier display time</summary>
+      <description>How long held modifiers stay on screen after the last one is released, in milliseconds, before they fade out. 0 hides them at once.</description>
+    </key>
+    <key name="modifier-pill-fade-ms" type="i">
+      <range min="0" max="1000"/>
+      <default>200</default>
+      <summary>Held modifier fade duration</summary>
+      <description>How long held modifiers take to fade in, in milliseconds. Fading out takes three quarters of this. 0 shows and hides them at once.</description>
+    </key>
     <key name="window-width" type="i">
       <default>960</default>
       <summary>Window width</summary>

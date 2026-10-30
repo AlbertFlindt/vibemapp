@@ -36,6 +36,7 @@ SHORTCUT_SNIPPET = 'hl.bind("SUPER + O", hl.dsp.exec_cmd("vibemapp --toggle-over
 INSTALL_COMMAND = "sudo pacman -S gtk4-layer-shell"
 HOLD_PILL_KEY = "hold-pill"
 HOLD_EXCLUDED_KEY = "hold-pill-excluded"
+MODIFIER_PILL_KEY = "modifier-pill"
 
 
 # --- pure helpers (unit tested) -------------------------------------------
@@ -176,6 +177,11 @@ class OverlayPage(Adw.Bin):
     fade_row: Adw.SpinRow = Gtk.Template.Child()
     hold_pill_row: Adw.SwitchRow = Gtk.Template.Child()
     hold_keys_row: Adw.ExpanderRow = Gtk.Template.Child()
+    modifier_pill_row: Adw.SwitchRow = Gtk.Template.Child()
+    hold_linger_row: Adw.SpinRow = Gtk.Template.Child()
+    hold_fade_row: Adw.SpinRow = Gtk.Template.Child()
+    modifier_linger_row: Adw.SpinRow = Gtk.Template.Child()
+    modifier_fade_row: Adw.SpinRow = Gtk.Template.Child()
     snippet_label: Gtk.Label = Gtk.Template.Child()
 
     def __init__(self) -> None:
@@ -223,8 +229,13 @@ class OverlayPage(Adw.Bin):
                              ("overlay-half-spacing", self._sync_spins),
                              ("overlay-opacity", self._sync_spins),
                              ("overlay-fade-ms", self._sync_spins),
+                             ("hold-pill-linger-ms", self._sync_spins),
+                             ("hold-pill-fade-ms", self._sync_spins),
+                             ("modifier-pill-linger-ms", self._sync_spins),
+                             ("modifier-pill-fade-ms", self._sync_spins),
                              (HOLD_PILL_KEY, self._sync_hold),
-                             (HOLD_EXCLUDED_KEY, self._sync_hold)):
+                             (HOLD_EXCLUDED_KEY, self._sync_hold),
+                             (MODIFIER_PILL_KEY, self._sync_hold)):
             connect((settings, settings.connect(f"changed::{key}",
                                                 lambda *_a, cb=refresh: cb())))
         for obj, signal in ((service, "layout-loaded"), (service, "disconnected"),
@@ -243,6 +254,7 @@ class OverlayPage(Adw.Bin):
             row.connect("notify::value", self._on_spin_value, key)
         self.preview_row.connect("notify::active", self._on_preview_active)
         self.hold_pill_row.connect("notify::active", self._on_hold_pill_active)
+        self.modifier_pill_row.connect("notify::active", self._on_modifier_pill_active)
 
         self._sync_mode()
         self._sync_layers()
@@ -315,6 +327,7 @@ class OverlayPage(Adw.Bin):
 
         def apply() -> None:
             self.hold_pill_row.set_active(self.settings.get_boolean(HOLD_PILL_KEY))
+            self.modifier_pill_row.set_active(self.settings.get_boolean(MODIFIER_PILL_KEY))
             for key, row in self._hold_rows.items():
                 row.set_active(key not in excluded)
 
@@ -399,7 +412,11 @@ class OverlayPage(Adw.Bin):
                 (self.size_row, "overlay-size"),
                 (self.half_spacing_row, "overlay-half-spacing"),
                 (self.opacity_row, "overlay-opacity"),
-                (self.fade_row, "overlay-fade-ms"))
+                (self.fade_row, "overlay-fade-ms"),
+                (self.hold_linger_row, "hold-pill-linger-ms"),
+                (self.hold_fade_row, "hold-pill-fade-ms"),
+                (self.modifier_linger_row, "modifier-pill-linger-ms"),
+                (self.modifier_fade_row, "modifier-pill-fade-ms"))
 
     def _sync_spins(self) -> None:
         def apply() -> None:
@@ -445,6 +462,11 @@ class OverlayPage(Adw.Bin):
     def _on_hold_pill_active(self, row: Adw.SwitchRow, _pspec: object) -> None:
         if not self._syncing and row.get_active() != self.settings.get_boolean(HOLD_PILL_KEY):
             self.settings.set_boolean(HOLD_PILL_KEY, row.get_active())
+
+    def _on_modifier_pill_active(self, row: Adw.SwitchRow, _pspec: object) -> None:
+        if (not self._syncing
+                and row.get_active() != self.settings.get_boolean(MODIFIER_PILL_KEY)):
+            self.settings.set_boolean(MODIFIER_PILL_KEY, row.get_active())
 
     def _on_hold_key_active(self, row: Adw.SwitchRow, _pspec: object, key: str) -> None:
         if not self._syncing:

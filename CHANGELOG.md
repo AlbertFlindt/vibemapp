@@ -2,6 +2,23 @@
 
 All notable changes to Vibemapp. Each version is a tag and a GitHub release.
 
+## 1.8.0 (2026-10-30)
+
+### Added
+- **Held modifiers on screen** (Overlay page, Held Modifiers group, off by default): while you
+  hold Ctrl, Alt, AltGr or Super, a key like the hold-action one shows them, then the key you
+  press with them, e.g. `Ctrl+Shift+T`. Each new key replaces the last, and it fades out shortly
+  after you let go. Mod-taps such as hold A = Ctrl count once held one tapping term, as the
+  keyboard decides by default. Shift alone isn't shown, since that's typing capitals.
+- **On-screen keys per Smart Layers rule:** each rule has Show Hold Actions and Show Held
+  Modifiers switches, so e.g. the All Steam Games rule can keep both off while gaming.
+- Hold actions and held modifiers each have their own Stay Visible and Fade Duration settings.
+  Set both to 0 to make them disappear the moment you let go.
+
+### Changed
+- A hold action now stays on screen while its key is held, then for Stay Visible (default
+  900 ms), instead of a fixed 900 ms. It no longer uses the overlay's Fade Duration.
+
 ## 1.7.0 (2026-10-30)
 
 ### Added

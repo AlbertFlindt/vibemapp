@@ -116,6 +116,20 @@ class HoldActionTests(unittest.TestCase):
                                                         "modifiers": self.CTRL}))
         self.assertEqual(b.hold_label, "Ctrl")
 
+    def test_modifiers(self) -> None:
+        b = key_binding_from_json(0, _key("KC_LCTL"))
+        self.assertEqual((b.modifier, b.hold_modifier), ("Ctrl", ""))
+        b = key_binding_from_json(0, _key("KC_LSFT", modifiers=self.CTRL))
+        self.assertEqual(b.modifier, "Ctrl+Shift")
+        # A home-row mod: hold A = Ctrl.
+        b = key_binding_from_json(0, _key("KC_A", hold={"code": "KC_LCTL"}))
+        self.assertEqual((b.modifier, b.hold_modifier, b.hold_combo), ("", "Ctrl", ""))
+        for code, names in (("KC_RALT", "AltGr"), ("KC_RGUI", "Super"), ("MEH_T", "Ctrl+Shift+Alt"),
+                            ("ALL_T", "Ctrl+Shift+Alt+Super"), ("SGUI_T", "Shift+Super")):
+            self.assertEqual(oryx_api.modifier_names({"code": code}), names, code)
+        for action in (None, {"code": "KC_A"}, {"code": "MO", "layer": 1}, {"code": None}):
+            self.assertEqual(oryx_api.modifier_names(action), "", action)
+
     def test_tapping_terms(self) -> None:
         b = key_binding_from_json(0, _key("KC_A", hold={"code": "KC_B"}, tappingTerm=250))
         self.assertEqual(b.tapping_term_ms, 250)
