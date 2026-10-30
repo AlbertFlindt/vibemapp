@@ -228,7 +228,7 @@ pause and reset (confirmation dialog), and an App filter (hidden while no app ha
   under 1%), reach cost (distance from the finger's home key / finger strength) and layer-switch
   rate. Each part becomes a penalty; `score` = 100 − Σ penalties, clamped to 0..100. Contract:
   `get_ergo_report(period, app)` → `ErgoReport` (None without a finger map).
-- The mock's own Voyager geometry is row-interleaved, so it maps through `MOCK_TO_ORYX` before scoring. Report
+- The mock's Voyager geometry is the real one (`geometries.py`) in a row-interleaved key order, so it maps through `MOCK_TO_ORYX` before scoring. Report
   keys (`worst_same_finger`, which carries the `finger`) use the service's own indices, so the mock maps
   them back.
 - **Insights page** (sidebar, Ctrl+5): Finger Load only (since 1.5.0), with its own Period toggle and

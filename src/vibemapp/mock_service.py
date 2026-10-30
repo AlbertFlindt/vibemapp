@@ -52,30 +52,13 @@ def _env_flag(name: str, default: bool) -> bool:
 
 # --- simulated Voyager --------------------------------------------------------
 
-# Column stagger of the left half, outer pinky column first (key units).
-_STAGGER = (0.45, 0.45, 0.2, 0.0, 0.2, 0.3)
-_HALF_GAP = 2.4
-_ROWS = 4
-_COLS = 6
-
-
 def voyager_geometry() -> tuple[KeyGeometry, ...]:
-    """52 keys: rows interleave left (6) and right (6) halves, thumbs last."""
-    keys: list[KeyGeometry] = []
-    right_x0 = _COLS + _HALF_GAP
-    for row in range(_ROWS):
-        for col in range(_COLS):
-            keys.append(KeyGeometry(len(keys), float(col), row + _STAGGER[col]))
-        for col in range(_COLS):
-            keys.append(KeyGeometry(len(keys), right_x0 + col,
-                                    row + _STAGGER[_COLS - 1 - col]))
-    total_w = right_x0 + _COLS
-    thumbs_left = ((4.85, 4.62, 14.0), (6.0, 4.95, 28.0))
-    for x, y, rot in thumbs_left:
-        keys.append(KeyGeometry(len(keys), x, y, rotation=rot))
-    for x, y, rot in reversed(thumbs_left):
-        keys.append(KeyGeometry(len(keys), total_w - x - 1.0, y, rotation=-rot))
-    return tuple(keys)
+    """52 keys: rows interleave left (6) and right (6) halves, thumbs last.
+
+    The real Voyager geometry (``geometries``), put in the mock's key order, so
+    mock screenshots look like the app with a real keyboard."""
+    oryx = geometries.geometry_for(KeyboardModel.VOYAGER)
+    return tuple(replace(oryx[MOCK_TO_ORYX[i]], index=i) for i in range(len(oryx)))
 
 
 def _mock_to_oryx_index(i: int) -> int:

@@ -108,9 +108,9 @@ class OverlayControllerTests(unittest.TestCase):
         self.assertEqual(state["anchor"], {"top": False, "bottom": True, "left": True,
                                            "right": False})
         width = self.ctl.surfaces[0].view._fixed_size[0]
-        # 80 % of the mock board's real width (14.4 u × 19.05 mm) at 4.3 px/mm.
-        self.assertAlmostEqual(width, 0.8 * 14.4 * 19.05 * 4.3, delta=2)
-        self.assertEqual(state["margin"]["left"], (3440 - width) // 2)
+        # 80 % of the Voyager's real width (16 u × 19.05 mm) at 4.3 px/mm.
+        self.assertAlmostEqual(width, 0.8 * 16 * 19.05 * 4.3, delta=2)
+        self.assertAlmostEqual(state["margin"]["left"], (3440 - width) / 2, delta=1)
 
     def test_preview_without_keyboard(self) -> None:
         self.ctl.props.preview = True
