@@ -4,12 +4,12 @@ GNOME/libadwaita clone of ZSA Keymapp for Arch Linux (Python + PyGObject). Headl
 feature: **Smart Layers** — switch the ZSA keyboard's layer when the focused app
 changes (Hyprland only). Also: live layout view, click-through layout overlay
 (gtk4-layer-shell), opt-in key heatmap, tray icon.
-Handoff state, decisions, dead ends: @PROGRESS.md.
+Handoff state, decisions, dead ends: @PROGRESS.md. Milestones: `ROADMAP.md` (not loaded).
 How it works, by feature: `docs/SPEC.md` (not loaded; read the feature's section before changing it,
 and update it with the change). Release history: `CHANGELOG.md` (not loaded).
 
 ## Install (Arch)
-- `cd packaging/arch && makepkg -si` (PKGBUILD builds the `v$pkgver` tag from GitHub, which CI creates on merge;
+- `cd packaging/arch && makepkg -si` (PKGBUILD builds the latest stable tag `v$pkgver` from GitHub;
   use `./run-dev.sh` for unreleased changes. Replaces the old
   `keymappforlinux` package), then replug the keyboard (udev `uaccess` rules).
 
@@ -62,6 +62,14 @@ and update it with the change). Release history: `CHANGELOG.md` (not loaded).
   user-visible strings in `_()` (gettext domain `vibemapp`).
 - The PKGBUILD lives in `packaging/arch/` on purpose. `makepkg -c/-C` runs `rm -rf ./src`,
   which would wipe our source tree if the PKGBUILD sat at the repo root.
-- **Every merge that changes the app is a release.** Before a PR is merged, bump the version in it
-  with the `release` skill; on merge, CI (`.github/workflows/release.yml`) tags and publishes it.
-  CI (`ci.yml`) runs `check.sh` on Arch and fails PRs that change the app without a bump. Repo: https://github.com/AlbertFlindt/vibemapp
+- **Every merge that changes the app is a pre-release; stable releases only when asked.** Set the
+  version and add the CHANGELOG entry in the PR with the `release` skill; on merge, CI
+  (`.github/workflows/release.yml`) publishes `vX.Y.Z-pre.N`. Major versions are `ROADMAP.md`
+  milestones. Repo: https://github.com/AlbertFlindt/vibemapp
+
+## Docs
+`check.sh` holds `CLAUDE.md`, `PROGRESS.md` and `ROADMAP.md` to a line budget (`build-aux/docs_check.py`).
+- `PROGRESS.md` is the present: state, what isn't verified, the next 1–3 steps, decisions still worth
+  defending, dead ends. Delete an entry the moment it's no longer true; history is git and `CHANGELOG.md`.
+- Write the decision and its reason, never who made it or who asked for it.
+- One fact lives in one file. Point to it from the others instead of repeating it.

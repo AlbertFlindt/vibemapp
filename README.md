@@ -150,6 +150,7 @@ installed one first (tray → Quit) so the two don't both switch layers, or use 
 ## Changes
 
 See [CHANGELOG.md](CHANGELOG.md) and the [releases](https://github.com/AlbertFlindt/vibemapp/releases).
+What's planned: [ROADMAP.md](ROADMAP.md).
 
 ## License
 
