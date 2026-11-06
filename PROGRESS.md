@@ -30,48 +30,34 @@ How things work: `docs/SPEC.md`.
   the cached layout JSON after changing it in Oryx. Per-key terms are verified to exist.
 
 ## Next steps
-1. **Translations.** Add `po/` (`POTFILES`, `LINGUAS`) and meson `i18n.gettext('vibemapp')`.
-   Strings are already in `_()`.
-
-## Workflow
-- Agree on the design before coding. UX and backend work are split by file; every change
-  is reviewed, passes `./check.sh` and comes with screenshots.
-- Releases: every PR that changes the app bumps the version (the `release` skill); merging
-  it tags and publishes the release via GitHub Actions.
+The immediate ones. The milestones after them are in `ROADMAP.md`.
+1. Check the Voyager items under "Not verified" above.
+2. Publish on the AUR.
+3. Ask for feedback (where and how: `ROADMAP.md`, 2.0).
 
 ## Decisions
 - **Vibemapp owns the overlay's behaviour, not the compositor:** e.g. the fade is our own
   animation with a setting, rather than Hyprland's layer animations.
-- **Insights is Finger Load only** (2026-10-29): the owner wasn't sold on the score, same-finger pairs,
-  reach, layer switches and Alternative Layouts. Their backend stays (additive contract); pair recording is off.
+- **Insights is Finger Load only** (2026-10-29): the score, same-finger pairs, reach, layer
+  switches and Alternative Layouts didn't earn their place. Their backend stays (additive contract); pair recording is off.
 - **Overlay requires gtk4-layer-shell, no fallback window:** the app stays lean with
   optional packages, as long as the UI says what to install.
 - **Overlay settings live on their own sidebar page**, not in Preferences: it has many tweaks.
-- **Hold actions show as an on-screen pill, not a desktop notification** (2026-10-29): Albert
-  holds C for Ctrl+C every few seconds; a notification would pile up and may play a sound.
+- **Hold actions show as an on-screen pill, not a desktop notification** (2026-10-29): holding
+  C for Ctrl+C happens every few seconds; a notification would pile up and may play a sound.
   The firmware never says tap or hold, so it's inferred from tap-dance timing (SPEC 4.3.1).
   Its settings sit on the Overlay page (same layer-shell requirement). Not verified on hardware.
 - **Held modifiers share the hold-action pill** (2026-10-30): one surface, so the two never
   overlap. It stays up while modifiers are held, shows the last key pressed with them, and lingers
-  `VISIBLE_MS` after release. Mod-taps count once held a tapping term (Albert's pick: what QMK
+  `VISIBLE_MS` after release. Mod-taps count once held a tapping term (what QMK
   decides by default; a quick home-row Ctrl+C released within the term is missed). Shift alone is
   typing, so it never shows. Not verified on hardware.
-- **Pills: own timing, off per Smart Layers rule** (2026-10-30, Albert): each pill has its own
+- **Pills: own timing, off per Smart Layers rule** (2026-10-30): each pill has its own
   Stay Visible (after release, 0 = at once) and Fade Duration, not the overlay's fade. Per-rule
   switches (not per layer) turn them off, e.g. Ctrl isn't wanted while gaming.
 - **Overlay shows whenever a selected layer is active**, not only while a layer key is held.
 - **Overlay size is % of the real keyboard size** (same look on every monitor), default 80;
   half spacing is a 0–100 % value, not a toggle.
-- **Screenshots come from the mock service** (`data/screenshots/`, `tests/ui/screenshot.py` and
-  `tray_menu_shot.py`; heatmap with `VIBEMAPP_MOCK_HEATMAP_SEED=1 --record --size 1000x1000`; insights the same with
-  `--page insights --size 1000x700`;
-  overlay page with `--page overlay --overlay-layers 1,2 --size 1000x1300`; tray with `--window-visible --overlay`;
-  `overlay-view.png` is `tests/ui/overlay_live.py --layer 1 --press 3,15` (the real layer-shell overlay)
-  over GNOME Text Editor and foot, tiled in sway at 1920x1080 on the `adwaita-d` wallpaper, taken with
-  `grim`): no personal data. The mock uses the real Voyager geometry (`geometries.py`), so thumbs match the app. Dark style, blue accent, Adwaita Sans, on a Wayland
-  compositor with layer-shell (else the Overlay page shows "Overlay Unavailable"). Cloud sessions
-  (Ubuntu, old libadwaita) rendered them in an Ubuntu 26.04 debootstrap chroot under headless sway
-  with `ADW_DEBUG_COLOR_SCHEME=prefer-dark ADW_DEBUG_ACCENT_COLOR=blue` (Ubuntu's default accent is orange).
 - **PKGBUILD builds the GitHub tag, not the working tree:** reproducible packages. Tag and push
   before `makepkg`; use `./run-dev.sh` for untagged work.
 - **Distribution, if any, is the AUR** (2026-10-18): no AppImage or Flatpak (GTK4 bundling; the sandbox

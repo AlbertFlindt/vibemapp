@@ -1,8 +1,8 @@
 name: Release
 
-# On every push to main: if meson.build names a version that has no tag yet, tag it and
-# publish the GitHub release with that version's CHANGELOG section. The PKGBUILD builds the
-# tag, so `makepkg -si` picks the release up right after the merge.
+# On every push to main. A dated CHANGELOG section with no tag yet is a stable release: tag
+# vX.Y.Z and publish it. An "(unreleased)" version whose app files changed since the last tag
+# gets the next pre-release, vX.Y.Z-pre.N, marked as a pre-release so "latest" stays stable.
 on:
   push:
     branches: [main]
@@ -21,15 +21,26 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Tag and publish if the version is new
+      - name: Publish a stable release or a pre-release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          version=$(python3 build-aux/version.py get)
-          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
-            echo "v$version is already released; nothing to do."; exit 0
-          fi
           python3 build-aux/version.py check
+          version=$(python3 build-aux/version.py get)
           python3 build-aux/version.py notes > "$RUNNER_TEMP/notes.md"
-          gh release create "v$version" --target "$GITHUB_SHA" \
-            --title "Vibemapp $version" --notes-file "$RUNNER_TEMP/notes.md"
+          if [ "$(python3 build-aux/version.py state)" = stable ]; then
+            if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+              echo "v$version is already released; nothing to do."; exit 0
+            fi
+            gh release create "v$version" --target "$GITHUB_SHA" \
+              --title "Vibemapp $version" --notes-file "$RUNNER_TEMP/notes.md"
+            exit 0
+          fi
+          last=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || true)
+          app=$(git diff --name-only "$last" HEAD | grep -Ev '^(\.github/|\.claude/|docs/|[^/]+\.md$|CLAUDE|check\.sh$|build-aux/(version|docs_check)\.py$)' || true)
+          if [ -z "$app" ]; then
+            echo "No app changes since $last: no pre-release."; exit 0
+          fi
+          n=$(( $(git tag -l "v$version-pre.*" | wc -l) + 1 ))
+          gh release create "v$version-pre.$n" --target "$GITHUB_SHA" --prerelease \
+            --title "Vibemapp $version pre-release $n" --notes-file "$RUNNER_TEMP/notes.md"

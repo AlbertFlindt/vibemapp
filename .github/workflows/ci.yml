@@ -22,32 +22,38 @@ jobs:
         run: xvfb-run -a ./check.sh
 
   release-ready:
-    # Every merge that changes the app ships as a release, so such a PR must bump the version.
-    name: Version bumped
+    # Every merge that changes the app publishes a pre-release of the version on main, so such a
+    # PR needs a version above the latest stable one and a CHANGELOG entry for it.
+    name: Version and changelog
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Require a new version when the app changes
+      - name: Require a new version and a CHANGELOG entry when the app changes
         run: |
           base="origin/${{ github.base_ref }}"
           changed=$(git diff --name-only "$base"...HEAD)
           echo "Changed files:"; echo "$changed" | sed 's/^/  /'
           # Docs, CI and Claude Code files alone don't need a release.
-          app=$(echo "$changed" | grep -Ev '^(\.github/|\.claude/|docs/|[^/]+\.md$|CLAUDE|check\.sh$|build-aux/version\.py$)' || true)
+          app=$(echo "$changed" | grep -Ev '^(\.github/|\.claude/|docs/|[^/]+\.md$|CLAUDE|check\.sh$|build-aux/(version|docs_check)\.py$)' || true)
           if [ -z "$app" ]; then
             echo "Only docs/CI changed: no release needed."; exit 0
           fi
+          python3 build-aux/version.py check
           new=$(python3 build-aux/version.py get)
-          old=$(git show "$base":meson.build | sed -n "s/^  version: '\(.*\)',/\1/p")
-          if [ "$new" = "$old" ] || [ "$(printf '%s\n%s\n' "$old" "$new" | sort -V | tail -1)" != "$new" ]; then
-            echo "::error::This PR changes the app but keeps version $old. Run build-aux/version.py bump X.Y.Z and add the CHANGELOG and metainfo entries (see the release skill)."
+          stable=$(git tag -l 'v*' | grep -v -- '-pre\.' | sed 's/^v//' | sort -V | tail -1)
+          if [ "$new" = "$stable" ] || [ "$(printf '%s\n%s\n' "$stable" "$new" | sort -V | tail -1)" != "$new" ]; then
+            echo "::error::Version $new is not above the latest stable $stable. Run build-aux/version.py bump X.Y.Z (see the release skill)."
             exit 1
           fi
-          if git rev-parse -q --verify "refs/tags/v$new" >/dev/null; then
-            echo "::error::Tag v$new already exists."; exit 1
+          if ! echo "$changed" | grep -qx CHANGELOG.md; then
+            echo "::error::This PR changes the app but not CHANGELOG.md. Add an entry under '## $new'."
+            exit 1
           fi
-          python3 build-aux/version.py check
-          echo "Will release $new on merge (was $old)."
+          if [ "$(python3 build-aux/version.py state)" = stable ]; then
+            echo "Will release $new as stable on merge (was $stable)."
+          else
+            echo "Will publish a $new pre-release on merge (latest stable: $stable)."
+          fi
