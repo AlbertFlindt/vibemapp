@@ -107,6 +107,50 @@ class LayoutSync(str, Enum):
     NOT_FLASHED = "not-flashed"
 
 
+class PointerKind(str, Enum):
+    """The keyboard's pointing device (ZSA Navigator). Additive (1.10)."""
+    # A touchpad interface (HID digitizer, usage 0x0D/0x05): known from the
+    # report descriptor as soon as the keyboard is connected.
+    TRACKPAD = "trackpad"
+    # The mouse interface moved while no key was held. Mouse keys use that
+    # interface too, so a trackball is only known after it first moves.
+    TRACKBALL = "trackball"
+
+
+class PointerAction(str, Enum):
+    """What a ``PointerActivity`` reports. Additive (1.10)."""
+    TOUCH = "touch"      # finger(s) down on the trackpad, not moving yet
+    MOVE = "move"        # pointer motion (one finger, or the ball rolling)
+    SCROLL = "scroll"    # two-finger motion on the trackpad, or wheel/pan reports
+    TAP = "tap"          # a short touch without motion, ended (tap-to-click)
+    CLICK = "click"      # a button went down (pad pressed, trackball button)
+    RELEASE = "release"  # a button went up
+    IDLE = "idle"        # all fingers lifted / no motion for a short while
+
+
+@dataclass(frozen=True)
+class PointerActivity:
+    """One change in what the pointing device does. Additive (1.10).
+
+    Emitted with ``pointer-activity`` on the GLib main loop, only when
+    something changes (not for every motion report): MOVE and SCROLL are sent
+    when the motion starts, again when its direction or finger count changes,
+    and IDLE follows once motion has stopped for ``POINTER_IDLE_MS``.
+    Never recorded or stored.
+    """
+    kind: PointerKind
+    action: PointerAction
+    fingers: int = 0              # trackpad fingers down (TAP: fingers of the tap)
+    button: int = 0               # CLICK/RELEASE: 1 left, 2 right, 3 middle
+    buttons: frozenset[int] = frozenset()   # buttons down after this change
+    # SCROLL direction of the fingers or wheel: "up", "down", "left", "right"
+    # (finger motion, so natural scrolling doesn't change it). "" otherwise.
+    direction: str = ""
+
+
+POINTER_IDLE_MS = 300
+
+
 class RuleMatch(str, Enum):
     """How an ``AppRule`` decides whether the focused window matches."""
     # ``app_class`` is compared exactly (case-sensitive) with the window class.
@@ -130,7 +174,8 @@ class AppRule:
     specific rules should come before catch-all ones.
     ``show_hold_actions`` and ``show_held_modifiers`` (additive, 1.8) turn the
     on-screen hold-action and held-modifier keys off while it matches, e.g.
-    in games.
+    in games. ``show_pointer`` (additive, 1.10) does the same for pointer
+    activity.
     """
     app_class: str
     display_name: str
@@ -141,6 +186,7 @@ class AppRule:
     match: RuleMatch = RuleMatch.APP
     show_hold_actions: bool = True
     show_held_modifiers: bool = True
+    show_pointer: bool = True
 
 
 @dataclass(frozen=True)

@@ -153,6 +153,33 @@
       <summary>Held modifier fade duration</summary>
       <description>How long held modifiers take to fade in, in milliseconds. Fading out takes three quarters of this. 0 shows and hides them at once.</description>
     </key>
+    <key name="pointer-pill" type="b">
+      <default>false</default>
+      <summary>Show pointer activity</summary>
+      <description>Show on screen when the keyboard's trackpad or trackball clicks, scrolls or moves, in the same place as held modifiers (Ctrl+Click). Needs gtk4-layer-shell, like the overlay.</description>
+    </key>
+    <key name="pointer-pill-actions" type="as">
+      <default>['click', 'tap', 'scroll', 'move']</default>
+      <summary>Pointer actions shown</summary>
+      <description>Which pointer actions the pointer pill shows: click, tap, scroll and move (moving the pointer or touching the trackpad).</description>
+    </key>
+    <key name="pointer-pill-linger-ms" type="i">
+      <range min="0" max="5000"/>
+      <default>600</default>
+      <summary>Pointer activity display time</summary>
+      <description>How long pointer activity stays on screen after it stops, in milliseconds, before it fades out. 0 hides it at once.</description>
+    </key>
+    <key name="pointer-pill-fade-ms" type="i">
+      <range min="0" max="1000"/>
+      <default>200</default>
+      <summary>Pointer activity fade duration</summary>
+      <description>How long pointer activity takes to fade in, in milliseconds. Fading out takes three quarters of this. 0 shows and hides it at once.</description>
+    </key>
+    <key name="overlay-pointer" type="b">
+      <default>false</default>
+      <summary>Show the trackpad on the overlay</summary>
+      <description>Draw the keyboard's trackpad or trackball next to the overlay's keys, lit up while it is touched, clicked or scrolled. Only while the overlay is shown; it never makes the overlay appear.</description>
+    </key>
     <key name="window-width" type="i">
       <default>960</default>
       <summary>Window width</summary>

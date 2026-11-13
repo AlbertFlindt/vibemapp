@@ -20,7 +20,7 @@ from typing import Callable
 from gi.repository import Gio, GObject
 
 from .models import (AppRule, Device, ErgoReport, LayoutComparison, FocusedWindow, HeatmapApp, HeatmapPeriod, Layout,
-                     LayoutSync, RunningApp, SteamGame)
+                     LayoutSync, PointerActivity, PointerKind, RunningApp, SteamGame)
 
 
 class KeyboardService(GObject.Object):
@@ -66,6 +66,12 @@ class KeyboardService(GObject.Object):
         # get_layout_sync() changed. Additive (1.7): the Layout page warns when
         # the shown layout isn't what's flashed on the keyboard.
         "layout-sync-changed": (GObject.SignalFlags.RUN_LAST, None, ()),
+        # The connected keyboard's pointing device changed: get_pointer_kind().
+        # Additive (1.10): on connect/disconnect and when a trackball first moves.
+        "pointer-changed": (GObject.SignalFlags.RUN_LAST, None, ()),
+        # A PointerActivity (models.py). Additive (1.10). Only emitted while
+        # pointer_tracking is True.
+        "pointer-activity": (GObject.SignalFlags.RUN_LAST, None, (object,)),
         # Human-readable, user-presentable error (shown as a toast).
         "error": (GObject.SignalFlags.RUN_LAST, None, (str,)),
     }
@@ -89,6 +95,13 @@ class KeyboardService(GObject.Object):
     # app. Never sequences longer than two keys, never characters.
     pair_recording = GObject.Property(type=bool, default=False,
                                       nick="pair-recording")
+
+    # Read the pointing device's reports and emit "pointer-activity". Additive
+    # (1.10). The UI turns it on only while something shows the activity (a
+    # pill, the overlay's trackpad or the page's live view), so a trackpad's
+    # ~125 reports a second aren't parsed for nothing.
+    pointer_tracking = GObject.Property(type=bool, default=False,
+                                        nick="pointer-tracking")
 
     # --- devices -------------------------------------------------------
 
@@ -179,6 +192,13 @@ class KeyboardService(GObject.Object):
         """Installed Steam games (all Steam libraries), sorted by name, without
         Proton/runtime/redistributable tools. [] when Steam isn't installed."""
         raise NotImplementedError
+
+    # --- pointing device ----------------------------------------------
+
+    def get_pointer_kind(self) -> PointerKind | None:
+        """The connected keyboard's pointing device, or None (none, not
+        connected, or a trackball that hasn't moved yet). Additive (1.10)."""
+        return None
 
     # --- heatmap -------------------------------------------------------
 
