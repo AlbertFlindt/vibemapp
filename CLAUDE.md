@@ -66,6 +66,8 @@ and update it with the change). Release history: `CHANGELOG.md` (not loaded).
   version and add the CHANGELOG entry in the PR with the `release` skill; on merge, CI
   (`.github/workflows/release.yml`) moves the one pre-release `vX.Y.Z-pre` to it. Major versions
   are `ROADMAP.md` milestones. Repo: https://github.com/AlbertFlindt/vibemapp
+- GitHub is reached through its connector (`mcp__github__*`, the user-scope `github` MCP server),
+  not `gh`. Fall back to `gh` only when the connector is missing.
 
 ## Docs
 `check.sh` holds `CLAUDE.md`, `PROGRESS.md` and `ROADMAP.md` to a line budget (`build-aux/docs_check.py`).
