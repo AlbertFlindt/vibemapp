@@ -64,8 +64,8 @@ and update it with the change). Release history: `CHANGELOG.md` (not loaded).
   which would wipe our source tree if the PKGBUILD sat at the repo root.
 - **Every merge that changes the app is a pre-release; stable releases only when asked.** Set the
   version and add the CHANGELOG entry in the PR with the `release` skill; on merge, CI
-  (`.github/workflows/release.yml`) publishes `vX.Y.Z-pre.N`. Major versions are `ROADMAP.md`
-  milestones. Repo: https://github.com/AlbertFlindt/vibemapp
+  (`.github/workflows/release.yml`) moves the one pre-release `vX.Y.Z-pre` to it. Major versions
+  are `ROADMAP.md` milestones. Repo: https://github.com/AlbertFlindt/vibemapp
 
 ## Docs
 `check.sh` holds `CLAUDE.md`, `PROGRESS.md` and `ROADMAP.md` to a line budget (`build-aux/docs_check.py`).

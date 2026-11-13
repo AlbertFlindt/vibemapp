@@ -1,7 +1,7 @@
 # Changelog
 
 All notable changes to Vibemapp. Each version is a tag and a GitHub release; the version at the
-top marked "(unreleased)" is out as pre-releases (`vX.Y.Z-pre.N`).
+top marked "(unreleased)" is out as one pre-release (`vX.Y.Z-pre`), updated on every merge.
 
 ## 1.10.0 (unreleased)
 

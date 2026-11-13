@@ -2,7 +2,8 @@ name: Release
 
 # On every push to main. A dated CHANGELOG section with no tag yet is a stable release: tag
 # vX.Y.Z and publish it. An "(unreleased)" version whose app files changed since the last tag
-# gets the next pre-release, vX.Y.Z-pre.N, marked as a pre-release so "latest" stays stable.
+# gets its pre-release published again at this commit: there is one, vX.Y.Z-pre (a GitHub
+# pre-release, so "latest" stays stable). Older pre-releases are deleted with their git tags.
 on:
   push:
     branches: [main]
@@ -28,19 +29,28 @@ jobs:
           python3 build-aux/version.py check
           version=$(python3 build-aux/version.py get)
           python3 build-aux/version.py notes > "$RUNNER_TEMP/notes.md"
+          drop_prereleases() {
+            for old in $(gh release list --limit 100 --json tagName,isPrerelease --jq '.[] | select(.isPrerelease) | .tagName'); do
+              gh release delete "$old" --yes --cleanup-tag
+              echo "Deleted the pre-release $old."
+            done
+          }
           if [ "$(python3 build-aux/version.py state)" = stable ]; then
             if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
               echo "v$version is already released; nothing to do."; exit 0
             fi
+            drop_prereleases
             gh release create "v$version" --target "$GITHUB_SHA" \
               --title "Vibemapp $version" --notes-file "$RUNNER_TEMP/notes.md"
             exit 0
           fi
           last=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || true)
           app=$(git diff --name-only "$last" HEAD | grep -Ev '^(\.github/|\.claude/|docs/|[^/]+\.md$|CLAUDE|check\.sh$|build-aux/(version|docs_check)\.py$)' || true)
-          if [ -z "$app" ]; then
-            echo "No app changes since $last: no pre-release."; exit 0
+          # Without app changes there is nothing new to try, unless the version has no vX.Y.Z-pre yet.
+          if [ -z "$app" ] && git rev-parse -q --verify "refs/tags/v$version-pre" >/dev/null; then
+            echo "No app changes since $last: no new pre-release."; exit 0
           fi
-          n=$(( $(git tag -l "v$version-pre.*" | wc -l) + 1 ))
-          gh release create "v$version-pre.$n" --target "$GITHUB_SHA" --prerelease \
-            --title "Vibemapp $version pre-release $n" --notes-file "$RUNNER_TEMP/notes.md"
+          printf '\n\nBuilt from %s.\n' "${GITHUB_SHA::7}" >> "$RUNNER_TEMP/notes.md"
+          drop_prereleases
+          gh release create "v$version-pre" --target "$GITHUB_SHA" --prerelease \
+            --title "Vibemapp $version-pre" --notes-file "$RUNNER_TEMP/notes.md"

@@ -43,7 +43,7 @@ jobs:
           fi
           python3 build-aux/version.py check
           new=$(python3 build-aux/version.py get)
-          stable=$(git tag -l 'v*' | grep -v -- '-pre\.' | sed 's/^v//' | sort -V | tail -1)
+          stable=$(git tag -l 'v*' | grep -v -- '-pre' | sed 's/^v//' | sort -V | tail -1)
           if [ "$new" = "$stable" ] || [ "$(printf '%s\n%s\n' "$stable" "$new" | sort -V | tail -1)" != "$new" ]; then
             echo "::error::Version $new is not above the latest stable $stable. Run build-aux/version.py bump X.Y.Z (see the release skill)."
             exit 1
