@@ -41,6 +41,10 @@ Moonlander, ErgoDox EZ, Planck EZ) running Oryx firmware.
   legacy ErgoDox EZ `0000FEED`. Product IDs map to `KeyboardModel` (Voyager: 0x1977).
 - A board exposes several hidraw nodes. The raw-HID one has Usage Page 0xFF60, Usage 0x61 in
   its `report_descriptor`.
+- The other nodes of the same USB device are its siblings (`devices.pointer_interfaces`), classed
+  by descriptor (`pointer.classify`): a touchpad (Digitizer 0x0D / Touch Pad 0x05 application), a
+  mouse (0x01 / 0x02) or other. A node with a keyboard collection is always "other": it carries
+  typed keys and is never opened. The `uaccess` rule already covers every ZSA hidraw node.
 - Hotplug via `Gio.FileMonitor` on `/dev`, with a polling fallback.
 - Access comes from `data/udev/50-zsa.rules` (`uaccess`), not a `plugdev` group.
 
@@ -97,6 +101,34 @@ The full, verified notes are in the `backend/oryx.py` module docstring. The sour
   never changes Hyprland state.
 - Reconnects with backoff. `FocusWatcher` is the base class for future GNOME/KDE/X11 sources.
 - Hyprland config is Lua (`hl.on`, `hl.exec_cmd`, `hl.bind`, `hl.dsp.exec_cmd`).
+
+### 3.5 Pointing device (Navigator)
+`backend/pointer.py` (pure logic), read by `zsa_service.py`; contract: `PointerKind`,
+`PointerActivity`, `get_pointer_kind()`, `pointer-changed`, `pointer-activity`, `pointer-tracking`.
+- **Trackpad:** a touchpad sibling makes `get_pointer_kind()` TRACKPAD on connect. Its node is
+  opened read-only (non-blocking fd, GLib io watch) only while `pointer-tracking` is on.
+  Voyager reports (verified): id 1, 16 bytes; two finger slots (bit0 confidence, bit1 tip; contact
+  id; X, Y u16 LE 0–2048), scan time, contact count (low nibble), buttons 1–3 (bits 4–6). ~125 Hz
+  while touched, one tip=0 report per lift, then silence. Hybrid frames (count 0 = continuation)
+  are handled. Fields are found by a small descriptor parser, not hard-coded offsets.
+- **Inference** (`TrackpadInterpreter`): TOUCH on fingers down or a finger-count change (motion
+  restarts there); MOVE (1 or 3+ fingers) / SCROLL (2 fingers, direction of the finger motion,
+  dominant axis, 2:1 hysteresis) once the mean moves 1.5 mm (descriptor's physical size; Voyager
+  ≈ 37 units/mm); IDLE after `POINTER_IDLE_MS` without motion, fingers still down; on lift TAP if
+  ≤ 180 ms, no motion and no button (fingers = most during it), then IDLE with 0 fingers. No
+  report for 0.5 s while touched counts as a lift (never a tap). CLICK/RELEASE from the buttons.
+  While TOUCH/MOVE/SCROLL the same action is re-sent with fresh `contacts` (0..1 of the logical
+  range) and accumulated `motion` at most every `POINTER_FRAME_MS`; a timer flushes the last one.
+- **Trackball:** without a touchpad, the mouse sibling is read whenever Oryx is paired. Mouse keys
+  use it too, so it's a trackball only after motion for 150 ms with no Oryx key held and none
+  within 200 ms (`TrackballDetector`). Then TRACKBALL, remembered in
+  `$XDG_STATE_HOME/vibemapp/pointer.json` by `<model>:<layout id>`, so it's known on the next
+  start. Its activity (`MouseInterpreter`: MOVE, SCROLL from wheel/AC Pan, CLICK/RELEASE, IDLE)
+  is only emitted for a known trackball. Not verified: no trackball has been seen.
+- Unplug or read errors close the node quietly; the device monitor handles the disconnect.
+- **Privacy:** activity is never recorded or stored; only the trackball flag is.
+- Mock (`VIBEMAPP_MOCK_POINTER=trackpad|trackball|none`): a looping script fed through the real
+  interpreters while `pointer-tracking` is on.
 
 ## 4. Features
 

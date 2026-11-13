@@ -10,6 +10,11 @@ Vendor/product IDs come from the ZSA QMK fork (branch ``firmware25``,
 ``keyboards/zsa/*/keyboard.json``) and ZSA's udev rules (legacy ``feed:1307``
 ErgoDox EZ and ``feed:6060`` Planck EZ).
 
+The same USB device's other interfaces are its siblings. ``pointer_interfaces``
+classifies them by report descriptor (``pointer.classify``) to find a
+Navigator's touchpad or the mouse interface; the keyboard interface (typed
+keys) is never returned.
+
 All filesystem roots are injectable so tests can run against a fake tree.
 """
 
@@ -24,6 +29,7 @@ from gi.repository import Gio, GLib, GObject
 
 from ..models import Device, KeyboardModel
 from . import geometries
+from .pointer import InterfaceClass, classify
 
 log = logging.getLogger(__name__)
 
@@ -139,6 +145,7 @@ class HidrawNode:
     uniq: str
     is_raw: bool
     accessible: bool
+    descriptor: bytes = b""
 
 
 def _read_text(path: str) -> str | None:
@@ -217,6 +224,7 @@ def scan_hidraw(sysfs_root: str = "/sys", dev_root: str = "/dev") -> list[Hidraw
             uniq=env.get("HID_UNIQ", ""),
             is_raw=is_raw_hid_descriptor(desc),
             accessible=os.path.exists(dev_path) and os.access(dev_path, os.R_OK | os.W_OK),
+            descriptor=desc,
         ))
     return nodes
 
@@ -268,6 +276,30 @@ def devices_from_nodes(nodes: Iterable[HidrawNode]) -> list[Device]:
 
 def enumerate_devices(sysfs_root: str = "/sys", dev_root: str = "/dev") -> list[Device]:
     return devices_from_nodes(scan_hidraw(sysfs_root, dev_root))
+
+
+@dataclass(frozen=True)
+class PointerInterface:
+    """A pointing-device sibling of a keyboard's raw-HID interface."""
+    dev_path: str
+    kind: InterfaceClass         # TOUCHPAD or MOUSE
+    descriptor: bytes
+
+
+def pointer_interfaces(device_id: str, sysfs_root: str = "/sys",
+                       dev_root: str = "/dev") -> list[PointerInterface]:
+    """Touchpad and mouse interfaces of the USB device ``device_id`` (a
+    ``Device.id``), touchpads first. Interfaces with a keyboard collection
+    are classed OTHER by ``classify`` and never returned."""
+    out: list[PointerInterface] = []
+    for node in scan_hidraw(sysfs_root, dev_root):
+        if node.usb_device != device_id or node.is_raw:
+            continue
+        kind = classify(node.descriptor)
+        if kind in (InterfaceClass.TOUCHPAD, InterfaceClass.MOUSE):
+            out.append(PointerInterface(node.dev_path, kind, node.descriptor))
+    out.sort(key=lambda p: p.kind != InterfaceClass.TOUCHPAD)
+    return out
 
 
 def device_permission_problem(device: Device) -> bool:

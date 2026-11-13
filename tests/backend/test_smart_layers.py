@@ -286,12 +286,13 @@ class StoreTests(unittest.TestCase):
     def test_pill_switches_roundtrip_and_default_on(self) -> None:
         from vibemapp.backend.smart_layers import rule_from_json, rule_to_json
         rule = AppRule("", "All Steam Games", 2, match=RuleMatch.STEAM_GAME,
-                       show_hold_actions=False, show_held_modifiers=False)
+                       show_hold_actions=False, show_held_modifiers=False, show_pointer=False)
         data = rule_to_json(rule)
-        self.assertEqual((data["show_hold_actions"], data["show_held_modifiers"]), (False, False))
+        self.assertEqual((data["show_hold_actions"], data["show_held_modifiers"],
+                          data["show_pointer"]), (False, False, False))
         self.assertEqual(rule_from_json(data), rule)
         old = rule_from_json({"app_class": "kitty", "layer_index": 1})   # pre-1.8 file
-        self.assertTrue(old.show_hold_actions and old.show_held_modifiers)
+        self.assertTrue(old.show_hold_actions and old.show_held_modifiers and old.show_pointer)
 
     def test_tolerates_bad_entries_and_corrupt_file(self) -> None:
         with tempfile.TemporaryDirectory() as d:

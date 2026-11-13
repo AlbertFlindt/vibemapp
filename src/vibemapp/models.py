@@ -132,11 +132,11 @@ class PointerAction(str, Enum):
 class PointerActivity:
     """One change in what the pointing device does. Additive (1.10).
 
-    Emitted with ``pointer-activity`` on the GLib main loop, only when
-    something changes (not for every motion report): MOVE and SCROLL are sent
-    when the motion starts, again when its direction or finger count changes,
-    and IDLE follows once motion has stopped for ``POINTER_IDLE_MS``.
-    Never recorded or stored.
+    Emitted with ``pointer-activity`` on the GLib main loop. Every action
+    change is sent; while fingers are down or the ball rolls, TOUCH/MOVE/SCROLL
+    are also re-sent with fresh ``contacts``/``motion`` at most every
+    ``POINTER_FRAME_MS``, so the UI can draw the fingers live. IDLE follows
+    once motion has stopped for ``POINTER_IDLE_MS``. Never recorded or stored.
     """
     kind: PointerKind
     action: PointerAction
@@ -146,6 +146,16 @@ class PointerActivity:
     # SCROLL direction of the fingers or wheel: "up", "down", "left", "right"
     # (finger motion, so natural scrolling doesn't change it). "" otherwise.
     direction: str = ""
+    # Trackpad: the fingers down, as (x, y) in 0..1 of the pad's logical
+    # range (0, 0 top left). TAP: where the tap's fingers were. () otherwise.
+    contacts: tuple[tuple[float, float], ...] = ()
+    # Motion since the previous activity, in device counts: trackball X/Y
+    # (MOVE) or wheel/pan (SCROLL, positive = up/right); trackpad: centroid
+    # delta in 0..1 units. (0, 0) when not moving.
+    motion: tuple[float, float] = (0.0, 0.0)
+
+
+POINTER_FRAME_MS = 16
 
 
 POINTER_IDLE_MS = 300
