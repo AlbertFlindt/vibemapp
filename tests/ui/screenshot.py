@@ -346,7 +346,11 @@ def overlay_shot(args) -> int:
         service.simulate_layer(args.layer)
 
     # Never put a real surface on screen: keep the content, drop the windows.
-    overlay_mod.OverlaySurface.fade_in = lambda self: self.box.set_opacity(1.0)
+    def fade_in(surface) -> None:
+        surface._showing = True
+        surface.box.set_opacity(1.0)
+
+    overlay_mod.OverlaySurface.fade_in = fade_in
     # No live pointer reports (the mock would play its script): scenes only.
     overlay_mod.want_pointer = lambda *_a: None
     if args.pointer:

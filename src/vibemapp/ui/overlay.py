@@ -397,26 +397,11 @@ class OverlayController(GObject.Object):
         _monitor, info = self.resolve_monitor()
         return unit_px(info, self.config.size, board[2] - board[0])
 
-    def can_show(self) -> bool:
-        """Whether the overlay may appear at all: available, and previewed or
-        a mode that can show it (not Off, and some layer selected)."""
-        if not self.available or self._destroyed:
-            return False
-        if self.props.preview:
-            return True
-        if self.config.mode == "off" or self.service.get_layout() is None:
-            return False
-        return self.config.mode == "always" or bool(self.config.layers)
-
     def edge_clearance(self) -> int:
-        """Logical px the overlay takes up from its anchored edge when shown,
-        whether it's shown now or not, as long as it can show at all (else 0).
-        So the pills keep one position while the overlay comes and goes (e.g.
-        a Mouse layer the firmware turns on while the trackpad moves)."""
-        if not self.can_show():
-            return 0
-        self._ensure_surfaces()
-        return max((s.extent() for s in self._surfaces), default=0)
+        """Logical px the overlay takes up from its anchored edge while it's
+        shown, else 0. A visible pill isn't moved when this changes (e.g. a
+        Mouse layer the firmware turns on mid-gesture); see ``hold_pill``."""
+        return max((s.extent() for s in self._surfaces if s.showing), default=0)
 
     def pill_style(self):
         """The overlay's appearance settings for the hold-action pill."""

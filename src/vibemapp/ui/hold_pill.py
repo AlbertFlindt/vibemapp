@@ -27,10 +27,10 @@ Surface
     NONE, exclusive zone -1, empty input region, not added to the
     Gtk.Application. It is anchored to the overlay's top or bottom edge only,
     so the compositor centres it, ``EDGE_FRACTION`` of the monitor height in
-    from that edge, or just past where the overlay is or would be whenever it
-    can show (``OverlayController.edge_clearance``), so the pill doesn't jump
-    as the overlay comes and goes. A visible pill is never moved: a new
-    placement waits until it's hidden. Its height is always the pad's (a key
+    from that edge, or just past the overlay while that is shown there
+    (``OverlayController.edge_clearance``). A visible pill is never moved: a
+    new placement waits until it's hidden, so it stays put within a gesture
+    even when the overlay comes or goes (e.g. a firmware auto mouse layer). Its height is always the pad's (a key
     is centred on it), and with the pad shown a spacer mirrors the modifier
     key, so the pad stays put as modifiers come and go. It
     goes on the overlay's monitor (the fixed one, else the focused one). Like the overlay
@@ -102,7 +102,7 @@ def fade_pair(fade_ms: int) -> tuple[int, int]:
 
 
 # (monitor, its logical height) to show on; the px to keep free at the edge
-# (the overlay's extent whenever it can show, else 0); the style.
+# (the overlay's extent while it's shown there, else 0); the style.
 MonitorFn = Callable[[], tuple[Gdk.Monitor | None, int]]
 ClearanceFn = Callable[[], int]
 StyleFn = Callable[[], PillStyle]

@@ -342,35 +342,24 @@ class PointerPadTests(unittest.TestCase):
 
 @unittest.skipUnless(HAVE_DISPLAY, "needs a display")
 class ClearanceTests(unittest.TestCase):
-    """Where the pills sit: past the overlay whenever it can show."""
+    """Where the pills sit: past the overlay while it's shown, else 0."""
 
     setUp = OverlayControllerTests.setUp
     tearDown = OverlayControllerTests.tearDown
     connect_keyboard = OverlayControllerTests.connect_keyboard
 
-    def test_stable_while_the_overlay_comes_and_goes(self) -> None:
+    def test_follows_the_overlay_being_shown(self) -> None:
         self.settings.set_value("overlay-layers", GLib.Variant("ai", [3]))
         self.connect_keyboard()
         self.assertFalse(self.ctl.shown)
-        hidden = self.ctl.edge_clearance()
-        self.assertGreater(hidden, 24 + 100)            # margin plus a whole board
+        self.assertEqual(self.ctl.edge_clearance(), 0)
         self.svc.simulate_layer(3)                      # e.g. the auto mouse layer
         self.assertTrue(self.ctl.shown)
-        self.assertEqual(self.ctl.edge_clearance(), hidden)
+        shown = self.ctl.edge_clearance()
+        self.assertGreater(shown, 24 + 100)             # margin plus a whole board
         self.svc.simulate_layer(0)
         self.assertFalse(self.ctl.shown)
-        self.assertEqual(self.ctl.edge_clearance(), hidden)
-
-    def test_none_when_it_cannot_show(self) -> None:
-        self.connect_keyboard()
-        self.settings.set_value("overlay-layers", GLib.Variant("ai", []))
-        self.assertEqual(self.ctl.edge_clearance(), 0)  # no layer selected
-        self.settings.set_string("overlay-mode", "always")
-        self.assertGreater(self.ctl.edge_clearance(), 0)
-        self.settings.set_string("overlay-mode", "off")
         self.assertEqual(self.ctl.edge_clearance(), 0)
-        self.ctl.props.preview = True                   # previewing shows it
-        self.assertGreater(self.ctl.edge_clearance(), 0)
 
 
 @unittest.skipUnless(HAVE_DISPLAY, "needs a display")

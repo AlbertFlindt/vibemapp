@@ -268,10 +268,9 @@ up by the application next to the overlay; settings in the Overlay page's Hold A
   exclusive zone -1, empty input region, never unmapped once shown; hidden it parks on
   BACKGROUND), namespace `vibemapp-hold-pill`, anchored to the overlay's top or bottom edge
   only, so it's centred. 10 % of the monitor height in from that edge, or 12 px past the
-  overlay's extent whenever the overlay can show (available, and previewed or a mode not Off with
-  a layer to show), shown or not (`OverlayController.edge_clearance`): a firmware auto mouse layer
-  on the overlay's layers would otherwise move it with every swipe. A visible pill never moves; a
-  new placement waits until it's hidden. Visible while the key stays down, then `hold-pill-linger-ms`
+  overlay while that is shown (`OverlayController.edge_clearance`). A visible (or fading) pill
+  never moves; a new placement waits until it's hidden, so a gesture's pill stays put when a
+  firmware auto mouse layer brings the overlay up. Visible while the key stays down, then `hold-pill-linger-ms`
   (default 900, 0 = fade at once); another hold replaces the text. Shown also while the
   Vibemapp window is active.
 - **Settings:** `hold-pill` (off by default), Stay Visible and Fade Duration, and
