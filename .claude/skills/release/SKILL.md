@@ -39,7 +39,8 @@ Then, on a release branch:
    fixed issues, items now verified), and move a decision that's just how the code works to
    `docs/SPEC.md`. In `ROADMAP.md`, check the shipped items; drop a finished milestone.
 4. `./check.sh`, commit "Release X.Y.Z: <summary>", open the PR.
-5. After the merge, confirm it appeared (`gh release view vX.Y.Z`). If the workflow failed,
+5. After the merge, confirm it appeared (`mcp__github__get_release_by_tag`, or
+   `gh release view vX.Y.Z`). If the workflow failed,
    rerun it from the Actions tab.
 6. Install: `cd packaging/arch && makepkg -si`, then replug the keyboard. The PKGBUILD builds
    stable tags only; to use a pre-release day to day, quit the installed app and run
