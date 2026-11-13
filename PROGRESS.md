@@ -1,6 +1,6 @@
 # Progress / handoff
 
-**Last updated:** 2026-10-30. **Latest release:** 1.9.0 (details in `CHANGELOG.md`).
+**Last updated:** 2026-11-13. **Latest release:** 1.10.0 (details in `CHANGELOG.md`).
 How things work: `docs/SPEC.md`.
 
 ## Current state
@@ -16,12 +16,13 @@ How things work: `docs/SPEC.md`.
 - Heatmap: counts land on the right keys (2026-10-13).
 - Heatmap per app and Insights recording (2026-10-18).
 - Tray (Noctalia), migration from `keymappforlinux`, dev app ID.
+- Trackpad (1.10): live fingers, taps and two-finger scroll on the Voyager's Navigator; its side
+  and kind from Oryx's `navigators`; the page and pill in daily use.
 
 **Not verified:**
-- Trackpad/trackball (1.10): live finger tracking, taps and two-finger scroll are checked on the
-  Voyager trackpad; a physical pad click, the overlay pad's position against the real board and
-  the pill not jumping with the auto mouse layer are not. The trackball is unseen: Oryx's kind
-  name `"trackball"`, its mouse-interface reports and two Navigators at once are assumed.
+- Trackpad/trackball (1.10): a physical pad click and the overlay pad's position against the real
+  board. The trackball is unseen: Oryx's kind name `"trackball"`, its mouse-interface reports and
+  two Navigators at once are assumed.
 - Steam game focus with a real game running (unit tests only).
 - Moonlander, ErgoDox EZ and Planck EZ: geometry and key order come from QMK data; thumb-key
   angles are estimates.

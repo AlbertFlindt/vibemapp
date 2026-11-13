@@ -3,7 +3,7 @@
 All notable changes to Vibemapp. Each version is a tag and a GitHub release; the version at the
 top marked "(unreleased)" is out as one pre-release (`vX.Y.Z-pre`), updated on every merge.
 
-## 1.10.0 (unreleased)
+## 1.10.0 (2026-11-13)
 
 ### Added
 - **Trackpad and trackball** (new sidebar page, named after your Navigator, grayed out without

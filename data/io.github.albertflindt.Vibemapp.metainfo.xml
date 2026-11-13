@@ -41,23 +41,27 @@
   <screenshots>
     <screenshot type="default">
       <caption>Your Oryx layout with the active layer</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.9.0/data/screenshots/layout.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.10.0/data/screenshots/layout.png</image>
     </screenshot>
     <screenshot>
       <caption>Smart Layers switches layers per app</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.9.0/data/screenshots/smart-layers.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.10.0/data/screenshots/smart-layers.png</image>
     </screenshot>
     <screenshot>
       <caption>An opt-in heatmap of your key presses</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.9.0/data/screenshots/heatmap.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.10.0/data/screenshots/heatmap.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Live trackpad view for a ZSA Navigator</caption>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.10.0/data/screenshots/trackpad.png</image>
     </screenshot>
     <screenshot>
       <caption>Overlay settings: which layers show it, where and how large</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.9.0/data/screenshots/overlay.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.10.0/data/screenshots/overlay.png</image>
     </screenshot>
     <screenshot>
       <caption>Insights: the load on each finger and the hand split</caption>
-      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.9.0/data/screenshots/insights.png</image>
+      <image>https://raw.githubusercontent.com/AlbertFlindt/vibemapp/v1.10.0/data/screenshots/insights.png</image>
     </screenshot>
   </screenshots>
   <branding>
@@ -74,6 +78,11 @@
     <keyword>layer</keyword>
   </keywords>
   <releases>
+    <release version="1.10.0" date="2026-11-13">
+      <description>
+        <p>Support for the ZSA Navigator: a Trackpad (or Trackball) page with a live drawing of your fingers, scrolls, taps and clicks, which can also show on screen beside held modifiers and on the overlay.</p>
+      </description>
+    </release>
     <release version="1.9.0" date="2026-10-30">
       <description>
         <p>Click the focused app in Smart Layers to edit its rule, or to add one for it.</p>
