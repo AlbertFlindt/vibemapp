@@ -319,8 +319,8 @@
                     </child>
                     <child>
                       <object class="AdwPreferencesGroup">
-                        <property name="title" translatable="yes">On-Screen Keys</property>
-                        <property name="description" translatable="yes">While a matching window is focused. Needs Show Hold Actions or Show Held Modifiers on the Overlay page.</property>
+                        <property name="title" translatable="yes">On-Screen Activity</property>
+                        <property name="description" translatable="yes">While a matching window is focused. Needs Show Hold Actions or Show Held Modifiers on the Overlay page, or Show Pointer Activity on the Trackpad page.</property>
                         <child>
                           <object class="AdwSwitchRow" id="hold_actions_row">
                             <property name="title" translatable="yes">Show _Hold Actions</property>
@@ -331,6 +331,13 @@
                         <child>
                           <object class="AdwSwitchRow" id="held_modifiers_row">
                             <property name="title" translatable="yes">Show Held _Modifiers</property>
+                            <property name="use-underline">True</property>
+                            <property name="active">True</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwSwitchRow" id="pointer_row">
+                            <property name="title" translatable="yes">Show Poin_ter Activity</property>
                             <property name="use-underline">True</property>
                             <property name="active">True</property>
                           </object>

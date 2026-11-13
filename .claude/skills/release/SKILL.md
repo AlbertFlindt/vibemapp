@@ -4,7 +4,8 @@ description: Set the Vibemapp version in a PR (every merge that changes the app 
 ---
 `main` carries the version being worked towards, with a `## X.Y.Z (unreleased)` section at the
 top of `CHANGELOG.md`. On every merge that changes the app, `.github/workflows/release.yml`
-publishes the pre-release `vX.Y.Z-pre.N` (GitHub marks it pre-release; "latest" stays stable).
+moves the one pre-release `vX.Y.Z-pre` (GitHub marks it pre-release; "latest" stays stable) to that
+merge; older pre-releases are deleted with their tags, and a stable release deletes it too.
 A stable release is a release PR that dates the section. CI's "Version and changelog" check fails
 a PR that changes the app without a version above the latest stable one and a CHANGELOG entry.
 

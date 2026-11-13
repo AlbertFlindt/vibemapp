@@ -16,6 +16,12 @@ Behaviour notes:
   nor used by Smart Layers, so the UI keeps showing the app the user came from.
 * Firmware keycodes TOGGLE_SMART_LAYER and TRIGGER_SMART_LAYER (Oryx events
   0x09/0x0A) toggle ``smart-layers-enabled`` and force a re-evaluation.
+* Pointing device (SPEC 3.5): the layout's Navigators (Oryx) name it once
+  loaded; before that a touchpad sibling interface makes
+  ``get_pointer_kind()`` TRACKPAD on connect. Touchpad reports are read (main
+  loop, non-blocking fd) only while ``pointer-tracking`` is on. When the layout
+  doesn't say, the mouse interface is read to spot a trackball: motion while
+  no Oryx key is held (mouse keys use that interface too), remembered per layout.
 """
 
 from __future__ import annotations
@@ -31,8 +37,8 @@ from typing import Any, Callable
 
 from gi.repository import Gio, GLib
 
-from ..models import (AppRule, Device, ErgoReport, LayoutComparison, FocusedWindow, HeatmapApp, HeatmapPeriod, Layout, LayoutSync, RunningApp,
-                      SteamGame)
+from ..models import (AppRule, Device, ErgoReport, LayoutComparison, FocusedWindow, HeatmapApp, HeatmapPeriod, Layout, LayoutSync,
+                      PointerActivity, PointerKind, RunningApp, SteamGame)
 from ..service import KeyboardService
 from . import devices as devmod
 from . import ergo, geometries, layouts
@@ -43,6 +49,8 @@ from .steam import SteamLibrary
 from .migration import migrate_legacy_dirs
 from .oryx import Evt, HandshakeResult, OryxConnection, OryxError, OryxEvent
 from .oryx_api import LayoutCache, LayoutRepository, layout_sync
+from .pointer import (InterfaceClass, KnownTrackballs, MouseInterpreter, TrackballDetector,
+                      TrackpadInterpreter)
 from ..appid import is_own_app_class
 from .smart_layers import DEFAULT_LAYOUT_KEY, RulesStore, SmartLayersEngine
 
@@ -57,6 +65,68 @@ def _idle(fn: Callable[..., object], *args: object) -> None:
         fn(*args)
         return GLib.SOURCE_REMOVE
     GLib.idle_add(run)
+
+
+class _HidReader:
+    """Reads one hidraw node on the main loop (non-blocking fd + io watch).
+
+    ``on_report(bytes)`` per report. A read error or EOF closes it quietly
+    (unplug is handled by the device monitor)."""
+
+    def __init__(self, path: str, opener: Callable[[str], int],
+                 on_report: Callable[[bytes], None]) -> None:
+        self.path = path
+        self._on_report = on_report
+        self._watch = 0
+        self._fd = opener(path)
+        try:
+            os.set_blocking(self._fd, False)
+            self._watch = GLib.io_add_watch(
+                self._fd, GLib.PRIORITY_DEFAULT,
+                GLib.IOCondition.IN | GLib.IOCondition.HUP | GLib.IOCondition.ERR, self._ready)
+        except Exception:
+            os.close(self._fd)
+            raise
+
+    @property
+    def is_open(self) -> bool:
+        return self._fd >= 0
+
+    def _ready(self, _fd: int, cond: GLib.IOCondition) -> bool:
+        for _i in range(64):
+            if self._fd < 0:
+                return GLib.SOURCE_REMOVE
+            try:
+                data = os.read(self._fd, 64)
+            except BlockingIOError:
+                break
+            except OSError as exc:
+                log.debug("Reading %s failed: %s", self.path, exc)
+                self.close()
+                return GLib.SOURCE_REMOVE
+            if not data:
+                self.close()
+                return GLib.SOURCE_REMOVE
+            self._on_report(data)
+        if cond & (GLib.IOCondition.HUP | GLib.IOCondition.ERR) and self._fd >= 0:
+            self.close()
+            return GLib.SOURCE_REMOVE
+        return GLib.SOURCE_CONTINUE
+
+    def close(self) -> None:
+        if self._watch:
+            GLib.source_remove(self._watch)
+            self._watch = 0
+        if self._fd >= 0:
+            try:
+                os.close(self._fd)
+            except OSError:
+                pass
+            self._fd = -1
+
+
+def _open_hidraw_readonly(path: str) -> int:
+    return os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
 
 
 class ZsaKeyboardService(KeyboardService):
@@ -82,7 +152,9 @@ class ZsaKeyboardService(KeyboardService):
                  monotonic: Callable[[], float] = time.monotonic,
                  migrate: bool | None = None,
                  steam_roots: list[str] | None = None,
-                 proc_root: str = "/proc") -> None:
+                 proc_root: str = "/proc",
+                 pointer_state_path: str | None = None,
+                 pointer_opener: Callable[[str], int] | None = None) -> None:
         super().__init__()
         # Legacy keymappforlinux -> vibemapp dirs. By default this only runs
         # when using the real default paths (not in tests with injected dirs).
@@ -128,6 +200,22 @@ class ZsaKeyboardService(KeyboardService):
         self._counts_timer = 0
         self._counts_last_emit = 0.0
         self._flush_id = 0
+        # Pointing device (SPEC 3.5). Activity is never stored.
+        self._sysfs_root, self._dev_root = sysfs_root, dev_root
+        self._pointer_opener = pointer_opener or _open_hidraw_readonly
+        self._known_trackballs = KnownTrackballs(pointer_state_path)
+        self._pointer_kind: PointerKind | None = None
+        self._pointer_key = ""
+        self._touchpad_path = ""
+        self._touchpad: TrackpadInterpreter | None = None
+        self._touchpad_reader: _HidReader | None = None
+        self._mouse: MouseInterpreter | None = None
+        self._mouse_reader: _HidReader | None = None
+        self._mouse_iface: tuple[str, MouseInterpreter] | None = None
+        self._trackball_seen = False      # found by motion, or remembered
+        self._trackball_active = False    # mouse activity is a trackball's
+        self._trackball = TrackballDetector()
+        self._pointer_timer = 0
 
         self._engine = SmartLayersEngine(
             RulesStore(rules_path), send_layer=self._engine_send_layer,
@@ -137,6 +225,7 @@ class ZsaKeyboardService(KeyboardService):
         self.connect("notify::auto-connect", self._on_auto_connect_changed)
         self.connect("notify::heatmap-recording", self._on_heatmap_recording_changed)
         self.connect("notify::pair-recording", self._on_pair_recording_changed)
+        self.connect("notify::pointer-tracking", self._on_pointer_tracking_changed)
 
         if autostart:
             self.start()
@@ -167,6 +256,7 @@ class ZsaKeyboardService(KeyboardService):
         self._watcher.stop()
         self._engine.set_enabled(False)
         self._close_connection(restore_base=True)
+        self._stop_pointer()
         self._device = None
         for attr in ("_flush_id", "_counts_timer"):
             sid = getattr(self, attr)
@@ -216,6 +306,7 @@ class ZsaKeyboardService(KeyboardService):
             self._active_layer = 0
             self._engine.set_layout(device.layout_id or DEFAULT_LAYOUT_KEY)
             self.emit("connected", self._device)
+            self._start_pointer(self._device)
             return
         if not os.access(device.hidraw_path, os.R_OK | os.W_OK):
             self._mark_access_denied(device.id)
@@ -287,6 +378,7 @@ class ZsaKeyboardService(KeyboardService):
         self._engine.layer_count = None
         self._engine.set_layout(dev.layout_id or DEFAULT_LAYOUT_KEY)
         self.emit("connected", dev)
+        self._start_pointer(dev)
         if not result.paired:
             if result.legacy_pairing:
                 self.emit("error", _("This keyboard's firmware is too old for live Oryx "
@@ -319,6 +411,7 @@ class ZsaKeyboardService(KeyboardService):
             log.exception("closing connection failed")
 
     def _teardown_state(self) -> None:
+        self._stop_pointer()
         self._prev_press = None
         self._set_heatmap_layout(None)
         self._device = None
@@ -460,6 +553,7 @@ class ZsaKeyboardService(KeyboardService):
                 else:
                     self._pressed.discard(index)
                 self._engine.key_activity(bool(self._pressed))
+                self._trackball.key_event(bool(self._pressed), self._monotonic())
                 if pressed and self.props.heatmap_recording:
                     app, app_name = self._heatmap_app()
                     self._heatmap.record(self._active_layer, index, app, app_name)
@@ -522,6 +616,7 @@ class ZsaKeyboardService(KeyboardService):
             current = generation == self._generation and self._device is not None
             if layout is not None and current:
                 self._layout = layout
+                self._refresh_pointer()          # the layout names its Navigators
                 self._engine.layer_count = len(layout.layers) or None
                 self._set_layout_sync(layout_sync(dev.revision_id, layout.revision_id, None))
                 self.emit("layout-loaded", layout)
@@ -653,6 +748,174 @@ class ZsaKeyboardService(KeyboardService):
             return
         self._update_focus(app_class, title)       # get_focused_window() is current...
         self.emit("focus-changed", app_class, title)   # ...before listeners run
+
+    # --- pointing device -----------------------------------------------------------
+
+    def get_pointer_kind(self) -> PointerKind | None:
+        """The board's pointing device. The layout's Navigators come first: a
+        trackpad there (or a touchpad interface) is TRACKPAD, else a trackball
+        there is TRACKBALL. With a trackpad on one half and a trackball on the
+        other it's TRACKPAD; ``pointer-activity`` carries each one's own kind.
+        Only when the layout doesn't say (not loaded yet, or an old cache used
+        offline) is a trackball found by motion (``TrackballDetector``) or
+        remembered (``KnownTrackballs``)."""
+        return self._pointer_kind
+
+    def _set_pointer_kind(self, kind: PointerKind | None) -> None:
+        if kind != self._pointer_kind:
+            self._pointer_kind = kind
+            self.emit("pointer-changed")
+
+    def _start_pointer(self, dev: Device) -> None:
+        try:
+            ifaces = devmod.pointer_interfaces(dev.id, self._sysfs_root, self._dev_root)
+        except Exception:   # noqa: BLE001 - the pointer must never break connecting
+            log.exception("Pointer interface scan failed")
+            return
+        self._pointer_key = f"{dev.model.value}:{dev.layout_id}" if dev.layout_id else dev.id
+        pad = next((p for p in ifaces if p.kind == InterfaceClass.TOUCHPAD), None)
+        if pad is not None:
+            interp = TrackpadInterpreter(pad.descriptor)
+            if interp.valid:
+                self._touchpad, self._touchpad_path = interp, pad.dev_path
+        mouse = next((p for p in ifaces if p.kind == InterfaceClass.MOUSE), None)
+        if mouse is not None:
+            interp_m = MouseInterpreter(mouse.descriptor)
+            if interp_m.valid:
+                self._mouse_iface = (mouse.dev_path, interp_m)
+        self._trackball_seen = self._pointer_key in self._known_trackballs
+        self._refresh_pointer()
+
+    def _refresh_pointer(self) -> None:
+        """Work out the pointer kind (see ``get_pointer_kind``) and open or close
+        the readers to match. Called on connect, on a layout load and when the
+        motion heuristic finds a trackball."""
+        layout = self._layout
+        if layout is not None and layout.navigators_known:
+            kinds = {n.kind for n in layout.navigators}
+            trackball = PointerKind.TRACKBALL in kinds
+            pad = PointerKind.TRACKPAD in kinds or self._touchpad is not None
+            detect = False
+        else:
+            pad = self._touchpad is not None
+            trackball = self._trackball_seen and not pad
+            # Without Oryx key events, mouse keys can't be told from a trackball.
+            detect = not pad and not trackball and self._conn is not None
+        self._trackball_active = trackball
+        self._update_touchpad_reader()
+        self._update_mouse_reader(trackball or detect)
+        self._set_pointer_kind(PointerKind.TRACKPAD if pad
+                               else PointerKind.TRACKBALL if trackball else None)
+
+    def _update_mouse_reader(self, want: bool) -> None:
+        want = want and self._mouse_iface is not None
+        if want and self._mouse_reader is None:
+            assert self._mouse_iface is not None
+            path, interp = self._mouse_iface
+            interp.reset()
+            self._mouse = interp
+            self._trackball = TrackballDetector()
+            try:
+                self._mouse_reader = _HidReader(path, self._pointer_opener,
+                                                self._on_mouse_report)
+            except OSError as exc:
+                log.info("Can't read the mouse interface %s: %s", path, exc)
+                self._mouse = None
+        elif not want and self._mouse_reader is not None:
+            self._mouse_reader.close()
+            self._mouse_reader = None
+            self._mouse = None
+
+    def _stop_pointer(self) -> None:
+        for attr in ("_touchpad_reader", "_mouse_reader"):
+            reader = getattr(self, attr)
+            if reader is not None:
+                reader.close()
+                setattr(self, attr, None)
+        if self._pointer_timer:
+            GLib.source_remove(self._pointer_timer)
+            self._pointer_timer = 0
+        self._touchpad = None
+        self._touchpad_path = ""
+        self._mouse = None
+        self._mouse_iface = None
+        self._trackball_seen = False
+        self._trackball_active = False
+        self._set_pointer_kind(None)
+
+    def _update_touchpad_reader(self) -> None:
+        want = bool(self.props.pointer_tracking) and self._touchpad is not None
+        if want and (self._touchpad_reader is None or not self._touchpad_reader.is_open):
+            assert self._touchpad is not None
+            self._touchpad.reset()
+            try:
+                self._touchpad_reader = _HidReader(self._touchpad_path, self._pointer_opener,
+                                                   self._on_touchpad_report)
+            except OSError as exc:
+                log.info("Can't read the touchpad %s: %s", self._touchpad_path, exc)
+                self._touchpad_reader = None
+        elif not want and self._touchpad_reader is not None:
+            self._touchpad_reader.close()
+            self._touchpad_reader = None
+            if self._touchpad is not None:
+                self._touchpad.reset()
+
+    def _on_pointer_tracking_changed(self, *_args: object) -> None:
+        self._update_touchpad_reader()
+        if not self.props.pointer_tracking and self._mouse is not None:
+            self._mouse.reset()
+        self._schedule_pointer_poll()
+
+    def _on_touchpad_report(self, data: bytes) -> None:
+        if self._touchpad is None or not self.props.pointer_tracking:
+            return
+        self._emit_pointer(self._touchpad.feed(data, self._monotonic()))
+
+    def _on_mouse_report(self, data: bytes) -> None:
+        if self._mouse is None:
+            return
+        now = self._monotonic()
+        activities = self._mouse.feed(data, now)
+        if self._mouse.last_moved and not self._trackball_active:
+            if self._trackball.motion(now):
+                self._known_trackballs.add(self._pointer_key)
+                self._trackball_seen = True
+                self._mouse.reset()       # activity starts with the next report
+                self._refresh_pointer()
+            return
+        if self._trackball_active and self.props.pointer_tracking:
+            self._emit_pointer(activities)
+        else:
+            self._mouse.reset()
+
+    def _emit_pointer(self, activities: list[PointerActivity]) -> None:
+        for activity in activities:
+            self.emit("pointer-activity", activity)
+        self._schedule_pointer_poll()
+
+    def _schedule_pointer_poll(self) -> None:
+        if self._pointer_timer:
+            GLib.source_remove(self._pointer_timer)
+            self._pointer_timer = 0
+        if not self.props.pointer_tracking:
+            return
+        deadlines = [i.next_deadline() for i in (self._touchpad, self._mouse) if i is not None]
+        deadlines = [d for d in deadlines if d is not None]
+        if not deadlines:
+            return
+        delay = max(1, int((min(deadlines) - self._monotonic()) * 1000) + 1)
+        self._pointer_timer = GLib.timeout_add(delay, self._on_pointer_timer)
+
+    def _on_pointer_timer(self) -> bool:
+        self._pointer_timer = 0
+        now = self._monotonic()
+        out: list[PointerActivity] = []
+        if self._touchpad is not None:
+            out += self._touchpad.poll(now)
+        if self._mouse is not None and self._trackball_active:
+            out += self._mouse.poll(now)
+        self._emit_pointer(out)
+        return GLib.SOURCE_REMOVE
 
     # --- heatmap ------------------------------------------------------------------
 

@@ -26,8 +26,8 @@ Moonlander, ErgoDox EZ, Planck EZ) running Oryx firmware.
   `VIBEMAPP_MOCK=1`). Every signal is emitted on the GLib main loop.
 - Contract and rules-JSON changes are additive and backward compatible.
 - UI: libadwaita, `Adw.ApplicationWindow` → `Adw.NavigationSplitView`. The sidebar pages are
-  **Layout**, **Smart Layers**, **Heatmap** and **Overlay** (Ctrl+1–4). The window always opens
-  on Layout. The header has a device menu and the primary menu (Preferences, Keyboard
+  **Layout**, **Smart Layers**, **Heatmap**, **Overlay**, **Insights** and **Trackpad** (Ctrl+1–6;
+  4.3.3). The window always opens on Layout. The header has a device menu and the primary menu (Preferences, Keyboard
   Shortcuts, About). Errors show as `Adw.Toast`s.
 - App lifecycle, tray and actions live in `main.py`. Settings are GSettings
   (`io.github.albertflindt.Vibemapp`, fixed path).
@@ -41,6 +41,10 @@ Moonlander, ErgoDox EZ, Planck EZ) running Oryx firmware.
   legacy ErgoDox EZ `0000FEED`. Product IDs map to `KeyboardModel` (Voyager: 0x1977).
 - A board exposes several hidraw nodes. The raw-HID one has Usage Page 0xFF60, Usage 0x61 in
   its `report_descriptor`.
+- The other nodes of the same USB device are its siblings (`devices.pointer_interfaces`), classed
+  by descriptor (`pointer.classify`): a touchpad (Digitizer 0x0D / Touch Pad 0x05 application), a
+  mouse (0x01 / 0x02) or other. A node with a keyboard collection is always "other": it carries
+  typed keys and is never opened. The `uaccess` rule already covers every ZSA hidraw node.
 - Hotplug via `Gio.FileMonitor` on `/dev`, with a polling fallback.
 - Access comes from `data/udev/50-zsa.rules` (`uaccess`), not a `plugdev` group.
 
@@ -71,7 +75,15 @@ The full, verified notes are in the `backend/oryx.py` module docstring. The sour
   revision's `config` JSON (`Layout.tapping_term_ms`). `config` holds only settings changed from
   Oryx's defaults; the name of a changed global term in it (`tappingTerm`) is a guess, since no
   layout with one has been seen. Unset means QMK's 200 ms.
-- Cached at `$XDG_CACHE_HOME/vibemapp/layouts/<layout>-<revision>.json` and used offline.
+- **Navigators:** the revision's `navigators` JSON names the ZSA Navigator per half, `null` without
+  one (checked 2026-11-13 on Oryx's default layouts), e.g. `{"right": {"kind": "trackpad",
+  "automouseTime": 400, ...}}`. Only side and `kind` become `Layout.navigators` (left first);
+  `Layout.navigators_known` is False when the field is missing. `"trackball"` as a kind is assumed
+  (none seen); unknown sides and kinds are skipped. The other fields are Navigator settings, such
+  as `automouseTime` (the firmware's auto mouse layer, switched on when the pad moves); not modelled.
+- Cached at `$XDG_CACHE_HOME/vibemapp/layouts/<layout>-<revision>.json` and used offline. A cached
+  revision is never fetched again, except one cached before `navigators` was queried (no key in it):
+  fetched once and rewritten; offline or when that fails, the old copy is used as it is.
 - **Flashed revision:** the layout is fetched by the revision in the firmware's serial
   (`GET_FW_VERSION`), so the view shows what's on the keyboard, not Oryx's newest edits. After a load,
   `KeyboardService.get_layout_sync()` (`models.LayoutSync`, signal `layout-sync-changed`) compares the
@@ -98,6 +110,42 @@ The full, verified notes are in the `backend/oryx.py` module docstring. The sour
 - Reconnects with backoff. `FocusWatcher` is the base class for future GNOME/KDE/X11 sources.
 - Hyprland config is Lua (`hl.on`, `hl.exec_cmd`, `hl.bind`, `hl.dsp.exec_cmd`).
 
+### 3.5 Pointing device (Navigator)
+`backend/pointer.py` (pure logic), read by `zsa_service.py`; contract: `PointerKind`,
+`PointerActivity`, `get_pointer_kind()`, `pointer-changed`, `pointer-activity`, `pointer-tracking`.
+- **Detection order:** the loaded layout's `navigators` (3.3) first: a trackpad there (or a touchpad
+  interface) is TRACKPAD, else a trackball there is TRACKBALL right away, with its mouse interface
+  read for activity; no Navigator there means no trackball. A trackpad on one half and a trackball
+  on the other report TRACKPAD, and both send activity with their own kind. Before the layout loads,
+  or when it doesn't say (an old cache offline), the hardware checks below decide. A layout that
+  changes the answer emits `pointer-changed`.
+- **Trackpad:** a touchpad sibling makes `get_pointer_kind()` TRACKPAD on connect. Its node is
+  opened read-only (non-blocking fd, GLib io watch) only while `pointer-tracking` is on.
+  Voyager reports (verified): id 1, 16 bytes; two finger slots (bit0 confidence, bit1 tip; contact
+  id; X, Y u16 LE 0–2048), scan time, contact count (low nibble), buttons 1–3 (bits 4–6). ~125 Hz
+  while touched, one tip=0 report per lift, then silence. Hybrid frames (count 0 = continuation)
+  are handled. Fields are found by a small descriptor parser, not hard-coded offsets.
+- **Inference** (`TrackpadInterpreter`): TOUCH on fingers down or a finger-count change (motion
+  restarts there); MOVE (1 or 3+ fingers) / SCROLL (2 fingers, direction of the finger motion,
+  dominant axis, 2:1 hysteresis) once the mean moves 1.5 mm (descriptor's physical size; Voyager
+  ≈ 37 units/mm); IDLE after `POINTER_IDLE_MS` without motion, fingers still down; on lift TAP if
+  ≤ 180 ms, no motion and no button (fingers = most during it), then IDLE with 0 fingers. No
+  report for 0.5 s while touched counts as a lift (never a tap). CLICK/RELEASE from the buttons.
+  While TOUCH/MOVE/SCROLL the same action is re-sent with fresh `contacts` (0..1 of the logical
+  range) and accumulated `motion` at most every `POINTER_FRAME_MS`; a timer flushes the last one.
+- **Trackball fallback** (layout doesn't say): without a touchpad, the mouse sibling is read whenever
+  Oryx is paired. Mouse keys use it too, so it's a trackball only after motion for 150 ms with no
+  Oryx key held and none
+  within 200 ms (`TrackballDetector`). Then TRACKBALL, remembered in
+  `$XDG_STATE_HOME/vibemapp/pointer.json` by `<model>:<layout id>`, so it's known on the next
+  start. Its activity (`MouseInterpreter`: MOVE, SCROLL from wheel/AC Pan, CLICK/RELEASE, IDLE)
+  is only emitted for a known trackball. Not verified: no trackball has been seen.
+- Unplug or read errors close the node quietly; the device monitor handles the disconnect.
+- **Privacy:** activity is never recorded or stored; only the trackball flag is.
+- Mock (`VIBEMAPP_MOCK_POINTER=trackpad|trackball|none`): a looping script fed through the real
+  interpreters while `pointer-tracking` is on. The mock layout lists it as its Navigator, on the
+  half `VIBEMAPP_MOCK_POINTER_SIDE=right|left` names (default right).
+
 ## 4. Features
 
 ### 4.1 Live layout
@@ -119,11 +167,11 @@ exists but can't be opened.
   - `CLASS_PATTERN`: regex that must `re.fullmatch` the class.
   - `STEAM_GAME`: empty `app_class` means any Steam game; an app id means that game (still
     matched and editable, no longer creatable from the UI).
-- **On-screen keys per rule** (additive, 1.8): `show_hold_actions` and `show_held_modifiers`
-  (missing = true). While the focused window matches an enabled rule with one off, that pill
-  (4.3.1, 4.3.2) doesn't show, e.g. no Ctrl in games via All Steam Games. Checked at key press
-  from the focused window, also while Smart Layers itself is paused. Switches in the rule dialog's
-  On-Screen Keys group.
+- **On-screen activity per rule** (additive, 1.8; `show_pointer` 1.10): `show_hold_actions`,
+  `show_held_modifiers` and `show_pointer` (missing = true). While the focused window matches an
+  enabled rule with one off, that pill (4.3.1–4.3.3) doesn't show, e.g. no Ctrl in games via All
+  Steam Games. Checked at key press (pointer report) from the focused window, also while Smart
+  Layers itself is paused. Switches in the rule dialog's On-Screen Activity group.
 - First enabled matching rule wins; no match → fallback layer (`None` = don't change, the
   default). Set-layer is only sent when the target differs from the keyboard's layer; focus
   flips are debounced ~50 ms.
@@ -188,6 +236,16 @@ docstring for sizing and half-spacing rules), `ui/overlay_page.py`/`.ui`.
 - **Control:** a Preview switch on the page (`app.overlay-preview`), a tray checkbox,
   `app.toggle-overlay` / `vibemapp --toggle-overlay` for a Hyprland bind (the page shows the
   snippet). Toggle remembers the last non-off mode in memory.
+- **Trackpad or trackball** (`overlay-pointer`, off; switch on the Trackpad page and in
+  Appearance, grayed out without a device): one pad per `Layout.navigators` entry (its kind, lit
+  only by activity of that kind), on the surface of its half. When `navigators_known` is False (a
+  layout cached before 1.10) the right half gets the known device; known and empty: none. The
+  Navigator snaps onto a half's inner edge above the thumb cluster, so the pad (`PointerView`,
+  overlay style) is 1.5 key units across, 0.3 beside the inner edge of the half's unrotated keys,
+  its bottom 0.3 above the thumb cluster's top, moved up past any key of the other half or the other
+  pad (joined board); a board without halves gets it beside that side's outer edge. The part's and
+  board's bounds grow to fit (`overlay_state.pointer_pad_bounds`); the layer pill stays aligned
+  with the keys. Live while the overlay is shown; it never shows the overlay by itself.
 - Additive contract: `get_pressed_keys()`, `get_focused_monitor()`, `focused-monitor-changed`.
 
 #### 4.3.1 Hold-action pill
@@ -210,7 +268,9 @@ up by the application next to the overlay; settings in the Overlay page's Hold A
   exclusive zone -1, empty input region, never unmapped once shown; hidden it parks on
   BACKGROUND), namespace `vibemapp-hold-pill`, anchored to the overlay's top or bottom edge
   only, so it's centred. 10 % of the monitor height in from that edge, or 12 px past the
-  overlay while that is shown. Visible while the key stays down, then `hold-pill-linger-ms`
+  overlay while that is shown (`OverlayController.edge_clearance`). A visible (or fading) pill
+  never moves; a new placement waits until it's hidden, so a gesture's pill stays put when a
+  firmware auto mouse layer brings the overlay up. Visible while the key stays down, then `hold-pill-linger-ms`
   (default 900, 0 = fade at once); another hold replaces the text. Shown also while the
   Vibemapp window is active.
 - **Settings:** `hold-pill` (off by default), Stay Visible and Fade Duration, and
@@ -238,6 +298,40 @@ them: `Ctrl`, `Ctrl+Shift`, `Ctrl+Shift+T`. Code: `ui/held_modifiers.py` (pure t
 - **Settings:** `modifier-pill` (off by default), Stay Visible and Fade Duration, in the Overlay
   page's Held Modifiers group, below Hold Actions. A Smart Layers rule can turn it off (4.2).
   Needs gtk4-layer-shell.
+
+#### 4.3.3 Pointer pill and the Trackpad page
+The keyboard's trackpad or trackball (3.5), drawn live on the hold pill's surface. Code:
+`ui/pointer_activity.py` (pure: `PadModel`, `PointerTracker`, labels, `want_pointer`),
+`ui/pointer_view.py` (`PointerView`, the drawing), `ui/hold_pill.py`, `ui/pointer_page.py`/`.ui`.
+- **Drawing** (`PointerView` + `PadModel`): a round trackpad with a dot per finger at its contact
+  (the pad's square 0..1 range mapped onto the disc, clamped), a fading trail behind moving fingers
+  (220 ms), a ripple where a tap was (450 ms), a press-in flash on a click (260 ms, held while a
+  button is down). A trackball is a shaded ball whose surface marks roll with `motion`, with short
+  streaks; buttons flash it. The frame clock runs only while something fades. Two looks: overlay
+  style (light outline, dark halo, overlay Opacity at rest; the same light colour fills it at 12 %
+  while touched and flashes 35 % on a click; pill and overlay) and neutral theme colours on the
+  page (window foreground at set strengths on the card, like the key outlines). Never the accent.
+- **Pill:** the pad, 1.5 key units across (overlay Size), after a key with the held modifiers when
+  `modifier-pill` shows them ("Ctrl" + the pad: Ctrl+scroll is zoom). A key typed with them replaces
+  the pad; a firing hold action shows over it, then it comes back. `pointer-pill-actions` (click,
+  tap, scroll, move = motion or touch) choose what makes it appear; once up, every report updates the
+  drawing. The surface is always the pad's height (a lone key is centred on it), and with a
+  modifier key a spacer as wide mirrors it, so the pad never moves as modifiers come and go.
+  A click or tap isn't replaced by motion within 500 ms or while a button is down (a drag).
+  It stays until IDLE, the RELEASE of a click, or at once for a tap, then `pointer-pill-linger-ms`
+  (600) and fades with `pointer-pill-fade-ms` (200); held modifiers then come back without the last
+  key. The text ("Two-Finger Scroll ↓") is only the accessible label and the page's caption: taps
+  name the fingers, not the button libinput makes of them (a compositor setting).
+- **Tracking:** `pointer_tracking` is on while the pill setting is on, the overlay's pad is shown, or
+  the page is mapped (`want_pointer` owners).
+- **Page:** sidebar item titled Trackpad (`input-touchpad-symbolic`), Trackball
+  (`input-mouse-symbolic`) or "Trackpad & Trackball" without a device, then insensitive with a
+  tooltip; if the device goes away while the page is shown, the window goes to Layout. A live view (large
+  `PointerView` and a one-line, ellipsized caption whose height never changes: a homogeneous stack
+  with a hidden probe holding the arrows, which come from a taller fallback font), On-Screen
+  Activity (switch, Show For expander, Stay Visible, Fade Duration), Overlay (`overlay-pointer`; its
+  subtitle names the half from `Layout.navigators`). "Overlay Unavailable" without gtk4-layer-shell. A Smart
+  Layers rule can turn the pill off (4.2).
 
 ### 4.4 Heatmap
 Opt-in (`heatmap-recording`, default off). Stores only per-(local day, layer, key index)

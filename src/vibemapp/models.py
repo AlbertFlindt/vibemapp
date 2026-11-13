@@ -92,6 +92,13 @@ class Layout:
     # The layout's global tapping term in ms when Oryx says it was changed, None
     # for the default. Additive (1.5).
     tapping_term_ms: int | None = None
+    # The Navigator modules Oryx says are on the board (revision
+    # ``navigators``), left half first. () when there are none, or for a
+    # cached layout fetched before 1.10. Additive (1.10).
+    navigators: tuple[Navigator, ...] = ()
+    # Whether Oryx said which Navigators there are (False for a cached layout
+    # fetched before 1.10, so () means "don't know" there). Additive (1.10).
+    navigators_known: bool = False
 
 
 class LayoutSync(str, Enum):
@@ -105,6 +112,69 @@ class LayoutSync(str, Enum):
     # A different revision than the flashed one is shown (Oryx sent another one,
     # or offline with only another revision cached), so keys may be wrong.
     NOT_FLASHED = "not-flashed"
+
+
+class PointerKind(str, Enum):
+    """The keyboard's pointing device (ZSA Navigator). Additive (1.10)."""
+    # A touchpad interface (HID digitizer, usage 0x0D/0x05): known from the
+    # report descriptor as soon as the keyboard is connected.
+    TRACKPAD = "trackpad"
+    # The mouse interface moved while no key was held. Mouse keys use that
+    # interface too, so a trackball is only known after it first moves.
+    TRACKBALL = "trackball"
+
+
+@dataclass(frozen=True)
+class Navigator:
+    """A ZSA Navigator module from the layout: which half it's on and what it
+    is. Oryx revision ``navigators`` is ``{"right": {"kind": "trackpad", ...}}``.
+    Additive (1.10)."""
+    side: str                     # "left" or "right"
+    kind: PointerKind
+
+
+class PointerAction(str, Enum):
+    """What a ``PointerActivity`` reports. Additive (1.10)."""
+    TOUCH = "touch"      # finger(s) down on the trackpad, not moving yet
+    MOVE = "move"        # pointer motion (one finger, or the ball rolling)
+    SCROLL = "scroll"    # two-finger motion on the trackpad, or wheel/pan reports
+    TAP = "tap"          # a short touch without motion, ended (tap-to-click)
+    CLICK = "click"      # a button went down (pad pressed, trackball button)
+    RELEASE = "release"  # a button went up
+    IDLE = "idle"        # all fingers lifted / no motion for a short while
+
+
+@dataclass(frozen=True)
+class PointerActivity:
+    """One change in what the pointing device does. Additive (1.10).
+
+    Emitted with ``pointer-activity`` on the GLib main loop. Every action
+    change is sent; while fingers are down or the ball rolls, TOUCH/MOVE/SCROLL
+    are also re-sent with fresh ``contacts``/``motion`` at most every
+    ``POINTER_FRAME_MS``, so the UI can draw the fingers live. IDLE follows
+    once motion has stopped for ``POINTER_IDLE_MS``. Never recorded or stored.
+    """
+    kind: PointerKind
+    action: PointerAction
+    fingers: int = 0              # trackpad fingers down (TAP: fingers of the tap)
+    button: int = 0               # CLICK/RELEASE: 1 left, 2 right, 3 middle
+    buttons: frozenset[int] = frozenset()   # buttons down after this change
+    # SCROLL direction of the fingers or wheel: "up", "down", "left", "right"
+    # (finger motion, so natural scrolling doesn't change it). "" otherwise.
+    direction: str = ""
+    # Trackpad: the fingers down, as (x, y) in 0..1 of the pad's logical
+    # range (0, 0 top left). TAP: where the tap's fingers were. () otherwise.
+    contacts: tuple[tuple[float, float], ...] = ()
+    # Motion since the previous activity, in device counts: trackball X/Y
+    # (MOVE) or wheel/pan (SCROLL, positive = up/right); trackpad: centroid
+    # delta in 0..1 units. (0, 0) when not moving.
+    motion: tuple[float, float] = (0.0, 0.0)
+
+
+POINTER_FRAME_MS = 16
+
+
+POINTER_IDLE_MS = 300
 
 
 class RuleMatch(str, Enum):
@@ -130,7 +200,8 @@ class AppRule:
     specific rules should come before catch-all ones.
     ``show_hold_actions`` and ``show_held_modifiers`` (additive, 1.8) turn the
     on-screen hold-action and held-modifier keys off while it matches, e.g.
-    in games.
+    in games. ``show_pointer`` (additive, 1.10) does the same for pointer
+    activity.
     """
     app_class: str
     display_name: str
@@ -141,6 +212,7 @@ class AppRule:
     match: RuleMatch = RuleMatch.APP
     show_hold_actions: bool = True
     show_held_modifiers: bool = True
+    show_pointer: bool = True
 
 
 @dataclass(frozen=True)

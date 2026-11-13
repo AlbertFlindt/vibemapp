@@ -9,7 +9,7 @@ from vibemapp.backend import oryx_api
 from vibemapp.backend.oryx_api import (LayoutCache, LayoutFetchError, LayoutRepository,
                                               key_binding_from_json, keycode_label, layout_sync,
                                               parse_layout)
-from vibemapp.models import KeyboardModel, LayoutSync
+from vibemapp.models import KeyboardModel, LayoutSync, Navigator, PointerKind
 
 
 def _key(code, hold=None, **extra):
@@ -23,7 +23,7 @@ def _key(code, hold=None, **extra):
 
 SAMPLE = {
     "hashId": "Bre9W", "title": "Flindt 1.1", "geometry": "voyager",
-    "revision": {"hashId": "rbaBD4", "qmkVersion": "25.0", "layers": [
+    "revision": {"hashId": "rbaBD4", "qmkVersion": "25.0", "navigators": None, "layers": [
         {"title": "Sym", "color": "#FF0000", "position": 1, "keys": [_key("KC_EXLM")]},
         {"title": "Main", "color": None, "position": 0, "keys": [
             _key("KC_ESCAPE"), _key("KC_A", hold={"code": "MO", "layer": 1}),
@@ -34,6 +34,27 @@ SAMPLE = {
         {"title": "", "color": "bogus", "position": 2, "keys": []},
     ]},
 }
+
+
+# Oryx's answer for layout Bre9W revision KreoW9 (a Voyager with a trackpad on
+# the right half), as fetched on 2026-11-13.
+NAVIGATORS_TRACKPAD_RIGHT = {"right": {
+    "tap": True, "kind": "trackpad", "aimSpeed": None, "rotation": 0, "tapRight": True,
+    "aimLayers": [], "turboSpeed": None, "orientation": None, "sensitivity": None,
+    "turboLayers": [], "invertScroll": None, "automouseTime": 400, "invertScrollX": None,
+    "invertScrollY": None, "scrollInertia": True, "oneShotAutoMouse": None,
+    "scrollSensitivity": None, "automouseThreshold": None, "scrollWithTwoFingers": True,
+    "oneShotAutoMouseTimeout": None}}
+
+
+def with_navigators(navigators=None, legacy=False):
+    """SAMPLE with ``navigators`` set, or without the key (a pre-1.10 cache)."""
+    revision = dict(SAMPLE["revision"])
+    if legacy:
+        del revision["navigators"]
+    else:
+        revision["navigators"] = navigators
+    return {**SAMPLE, "revision": revision}
 
 
 class LabelTests(unittest.TestCase):
@@ -181,6 +202,34 @@ class ParseTests(unittest.TestCase):
         self.assertEqual((keys[5].tap_label, keys[5].color), ("MoveScreen", "#abcdef"))
 
 
+class NavigatorTests(unittest.TestCase):
+    def test_trackpad_right_from_oryx(self) -> None:
+        layout = parse_layout(with_navigators(NAVIGATORS_TRACKPAD_RIGHT))
+        self.assertEqual(layout.navigators, (Navigator("right", PointerKind.TRACKPAD),))
+        self.assertTrue(layout.navigators_known)
+
+    def test_none_and_unknown(self) -> None:
+        none = parse_layout(SAMPLE)          # Oryx sends null without a Navigator
+        self.assertEqual((none.navigators, none.navigators_known), ((), True))
+        legacy = parse_layout(with_navigators(legacy=True))
+        self.assertEqual((legacy.navigators, legacy.navigators_known), ((), False))
+        for raw in ({}, [], "not json", 3):
+            layout = parse_layout(with_navigators(raw))
+            self.assertEqual((layout.navigators, layout.navigators_known), ((), True), raw)
+
+    def test_both_halves_left_first_and_skips(self) -> None:
+        import json
+        raw = {"right": {"kind": "trackpad"}, "left": {"kind": "trackball"}}
+        layout = parse_layout(with_navigators(json.dumps(raw)))      # a JSON-string scalar
+        self.assertEqual(layout.navigators, (Navigator("left", PointerKind.TRACKBALL),
+                                             Navigator("right", PointerKind.TRACKPAD)))
+        raw = {"left": {"kind": "joystick"}, "middle": {"kind": "trackpad"},
+               "right": "trackpad"}
+        with self.assertLogs("vibemapp.backend.oryx_api", "INFO"):
+            layout = parse_layout(with_navigators(raw))
+        self.assertEqual(layout.navigators, ())
+
+
 class RepositoryTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
@@ -195,7 +244,36 @@ class RepositoryTests(unittest.TestCase):
         self.calls.append((lid, rev, geo))
         if self.offline:
             raise LayoutFetchError("offline", offline=True)
-        return SAMPLE
+        return self.answer
+
+    answer = SAMPLE
+
+    def test_old_cache_is_fetched_again_once(self) -> None:
+        self.cache.store("Bre9W", with_navigators(legacy=True))
+        repo = LayoutRepository(self.cache, self.fetch)
+        # Offline: the old copy as it is, navigators unknown.
+        self.offline = True
+        layout = repo.load_blocking("Bre9W", "rbaBD4", KeyboardModel.VOYAGER)
+        self.assertEqual((layout.title, layout.navigators_known), ("Flindt 1.1", False))
+        self.assertEqual(len(self.calls), 1)
+        # Online: fetched once, rewritten, then served from the cache again.
+        self.offline = False
+        self.answer = with_navigators(NAVIGATORS_TRACKPAD_RIGHT)
+        layout = repo.load_blocking("Bre9W", "rbaBD4", KeyboardModel.VOYAGER)
+        self.assertEqual(layout.navigators, (Navigator("right", PointerKind.TRACKPAD),))
+        self.assertEqual(len(self.calls), 2)
+        layout = repo.load_blocking("Bre9W", "rbaBD4", KeyboardModel.VOYAGER)
+        self.assertEqual(layout.navigators, (Navigator("right", PointerKind.TRACKPAD),))
+        self.assertEqual(len(self.calls), 2)
+
+    def test_old_cache_kept_when_refetch_fails(self) -> None:
+        self.cache.store("Bre9W", with_navigators(legacy=True))
+
+        def broken(lid, rev, geo):
+            raise LayoutFetchError("Oryx returned HTTP 500")
+        layout = LayoutRepository(self.cache, broken).load_blocking(
+            "Bre9W", "rbaBD4", KeyboardModel.VOYAGER)
+        self.assertEqual((layout.revision_id, layout.navigators_known), ("rbaBD4", False))
 
     def test_fetch_then_cache_then_offline(self) -> None:
         repo = LayoutRepository(self.cache, self.fetch)
@@ -230,7 +308,7 @@ class RepositoryTests(unittest.TestCase):
     def test_query_text(self) -> None:
         q = oryx_api.LAYOUT_QUERY
         for part in ("layout(hashId: $hashId, geometry: $geometry, revisionId: $revisionId)",
-                     "layers { title color position keys }", " config "):
+                     "layers { title color position keys }", " config ", " navigators "):
             self.assertIn(part, q)
 
     def test_latest_revision_async(self) -> None:

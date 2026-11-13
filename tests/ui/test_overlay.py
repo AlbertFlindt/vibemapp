@@ -230,6 +230,139 @@ class OverlayControllerTests(unittest.TestCase):
 
 
 @unittest.skipUnless(HAVE_DISPLAY, "needs a display")
+class PointerPadTests(unittest.TestCase):
+    """The layout's Navigators beside their halves' inner edges (``overlay-pointer``)."""
+
+    setUp = OverlayControllerTests.setUp
+    tearDown = OverlayControllerTests.tearDown
+    connect_keyboard = OverlayControllerTests.connect_keyboard
+
+    def use_navigators(self, *navigators, known: bool = True) -> None:
+        """The layout as Oryx describes it, whatever the mock fills in."""
+        from dataclasses import replace
+        layout = replace(self.svc.get_layout(), navigators=tuple(navigators),
+                         navigators_known=known)
+        self.svc.get_layout = lambda: layout
+        self.svc.emit("layout-loaded", layout)
+
+    def test_pad_only_with_the_setting_and_a_device(self) -> None:
+        from vibemapp.models import PointerAction, PointerActivity, PointerKind
+        self.connect_keyboard()
+        self.svc.simulate_pointer_kind(PointerKind.TRACKPAD)
+        self.use_navigators(known=False)          # a layout cached before 1.10
+        self.settings.set_string("overlay-mode", "always")
+        self.assertTrue(self.ctl.shown)
+        self.assertFalse(any(s.pads for s in self.ctl.surfaces))
+        self.assertFalse(self.svc.props.pointer_tracking)
+        self.settings.set_boolean("overlay-pointer", True)
+        pads = [p for s in self.ctl.surfaces for p in s.pads]
+        self.assertEqual(len(pads), 1)            # the right half, by default
+        self.assertTrue(self.svc.props.pointer_tracking)       # shown and on
+        self.svc.emit("pointer-activity", PointerActivity(
+            PointerKind.TRACKPAD, PointerAction.TOUCH, fingers=1, contacts=((0.5, 0.5),)))
+        self.assertEqual(pads[0].model.contacts, ((0.0, 0.0),))
+        self.settings.set_string("overlay-mode", "off")         # never shows it by itself
+        self.assertFalse(self.ctl.shown)
+        self.assertFalse(self.svc.props.pointer_tracking)
+        self.settings.set_string("overlay-mode", "always")
+        self.svc.simulate_pointer_kind(None)
+        self.assertFalse(any(s.pads for s in self.ctl.surfaces))
+
+    def test_no_pad_when_the_layout_says_there_is_none(self) -> None:
+        from vibemapp.models import PointerKind
+        self.connect_keyboard()
+        self.svc.simulate_pointer_kind(PointerKind.TRACKPAD)
+        self.use_navigators()                     # Oryx: no Navigator
+        self.settings.set_boolean("overlay-pointer", True)
+        self.settings.set_string("overlay-mode", "always")
+        self.assertFalse(any(s.pads for s in self.ctl.surfaces))
+
+    def test_each_navigator_on_its_half_lit_by_its_own_kind(self) -> None:
+        from vibemapp.models import Navigator, PointerAction, PointerActivity, PointerKind
+        self.connect_keyboard()
+        self.use_navigators(Navigator("left", PointerKind.TRACKBALL),
+                            Navigator("right", PointerKind.TRACKPAD))
+        self.settings.set_boolean("overlay-pointer", True)
+        self.settings.set_int("overlay-half-spacing", 50)
+        self.settings.set_string("overlay-mode", "always")
+        surfaces = self.ctl.surfaces
+        self.assertEqual(len(surfaces), 2)
+        self.assertEqual([[p.model.kind for p in s.pads] for s in surfaces],
+                         [[PointerKind.TRACKBALL], [PointerKind.TRACKPAD]])
+        self.assert_pad_inside(surfaces[0], "left")
+        self.assert_pad_inside(surfaces[1], "right")
+        ball, pad = surfaces[0].pads[0], surfaces[1].pads[0]
+        self.svc.emit("pointer-activity", PointerActivity(
+            PointerKind.TRACKPAD, PointerAction.TOUCH, fingers=1, contacts=((0.5, 0.5),)))
+        self.assertEqual(len(pad.model.contacts), 1)
+        self.assertEqual(ball.model.lit(0), 0.0)           # not the trackball's
+        self.assertEqual(ball.model.contacts, ())
+
+    def test_joined_board_carries_both_pads_between_the_halves(self) -> None:
+        from vibemapp.models import Navigator, PointerKind
+        self.connect_keyboard()
+        self.use_navigators(Navigator("left", PointerKind.TRACKBALL),
+                            Navigator("right", PointerKind.TRACKPAD))
+        self.settings.set_boolean("overlay-pointer", True)
+        self.settings.set_string("overlay-mode", "always")
+        surfaces = self.ctl.surfaces
+        self.assertEqual(len(surfaces), 1)
+        left, right = surfaces[0].pads
+        view = surfaces[0].view
+        # Both in the gap between the halves, side by side, inside the board.
+        self.assertGreater(left.get_margin_start(), view.get_margin_start())
+        self.assertLessEqual(left.get_margin_start() + left._size, right.get_margin_start())
+        self.assertLess(right.get_margin_start() + right._size,
+                        view.get_margin_start() + view._fixed_size[0])
+
+    def assert_pad_inside(self, surface, side: str) -> None:
+        """The pad sits on the half's inner side (the surface's edge facing the
+        other half), in the lower part, inside the surface."""
+        view, pad = surface.view, surface.pads[0]
+        size = pad._size
+        board_w, board_h = view._fixed_size
+        surface_w = view.get_margin_start() + board_w + view.get_margin_end()
+        surface_h = view.get_margin_top() + board_h + view.get_margin_bottom()
+        self.assertGreaterEqual(pad.get_margin_top(), 0)
+        self.assertLessEqual(pad.get_margin_top() + size, surface_h)
+        if side == "right":                  # inner edge: the surface's left
+            self.assertEqual(pad.get_margin_start(), 0)
+            self.assertGreater(view.get_margin_start(), 0)
+            # The layer pill lines up with the keys, not the pad.
+            self.assertEqual(surface.pill.get_margin_start(), view.get_margin_start())
+        else:
+            self.assertEqual(pad.get_margin_start() + size, surface_w)
+            self.assertEqual(view.get_margin_start(), 0)
+            self.assertGreater(view.get_margin_end(), 0)
+        # Above the thumb cluster: its bottom in the board's middle part.
+        bottom = pad.get_margin_top() + size - view.get_margin_top()
+        self.assertGreater(bottom, board_h * 0.5)
+        self.assertLess(bottom, board_h * 0.8)
+
+
+@unittest.skipUnless(HAVE_DISPLAY, "needs a display")
+class ClearanceTests(unittest.TestCase):
+    """Where the pills sit: past the overlay while it's shown, else 0."""
+
+    setUp = OverlayControllerTests.setUp
+    tearDown = OverlayControllerTests.tearDown
+    connect_keyboard = OverlayControllerTests.connect_keyboard
+
+    def test_follows_the_overlay_being_shown(self) -> None:
+        self.settings.set_value("overlay-layers", GLib.Variant("ai", [3]))
+        self.connect_keyboard()
+        self.assertFalse(self.ctl.shown)
+        self.assertEqual(self.ctl.edge_clearance(), 0)
+        self.svc.simulate_layer(3)                      # e.g. the auto mouse layer
+        self.assertTrue(self.ctl.shown)
+        shown = self.ctl.edge_clearance()
+        self.assertGreater(shown, 24 + 100)             # margin plus a whole board
+        self.svc.simulate_layer(0)
+        self.assertFalse(self.ctl.shown)
+        self.assertEqual(self.ctl.edge_clearance(), 0)
+
+
+@unittest.skipUnless(HAVE_DISPLAY, "needs a display")
 class UnavailableTests(unittest.TestCase):
     def test_no_layer_shell_means_no_surfaces(self) -> None:
         from vibemapp.ui import overlay

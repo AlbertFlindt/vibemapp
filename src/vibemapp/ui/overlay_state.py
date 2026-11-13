@@ -29,6 +29,18 @@ Half spacing (``overlay-half-spacing``, 0–100 %)
     offsets within the board (the thumb clusters stay level with each other)
     and the board keeps MARGIN_PX from the anchored edge. Boards without
     halves (Planck EZ) ignore the spacing.
+
+Pointing device (``overlay-pointer``, the layout's ``navigators``)
+    A ZSA Navigator snaps onto a half's inner edge (the one facing the other
+    half), just above the thumb cluster. So each one in the layout is drawn
+    PAD_UNITS across, PAD_GAP beside the inner edge of its half's main keys
+    (unrotated), its bottom PAD_GAP above the top of that half's thumb
+    cluster (rotated keys; without any, level with the main keys' bottom),
+    moved up past any key of the other half (or its pad) it would overlap
+    (a joined board). Without ``navigators`` (a layout cached before 1.10) the right
+    half gets the known device. A board without halves gets it beside that
+    side's outer edge, centred on its keys. The part's and board's bounds grow
+    to include it (``pointer_pad_bounds``).
 """
 
 from __future__ import annotations
@@ -51,6 +63,8 @@ MIN_PX_PER_MM = 1.5           # ~38 DPI (TVs, projectors)
 MAX_PX_PER_MM = 24.0          # ~610 DPI
 
 
+PAD_UNITS = 1.5               # trackpad/trackball diameter, key units
+PAD_GAP = 0.3                 # between the keys and the pad
 DEFAULT_FADE_MS = 200          # the overlay-fade-ms schema default
 MAX_FADE_MS = 1000
 
@@ -59,6 +73,13 @@ def _get_int(settings, key: str, default: int) -> int:
     """For keys newer than a settings stand-in (MemorySettings in tests)."""
     try:
         return int(settings.get_int(key))
+    except KeyError:
+        return default
+
+
+def _get_bool(settings, key: str, default: bool) -> bool:
+    try:
+        return bool(settings.get_boolean(key))
     except KeyError:
         return default
 
@@ -82,6 +103,7 @@ class OverlayConfig:
     monitor: str = ""          # connector name; "" follows the focused monitor
     idle_seconds: int = 0      # 0 never hides
     fade_ms: int = DEFAULT_FADE_MS   # fade-in duration; 0 shows/hides at once
+    pointer: bool = False      # draw the trackpad or trackball (overlay-pointer)
 
     @classmethod
     def from_settings(cls, settings) -> "OverlayConfig":
@@ -96,7 +118,8 @@ class OverlayConfig:
                    half_spacing=int(settings.get_int("overlay-half-spacing")),
                    monitor=settings.get_string("overlay-monitor"),
                    idle_seconds=int(settings.get_int("overlay-idle-seconds")),
-                   fade_ms=_get_int(settings, "overlay-fade-ms", DEFAULT_FADE_MS))
+                   fade_ms=_get_int(settings, "overlay-fade-ms", DEFAULT_FADE_MS),
+                   pointer=_get_bool(settings, "overlay-pointer", False))
 
 
 def should_show(config: OverlayConfig, active_layer: int, *, has_layout: bool,
@@ -201,6 +224,42 @@ def geometry_bounds(geometry: tuple[KeyGeometry, ...]) -> Bounds:
     return min(xs), min(ys), max(xs), max(ys)
 
 
+def _overlaps(a: Bounds, b: Bounds) -> bool:
+    return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+
+
+def pointer_pad_bounds(part: tuple[KeyGeometry, ...], side: str = "right",
+                       other: tuple[KeyGeometry, ...] | None = None,
+                       avoid: tuple[Bounds, ...] = ()) -> Bounds:
+    """Where a Navigator on ``side`` ("right" or "left") goes, in key units;
+    see the module docstring. ``part`` is that half, ``other`` the other half,
+    or ``other`` is None and ``part`` the whole board (no halves). It also
+    moves up past ``avoid`` (the other half's pad)."""
+    main = tuple(k for k in part if not k.rotation) or part
+    mb = geometry_bounds(main)
+    if other is None:           # no halves: beside the board's outer edge
+        cy = (mb[1] + mb[3]) / 2
+        outer = geometry_bounds(part)
+        x0 = outer[2] + PAD_GAP if side != "left" else outer[0] - PAD_GAP - PAD_UNITS
+        return x0, cy - PAD_UNITS / 2, x0 + PAD_UNITS, cy + PAD_UNITS / 2
+    thumbs = tuple(k for k in part if k.rotation)
+    y1 = (geometry_bounds(thumbs)[1] - PAD_GAP) if thumbs else mb[3]
+    x0 = mb[0] - PAD_GAP - PAD_UNITS if side != "left" else mb[2] + PAD_GAP
+    pad = (x0, y1 - PAD_UNITS, x0 + PAD_UNITS, y1)
+    keys = [geometry_bounds((k,)) for k in other] + list(avoid)
+    for _ in range(len(keys)):  # up past the other half's keys it would cover
+        hit = [k for k in keys if _overlaps(pad, k)]
+        if not hit:
+            break
+        y1 = min(k[1] for k in hit) - PAD_GAP
+        pad = (x0, y1 - PAD_UNITS, x0 + PAD_UNITS, y1)
+    return pad
+
+
+def union_bounds(a: Bounds, b: Bounds) -> Bounds:
+    return min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3])
+
+
 @dataclass(frozen=True)
 class MonitorInfo:
     """What placement needs to know about a monitor (logical pixels)."""
@@ -265,7 +324,7 @@ def place_parts(monitor: MonitorInfo, anchor: str, unit: float, board: Bounds,
     return out
 
 
-__all__ = ["ANCHORS", "DEFAULT_FADE_MS", "DEFAULT_MODE", "fade_durations", "KEY_PITCH_MM", "MARGIN_PX", "MODES", "MonitorInfo",
+__all__ = ["PAD_GAP", "PAD_UNITS", "pointer_pad_bounds", "union_bounds", "ANCHORS", "DEFAULT_FADE_MS", "DEFAULT_MODE", "fade_durations", "KEY_PITCH_MM", "MARGIN_PX", "MODES", "MonitorInfo",
            "OverlayConfig", "PartPlacement", "anchor_edges", "geometry_bounds",
            "place_parts", "px_per_mm", "should_show", "split_geometry", "toggled_mode",
            "unit_px"]

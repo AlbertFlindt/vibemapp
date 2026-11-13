@@ -12,6 +12,10 @@ Surfaces
     Every surface gets an empty input region, so clicks go through it.
     With a half spacing above 0 each keyboard half gets its own surface, so the
     space between them stays free (placement rule: ``overlay_state``).
+    With ``overlay-pointer`` on, the surface of each half with a Navigator in
+    the layout (``Layout.navigators``; without them the right half, when a
+    device is known) also draws it (``PointerView``), live, beside that half's
+    inner edge above the thumb cluster (``overlay_state.pointer_pad_bounds``).
 
     gtk4-layer-shell is an optional package but required for the overlay, and
     it must be loaded before GTK (``vibemapp._preload``). Without it the
@@ -35,13 +39,16 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, GLib, GObject, Gtk  # noqa: E402
 
-from ..models import KeyGeometry, Layout  # noqa: E402
+from ..models import KeyGeometry, Layout, Navigator, PointerActivity  # noqa: E402
 from ..service import KeyboardService  # noqa: E402
 from .i18n import _  # noqa: E402
 from .keyboard_view import KeyboardView  # noqa: E402
-from .overlay_state import (MonitorInfo, OverlayConfig, PartPlacement,  # noqa: E402
+from .overlay_state import (Bounds, MonitorInfo, OverlayConfig, PartPlacement,  # noqa: E402
                             anchor_edges, fade_durations, geometry_bounds,
-                            place_parts, should_show, split_geometry, unit_px)
+                            place_parts, pointer_pad_bounds, should_show,
+                            split_geometry, union_bounds, unit_px)
+from .pointer_activity import want_pointer  # noqa: E402
+from .pointer_view import PointerView  # noqa: E402
 from .rules_model import layer_label  # noqa: E402
 from .view_binder import KeyboardViewBinder  # noqa: E402
 
@@ -53,7 +60,7 @@ NO_LAYER_SHELL_ENV = "VIBEMAPP_NO_LAYER_SHELL"
 
 _SETTING_KEYS = ("overlay-mode", "overlay-layers", "overlay-anchor", "overlay-size",
                  "overlay-opacity", "overlay-half-spacing", "overlay-monitor",
-                 "overlay-idle-seconds", "overlay-fade-ms")
+                 "overlay-idle-seconds", "overlay-fade-ms", "overlay-pointer")
 
 _layer_shell = None
 _layer_shell_checked = False
@@ -141,9 +148,13 @@ class OverlaySurface(Gtk.Window):
         self.view.set_can_target(False)
         self.view.set_hexpand(False)
         self.view.set_vexpand(False)
-        self.view.set_halign(Gtk.Align.START)
+        # The board and, on a half with a Navigator, its trackpad or trackball.
+        self.stage = Gtk.Overlay(can_target=False, halign=Gtk.Align.START)
+        self.stage.set_child(self.view)
+        self.pads: list[PointerView] = []
+        self._rest_opacity = 1.0
         self.box.append(self.pill)
-        self.box.append(self.view)
+        self.box.append(self.stage)
         self.box.set_opacity(0.0)
         self.set_child(self.box)
 
@@ -168,9 +179,9 @@ class OverlaySurface(Gtk.Window):
         position is exactly ``placement`` on ``monitor``."""
         # The pill sits on the board's inner side, away from the screen edge.
         if vertical == "bottom":
-            self.box.reorder_child_after(self.view, self.pill)
+            self.box.reorder_child_after(self.stage, self.pill)
         else:
-            self.box.reorder_child_after(self.pill, self.view)
+            self.box.reorder_child_after(self.pill, self.stage)
         self.pill.set_halign(pill_halign)
         self.vertical, self.edge_margin = vertical, placement.edge_margin
         ls = self._ls
@@ -182,17 +193,55 @@ class OverlaySurface(Gtk.Window):
             ls.set_margin(self, edge, margins[name])
         ls.set_monitor(self, monitor)
 
-    def set_board(self, geometry: tuple[KeyGeometry, ...], placement: PartPlacement) -> None:
+    def set_board(self, geometry: tuple[KeyGeometry, ...], placement: PartPlacement,
+                  bounds: Bounds | None = None,
+                  pads: tuple[tuple[Bounds, Navigator], ...] = ()) -> None:
+        """``bounds`` are the part's in key units, the ``pads``' included (each
+        drawn as its Navigator's kind); without them the board fills ``placement``."""
         self.view.set_geometry(geometry)
-        self.view.set_fixed_size(placement.width, placement.height)
         self.view.set_visible(bool(geometry))
+        board = geometry_bounds(geometry) if geometry else (0.0, 0.0, 1.0, 1.0)
+        bounds = bounds or board
+        unit = placement.width / max(bounds[2] - bounds[0], 0.1)
+        start, top = (board[0] - bounds[0]) * unit, (board[1] - bounds[1]) * unit
+        end, bottom = (bounds[2] - board[2]) * unit, (bounds[3] - board[3]) * unit
+        self.view.set_fixed_size(max(placement.width - round(start) - round(end), 1),
+                                 max(placement.height - round(top) - round(bottom), 1))
+        for side, value in (("start", start), ("top", top), ("end", end), ("bottom", bottom)):
+            getattr(self.view, f"set_margin_{side}")(round(value))
+        # The layer pill lines up with the keys, not the pad beside them.
+        self.pill.set_margin_start(round(start))
+        self.pill.set_margin_end(round(end))
+        for view in self.pads:
+            self.stage.remove_overlay(view)
+        self.pads = []
+        for pad, navigator in pads:
+            view = PointerView(navigator.kind)
+            view.set_overlay_style(True)
+            view.set_can_target(False)
+            view.set_halign(Gtk.Align.START)
+            view.set_valign(Gtk.Align.START)
+            view.set_rest_opacity(self._rest_opacity)
+            view.set_diameter(round((pad[2] - pad[0]) * unit))
+            view.set_margin_start(round((pad[0] - bounds[0]) * unit))
+            view.set_margin_top(round((pad[1] - bounds[1]) * unit))
+            self.stage.add_overlay(view)
+            self.pads.append(view)
+
+    def extent(self) -> int:
+        """Height from its anchored edge outwards, in logical px: the same
+        whether it's shown or hidden (its natural height, pill included)."""
+        return self.edge_margin + self.box.measure(Gtk.Orientation.VERTICAL, -1)[1]
 
     def set_pill(self, text: str | None) -> None:
         self.pill.set_visible(bool(text))
         self.pill.set_label(text or "")
 
     def set_rest_opacity(self, opacity: float) -> None:
+        self._rest_opacity = opacity
         self.view.set_rest_opacity(opacity)
+        for view in self.pads:
+            view.set_rest_opacity(opacity)
         self.pill.set_opacity(opacity)
 
     # --- showing ---------------------------------------------------------
@@ -303,6 +352,8 @@ class OverlayController(GObject.Object):
             (service, service.connect("disconnected", lambda *_a: self._update())),
             (service, service.connect("focused-monitor-changed",
                                       lambda *_a: self._update())),
+            (service, service.connect("pointer-changed", lambda *_a: self._update())),
+            (service, service.connect("pointer-activity", self._on_pointer_activity)),
             (self, self.connect("notify::preview", lambda *_a: self._update())),
         ]
         for key in _SETTING_KEYS:
@@ -348,9 +399,9 @@ class OverlayController(GObject.Object):
 
     def edge_clearance(self) -> int:
         """Logical px the overlay takes up from its anchored edge while it's
-        shown, else 0."""
-        return max((s.edge_margin + s.get_height() for s in self._surfaces
-                    if s.showing), default=0)
+        shown, else 0. A visible pill isn't moved when this changes (e.g. a
+        Mouse layer the firmware turns on mid-gesture); see ``hold_pill``."""
+        return max((s.extent() for s in self._surfaces if s.showing), default=0)
 
     def pill_style(self):
         """The overlay's appearance settings for the hold-action pill."""
@@ -375,6 +426,8 @@ class OverlayController(GObject.Object):
         self._monitors_handler = 0
         self._cancel_idle()
         self._destroy_surfaces()
+        if self._ls is not None:
+            want_pointer(self.service, "overlay", False)
 
     # --- state -----------------------------------------------------------
 
@@ -435,6 +488,26 @@ class OverlayController(GObject.Object):
             self._hide()
         if want != self.shown:
             self.shown = want
+        # Pointer reports are parsed only while a pad can be seen.
+        want_pointer(self.service, "overlay", want and bool(self.navigators()))
+
+    def navigators(self) -> tuple[Navigator, ...]:
+        """The pads the overlay draws: the layout's Navigators when Oryx said
+        (``navigators_known``; maybe none), else (a layout cached before 1.10)
+        the known device on the right half; () when ``overlay-pointer`` is off."""
+        if not self.config.pointer:
+            return ()
+        layout = self.service.get_layout()
+        if layout is not None and (layout.navigators_known or layout.navigators):
+            return tuple(layout.navigators)
+        kind = self.service.get_pointer_kind()
+        return (Navigator("right", kind),) if kind is not None else ()
+
+    def _on_pointer_activity(self, _service: object, activity: PointerActivity) -> None:
+        for surface in self._surfaces:
+            for view in surface.pads:
+                if view.model.kind == activity.kind:
+                    view.feed(activity)
 
     # --- surfaces --------------------------------------------------------
 
@@ -451,20 +524,29 @@ class OverlayController(GObject.Object):
             return None, MonitorInfo(None, 1920, 1080, 0)
         return monitor, monitor_info(monitor)
 
-    def _show(self) -> None:
+    def _ensure_surfaces(self) -> None:
+        """Build the surfaces for the current placement (they stay hidden
+        until shown); rebuilt when it changes."""
         layout = self.service.get_layout()
         monitor, info = self.resolve_monitor()
         geometry = layout.geometry if layout is not None else ()
-        key = (self.config.anchor, self.config.size, self.config.half_spacing, info, geometry)
-        if key != self._placement_key:
-            was_shown = any(s.showing for s in self._surfaces)
-            self._destroy_surfaces()
-            self._build_surfaces(geometry, monitor, info)
-            self._placement_key = key
-            if was_shown:
-                for surface in self._surfaces:
-                    surface.box.set_opacity(1.0)
+        key = (self.config.anchor, self.config.size, self.config.half_spacing, info, geometry,
+               self.navigators())
+        if key == self._placement_key:
+            return
+        was_shown = any(s.showing for s in self._surfaces)
+        self._destroy_surfaces()
+        self._build_surfaces(geometry, monitor, info)
+        self._placement_key = key
         self._refresh_content(layout)
+        if was_shown:
+            for surface in self._surfaces:
+                surface.box.set_opacity(1.0)
+                surface.fade_in()
+
+    def _show(self) -> None:
+        self._ensure_surfaces()
+        self._refresh_content(self.service.get_layout())
         if self._binder is not None:
             self._binder.sync_pressed()
         for surface in self._surfaces:
@@ -474,29 +556,48 @@ class OverlayController(GObject.Object):
         for surface in self._surfaces:
             surface.fade_out()
 
-    def layout_parts(self, geometry: tuple[KeyGeometry, ...], info: MonitorInfo
-                     ) -> list[tuple[tuple[KeyGeometry, ...], PartPlacement]]:
-        """The board parts (whole board, or left and right half) and where
-        they go on ``info``'s monitor."""
-        board = geometry_bounds(geometry)
+    def layout_parts(self, geometry: tuple[KeyGeometry, ...], info: MonitorInfo,
+                     navigators: tuple[Navigator, ...] = ()
+                     ) -> list[tuple[tuple[KeyGeometry, ...], PartPlacement, Bounds,
+                                     tuple[tuple[Bounds, Navigator], ...]]]:
+        """The board parts (whole board, or left and right half), where they go
+        on ``info``'s monitor, their bounds and the pads of the ``navigators``
+        each carries (a pad goes on the part of its half: the whole board when
+        it isn't spaced apart)."""
         halves = split_geometry(geometry) if self.config.half_spacing > 0 else None
         parts = list(halves) if halves is not None else [geometry]
+        bounds = [geometry_bounds(p) for p in parts]
+        pads: list[list[tuple[Bounds, Navigator]]] = [[] for _ in parts]
+        board = geometry_bounds(geometry)
+        whole = split_geometry(geometry) if geometry else None
+        placed: list[Bounds] = []
+        for navigator in navigators if geometry else ():
+            n = 1 if navigator.side == "right" else 0
+            if whole is None:
+                pad = pointer_pad_bounds(geometry, navigator.side)
+            else:
+                pad = pointer_pad_bounds(whole[n], navigator.side, whole[1 - n],
+                                         tuple(placed))
+            placed.append(pad)
+            n = min(n, len(parts) - 1)
+            pads[n].append((pad, navigator))
+            bounds[n] = union_bounds(bounds[n], pad)
+            board = union_bounds(board, pad)
         unit = unit_px(info, self.config.size, board[2] - board[0])
-        placements = place_parts(info, self.config.anchor, unit, board,
-                                 [geometry_bounds(p) for p in parts],
+        placements = place_parts(info, self.config.anchor, unit, board, bounds,
                                  self.config.half_spacing)
-        return list(zip(parts, placements))
+        return list(zip(parts, placements, bounds, (tuple(p) for p in pads)))
 
     def _build_surfaces(self, geometry: tuple[KeyGeometry, ...],
                         monitor: Gdk.Monitor | None, info: MonitorInfo) -> None:
         vertical, _horizontal = anchor_edges(self.config.anchor)
-        parts = self.layout_parts(geometry, info)
-        for part, placement in parts:
+        parts = self.layout_parts(geometry, info, self.navigators())
+        for part, placement, bounds, pads in parts:
             surface = OverlaySurface(self._ls)
             # Joined board: pill centred on it; halves: with the left half.
             halign = Gtk.Align.CENTER if len(parts) == 1 else Gtk.Align.START
             surface.place(monitor, vertical, placement, halign)
-            surface.set_board(part, placement)
+            surface.set_board(part, placement, bounds, pads)
             surface.set_rest_opacity(self.config.opacity / 100)
             surface.set_fade_durations(*fade_durations(self.config))
             self._surfaces.append(surface)

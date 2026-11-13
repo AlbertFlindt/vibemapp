@@ -1,4 +1,5 @@
-"""Main window: sidebar navigation between Layout, Smart Layers, Heatmap, Overlay and Insights."""
+"""Main window: sidebar navigation between Layout, Smart Layers, Heatmap, Overlay, Insights
+and the trackpad or trackball (grayed out when the keyboard has none)."""
 
 from __future__ import annotations
 
@@ -20,12 +21,16 @@ from .rules_model import layer_label  # noqa: E402
 from .heatmap_page import HeatmapPage  # noqa: E402
 from .insights_page import InsightsPage  # noqa: E402
 from .overlay_page import OverlayPage  # noqa: E402
+from .pointer_activity import device_icon, device_title  # noqa: E402
+from .pointer_page import PointerPage  # noqa: E402
 from .smart_layers_page import SmartLayersPage  # noqa: E402
 
-PAGES = ("layout", "smart-layers", "heatmap", "overlay", "insights")
+PAGES = ("layout", "smart-layers", "heatmap", "overlay", "insights", "pointer")
 
 
-def page_title(name: str) -> str:
+def page_title(name: str, pointer_kind=None) -> str:
+    if name == "pointer":
+        return device_title(pointer_kind)
     return {"layout": _("Layout"), "smart-layers": _("Smart Layers"),
             "heatmap": _("Heatmap"), "overlay": _("Overlay"),
             "insights": _("Insights")}[name]
@@ -45,6 +50,8 @@ class Window(Adw.ApplicationWindow):
     heatmap_page: HeatmapPage = Gtk.Template.Child()
     overlay_page: OverlayPage = Gtk.Template.Child()
     insights_page: InsightsPage = Gtk.Template.Child()
+    pointer_page: PointerPage = Gtk.Template.Child()
+    pointer_item: Adw.SidebarItem = Gtk.Template.Child()
     device_status_icon: Gtk.Image = Gtk.Template.Child()
     device_status_title: Gtk.Label = Gtk.Template.Child()
     device_status_subtitle: Gtk.Label = Gtk.Template.Child()
@@ -73,13 +80,16 @@ class Window(Adw.ApplicationWindow):
         self.heatmap_page.setup(service, controller)
         self.overlay_page.setup(service, controller, settings, self.add_toast)
         self.insights_page.setup(service, controller)
+        self.pointer_page.setup(service, settings, self.add_toast)
         self.layout_page.connect("layers-changed", lambda *_a: self._sync_actions())
 
         self._handlers = [
             (controller, controller.connect("notify::state", lambda *_a: self._sync())),
             (controller, controller.connect("error", self._on_error)),
             (service, service.connect("layer-changed", lambda *_a: self._sync_device_status())),
+            (service, service.connect("pointer-changed", lambda *_a: self._sync_pointer())),
         ]
+        self._sync_pointer()
 
         self._setup_instance_check()
 
@@ -100,7 +110,7 @@ class Window(Adw.ApplicationWindow):
         # One banner under each page's header bar (HIG placement); each page
         # has its own toolbar view.
         for page in (self.layout_page, self.smart_layers_page, self.heatmap_page,
-                     self.overlay_page, self.insights_page):
+                     self.overlay_page, self.insights_page, self.pointer_page):
             toolbar = page.get_child()
             if not isinstance(toolbar, Adw.ToolbarView):
                 continue
@@ -196,11 +206,30 @@ class Window(Adw.ApplicationWindow):
 
     # --- navigation ------------------------------------------------------
 
+    def _sync_pointer(self) -> None:
+        """Sidebar item named after the device; grayed out without one."""
+        kind = self.service.get_pointer_kind()
+        item = self.pointer_item
+        item.set_use_underline(False)       # the title is translated at run time
+        item.set_title(device_title(kind))
+        item.set_icon_name(device_icon(kind))
+        item.set_enabled(kind is not None)
+        item.set_tooltip(None if kind is not None else _(
+            "This keyboard has no trackpad or trackball. A trackball shows up after it "
+            "first moves."))
+        if self.content_stack.get_visible_child_name() == "pointer":
+            if kind is None:
+                self.show_page("layout", reveal=False)
+            else:
+                self.content_page.set_title(page_title("pointer", kind))
+
     def show_page(self, name: str, reveal: bool = True) -> None:
         if name not in PAGES:
             return
+        if name == "pointer" and self.service.get_pointer_kind() is None:
+            return
         self.content_stack.set_visible_child_name(name)
-        self.content_page.set_title(page_title(name))
+        self.content_page.set_title(page_title(name, self.service.get_pointer_kind()))
         self.sidebar.set_selected(PAGES.index(name))
         self._page_action.set_state(GLib.Variant("s", name))
         if reveal:
@@ -285,3 +314,4 @@ class Window(Adw.ApplicationWindow):
         self.heatmap_page.teardown()
         self.overlay_page.teardown()
         self.insights_page.teardown()
+        self.pointer_page.teardown()

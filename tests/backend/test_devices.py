@@ -104,6 +104,28 @@ class EnumerationTests(unittest.TestCase):
         self.assertFalse(d.access_denied)     # no Oryx interface is not a permission issue
         self.assertIsNone(d.layout_id)
 
+    def test_pointer_interfaces(self) -> None:
+        from vibemapp.backend.pointer import (VOYAGER_MOUSE_DESCRIPTOR,
+                                              VOYAGER_TOUCHPAD_DESCRIPTOR, InterfaceClass)
+        make_node(self.root, 9, "5-2.2", 0, 0x3297, 0x1977, KBD_DESC)
+        make_node(self.root, 10, "5-2.2", 1, 0x3297, 0x1977, RAW_DESC)
+        make_node(self.root, 11, "5-2.2", 2, 0x3297, 0x1977, VOYAGER_MOUSE_DESCRIPTOR)
+        make_node(self.root, 13, "5-2.2", 4, 0x3297, 0x1977, VOYAGER_TOUCHPAD_DESCRIPTOR)
+        make_node(self.root, 20, "5-2.3", 4, 0x3297, 0x1977, VOYAGER_TOUCHPAD_DESCRIPTOR)
+        make_node(self.root, 21, "5-2.3", 0, 0x3297, 0x1977, KBD_DESC + VOYAGER_MOUSE_DESCRIPTOR)
+        dev = next(d for d in devices.enumerate_devices(self.sys, self.dev)
+                   if d.id.endswith("5-2.2"))
+        found = devices.pointer_interfaces(dev.id, self.sys, self.dev)
+        self.assertEqual([(os.path.basename(p.dev_path), p.kind) for p in found],
+                         [("hidraw13", InterfaceClass.TOUCHPAD), ("hidraw11", InterfaceClass.MOUSE)])
+        self.assertEqual(found[0].descriptor, VOYAGER_TOUCHPAD_DESCRIPTOR)
+        other = next(d for d in devices.enumerate_devices(self.sys, self.dev)
+                     if d.id.endswith("5-2.3"))
+        # The shared keyboard + mouse interface carries typed keys: never returned.
+        self.assertEqual([os.path.basename(p.dev_path)
+                          for p in devices.pointer_interfaces(other.id, self.sys, self.dev)],
+                         ["hidraw20"])
+
     def test_empty_tree(self) -> None:
         self.assertEqual(devices.enumerate_devices(self.sys, self.dev), [])
 

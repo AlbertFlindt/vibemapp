@@ -7,6 +7,7 @@
         [--backdrop checker|busy] [--half-spacing 0] [--anchor bottom]
         [--overlay-size 80] [--width-mm 800] [--opacity 60] [--layer 1]
         [--press 3,15] [--size 3440x1440] [--real-geometry]
+        [--pointer SCENE] [--pointer-pill SCENE [--modifiers Ctrl]]
 
 ``--overlay`` draws the on-screen overlay (mock keyboard) over a checkerboard
 or a busy light backdrop of ``--size``, a monitor ``--width-mm`` wide, placed
@@ -14,6 +15,12 @@ exactly where the layer-shell surfaces would go (the margins the overlay asks
 gtk4-layer-shell for are recorded and replayed), so size, half spacing,
 translucency and halo are visible. No overlay surface is shown.
 ``--real-geometry`` uses the real Voyager geometry instead of the mock's.
+
+``--pointer SCENE`` draws the trackpad (or trackball) on the overlay and
+``--pointer-pill SCENE`` the pointer pill, frozen mid-gesture; SCENE is one of
+``POINTER_SCENES`` (one-finger, two-finger, scroll, tap, click, trackball).
+On ``--page pointer`` it freezes the page's live view the same way.
+``VIBEMAPP_MOCK_POINTER=none`` shows the window without a pointing device.
 
 ``--page insights --record`` also turns key-pair recording on; ``--heatmap-app KEY``
 picks the App filter of the Insights page when that page is shown.
@@ -54,7 +61,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("out")
     parser.add_argument("--page", default="layout",
-                        choices=["layout", "smart-layers", "heatmap", "overlay", "insights"])
+                        choices=["layout", "smart-layers", "heatmap", "overlay", "insights",
+                                 "pointer"])
     parser.add_argument("--overlay-layers",
                         help="comma-separated layers ticked on the Overlay page, e.g. 1,2")
     parser.add_argument("--dialog")
@@ -86,6 +94,12 @@ def main() -> int:
     parser.add_argument("--width-mm", type=int, default=800)
     parser.add_argument("--opacity", type=int, default=60)
     parser.add_argument("--real-geometry", action="store_true")
+    parser.add_argument("--pointer", choices=sorted(POINTER_SCENES),
+                        help="draw the trackpad or trackball frozen in this scene")
+    parser.add_argument("--pointer-pill", choices=sorted(POINTER_SCENES),
+                        help="with --overlay: show the pointer pill in this scene")
+    parser.add_argument("--modifiers", default="",
+                        help="with --pointer-pill: held modifiers shown with it, e.g. Ctrl")
     parser.add_argument("--hold-pill", metavar="TEXT",
                         help="with --overlay: also show the hold-action pill, e.g. Ctrl+C")
     args = parser.parse_args()
@@ -124,6 +138,14 @@ def main() -> int:
             app.settings.set_value("overlay-layers", GLib.Variant(
                 "ai", [int(v) for v in args.overlay_layers.split(",") if v]))
         win.show_page(args.page)
+        if args.pointer and args.page == "pointer":
+            # Freeze the scene: the mock's own pointer script would replace it.
+            for obj, handler in win.pointer_page._handlers:
+                if obj is svc:
+                    obj.handler_block(handler)
+            win.pointer_page.live_view.set_kind(None)
+            label = play_scene(win.pointer_page.live_view, args.pointer)
+            win.pointer_page.live_label.set_label(label)
         if args.heatmap_app:
             page = win.insights_page if args.page == "insights" else win.heatmap_page
             page.refresh()
@@ -197,6 +219,48 @@ def main() -> int:
 
     app.connect_after("activate", on_activate)
     return app.run([sys.argv[0]])
+
+
+def _scenes():
+    from vibemapp.models import PointerAction as P
+    from vibemapp.models import PointerActivity as A
+    from vibemapp.models import PointerKind as K
+    pad, ball = K.TRACKPAD, K.TRACKBALL
+
+    def two(y: float, action=P.SCROLL) -> A:
+        return A(pad, action, fingers=2, direction="down" if action == P.SCROLL else "",
+                 contacts=((0.4, y), (0.58, y + 0.02)))
+    return {
+        "one-finger": [(0, A(pad, P.TOUCH, fingers=1, contacts=((0.3, 0.55),)))]
+        + [(16, A(pad, P.MOVE, fingers=1, contacts=((0.3 + i * 0.03, 0.55 - i * 0.02),)))
+           for i in range(1, 9)],
+        "two-finger": [(0, two(0.45, P.TOUCH))],
+        "scroll": [(16, two(0.2 + i * 0.045)) for i in range(10)],
+        "tap": [(0, A(pad, P.TAP, fingers=1, contacts=((0.62, 0.38),))), (110, A(pad, P.IDLE))],
+        "click": [(0, A(pad, P.TOUCH, fingers=1, contacts=((0.5, 0.6),))),
+                  (40, A(pad, P.CLICK, fingers=1, button=1, buttons=frozenset({1}),
+                         contacts=((0.5, 0.6),)))],
+        "trackball": [(16, A(ball, P.MOVE, motion=(7, 3))) for _ in range(6)],
+    }
+
+
+POINTER_SCENES = ("one-finger", "two-finger", "scroll", "tap", "click", "trackball")
+
+
+def play_scene(view, name: str) -> str:
+    """Feed ``view`` (a PointerView) the scene on a fake clock and freeze it
+    there; returns the page's live text for it."""
+    from vibemapp.ui.pointer_activity import live_label
+    clock = [1000.0]
+    view._now = lambda: clock[0]
+    label = ""
+    for dt, activity in _scenes()[name]:
+        clock[0] += dt
+        view.feed(activity)
+        label = live_label(activity) or label
+    frozen = clock[0]
+    view._now = lambda: frozen
+    return label
 
 
 def _draw_backdrop(kind: str, cr, width: int, height: int) -> None:
@@ -282,7 +346,18 @@ def overlay_shot(args) -> int:
         service.simulate_layer(args.layer)
 
     # Never put a real surface on screen: keep the content, drop the windows.
-    overlay_mod.OverlaySurface.fade_in = lambda self: self.box.set_opacity(1.0)
+    def fade_in(surface) -> None:
+        surface._showing = True
+        surface.box.set_opacity(1.0)
+
+    overlay_mod.OverlaySurface.fade_in = fade_in
+    # No live pointer reports (the mock would play its script): scenes only.
+    overlay_mod.want_pointer = lambda *_a: None
+    if args.pointer:
+        from vibemapp.models import PointerKind
+        settings.set_boolean("overlay-pointer", True)
+        service.simulate_pointer_kind(PointerKind.TRACKBALL if args.pointer == "trackball"
+                                      else PointerKind.TRACKPAD)
     fake = FakeLayerShell()
     info = MonitorInfo("SHOT-1", width, height, args.width_mm)
     controller = overlay_mod.OverlayController(service, settings, layer_shell=fake)
@@ -290,6 +365,12 @@ def overlay_shot(args) -> int:
     controller._update()
     for idx in filter(None, args.press.split(",")):
         service.simulate_key(int(idx), True)
+    if args.pointer:
+        for surface in controller.surfaces:
+            for pad in surface.pads:
+                play_scene(pad, args.pointer)
+    # Where the pills go: past the overlay (measured before its boxes move).
+    clearance = controller.edge_clearance()
 
     scene = Gtk.Window(default_width=width, default_height=height, decorated=False)
     stack = Gtk.Overlay()
@@ -314,16 +395,13 @@ def overlay_shot(args) -> int:
     if args.hold_pill:
         from vibemapp.ui import hold_pill as pill_mod
         pill_mod.HoldPillSurface.flash = lambda self, text, unit: (
-            self.set_key(text, unit), self.view.set_opacity(1.0))
-        clearance = max((fake.state(s)["margin"][vertical]
-                         + s.box.measure(Gtk.Orientation.VERTICAL, -1)[1]
-                         for s in controller.surfaces), default=0)
+            self.set_key(text, unit), self.box.set_opacity(1.0))
         pill = pill_mod.HoldPillController(service, settings, fake,
                                            monitor=lambda: (None, height),
                                            clearance=lambda: clearance,
                                            style=controller.pill_style)
         pill.show(args.hold_pill)
-        key = pill.surface.view
+        key = pill.surface.box
         pill.surface.set_child(None)
         key.set_halign(Gtk.Align.CENTER)
         margin = fake.state(pill.surface)["margin"][vertical]
@@ -335,6 +413,29 @@ def overlay_shot(args) -> int:
             key.set_margin_top(margin + key.get_margin_top())
         stack.add_overlay(key)
         print(f"hold pill {vertical}={margin}")
+    if args.pointer_pill:
+        from vibemapp.ui import hold_pill as pill_mod
+        surface = pill_mod.HoldPillSurface(fake)
+        style = controller.pill_style()
+        surface.set_style(style)
+        surface.place(None, vertical, pill_mod.edge_margin(height, clearance))
+        if args.pointer_pill == "trackball":
+            from vibemapp.models import PointerKind
+            surface.pointer.set_kind(PointerKind.TRACKBALL)
+        surface.set_pointer(args.modifiers or None, style.unit)
+        play_scene(surface.pointer, args.pointer_pill)
+        box = surface.box
+        surface.set_child(None)
+        box.set_opacity(1.0)
+        box.set_halign(Gtk.Align.CENTER)
+        margin = fake.state(surface)["margin"][vertical]
+        box.set_valign(Gtk.Align.END if vertical == "bottom" else Gtk.Align.START)
+        if vertical == "bottom":
+            box.set_margin_bottom(margin)
+        else:
+            box.set_margin_top(margin)
+        stack.add_overlay(box)
+        print(f"pointer pill {vertical}={margin}")
     scene.set_child(stack)
     scene.present()
 

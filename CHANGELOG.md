@@ -1,7 +1,16 @@
 # Changelog
 
 All notable changes to Vibemapp. Each version is a tag and a GitHub release; the version at the
-top marked "(unreleased)" is out as pre-releases (`vX.Y.Z-pre.N`).
+top marked "(unreleased)" is out as one pre-release (`vX.Y.Z-pre`), updated on every merge.
+
+## 1.10.0 (unreleased)
+
+### Added
+- **Trackpad and trackball** (new sidebar page, named after your Navigator, grayed out without
+  one): a live drawing of the round pad shows your fingers, two-finger scroll trails, tap
+  ripples and clicks, or the trackball rolling. Optionally the same drawing shows on screen
+  where held modifiers do (Ctrl + pad while you zoom), and beside its half on the overlay. The
+  side and kind come from your layout in Oryx. A Smart Layers rule can turn it off.
 
 ## 1.9.0 (2026-10-30)
 

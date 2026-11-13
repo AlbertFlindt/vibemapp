@@ -174,12 +174,17 @@
                     <child>
                       <object class="AdwPreferencesGroup">
                         <property name="title" translatable="yes">Appearance</property>
-                        <property name="description" translatable="yes">Position, monitor, size and opacity are also used for hold actions and held modifiers</property>
+                        <property name="description" translatable="yes">Position, monitor, size and opacity are also used for hold actions, held modifiers and pointer activity</property>
                         <child>
                           <object class="AdwSwitchRow" id="preview_row">
                             <property name="title" translatable="yes">_Preview Overlay</property>
                             <property name="use-underline">True</property>
                             <property name="subtitle" translatable="yes">Show the overlay now while you adjust it</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwSwitchRow" id="pointer_row">
+                            <property name="title" translatable="yes">Show Trackpad</property>
                           </object>
                         </child>
                         <child>

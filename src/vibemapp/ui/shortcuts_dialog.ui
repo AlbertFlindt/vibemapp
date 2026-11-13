@@ -38,6 +38,12 @@
         </child>
         <child>
           <object class="AdwShortcutsItem">
+            <property name="title" translatable="yes">Show Trackpad or Trackball</property>
+            <property name="accelerator">&lt;Ctrl&gt;6</property>
+          </object>
+        </child>
+        <child>
+          <object class="AdwShortcutsItem">
             <property name="title" translatable="yes">Keyboard Information</property>
             <property name="accelerator">&lt;Ctrl&gt;i</property>
           </object>

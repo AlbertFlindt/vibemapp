@@ -76,6 +76,7 @@ def rule_from_json(obj: Any) -> AppRule | None:
         match=match,
         show_hold_actions=bool(obj.get("show_hold_actions", True)),
         show_held_modifiers=bool(obj.get("show_held_modifiers", True)),
+        show_pointer=bool(obj.get("show_pointer", True)),
     )
 
 

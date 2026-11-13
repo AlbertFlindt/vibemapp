@@ -44,6 +44,16 @@ keyboardview.overlay > .probe-overlay-halo { color: color-mix(in srgb, var(--dar
 keyboardview > .probe-overlay-fg   { color: var(--window-fg-color); }
 keyboardview > .probe-overlay-halo { color: transparent; }
 
+/* Colour probes read by PointerView (ui/pointer_view.py). Never the accent:
+   the page look is window fg on the card, the overlay look its light fg. */
+pointerview > .probe-fg        { color: var(--window-fg-color); }
+pointerview > .probe-card      { color: var(--card-bg-color); }
+pointerview > .probe-border    { color: color-mix(in srgb, var(--window-fg-color) 15%, transparent); }
+pointerview.overlay > .probe-overlay-fg   { color: var(--light-1); }
+pointerview.overlay > .probe-overlay-halo { color: color-mix(in srgb, var(--dark-5) 85%, transparent); }
+pointerview > .probe-overlay-fg   { color: var(--window-fg-color); }
+pointerview > .probe-overlay-halo { color: transparent; }
+
 window.vibemapp-overlay,
 window.vibemapp-overlay > * { background: none; box-shadow: none; }
 

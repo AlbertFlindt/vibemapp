@@ -16,6 +16,12 @@ like the real backend. Behaviour can be tuned with environment variables:
 ``VIBEMAPP_MOCK_HEATMAP_SEED=1`` pre-fill 30 days of plausible heatmap counts
 ``VIBEMAPP_MOCK_LAYOUT_SYNC``  ``LayoutSync`` value once the layout loads
                                (default ``flashed``; ``oryx-newer``, ``not-flashed``)
+``VIBEMAPP_MOCK_POINTER``     ``trackpad`` (default), ``trackball`` or ``none``. While
+                               ``pointer-tracking`` is on, a looping script of
+                               finger moves, taps, scrolls and a click (trackpad)
+                               or rolls, wheel and clicks (trackball) plays. The
+                               layout lists it as its Navigator (none: no Navigator)
+``VIBEMAPP_MOCK_POINTER_SIDE`` ``right`` (default) or ``left``: the Navigator's half
 
 Tests construct it with ``autostart=False`` and drive it through the
 ``simulate_*`` methods.
@@ -26,6 +32,7 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import replace
 import itertools
+import math
 import os
 import random
 import time
@@ -34,8 +41,10 @@ from typing import Callable
 from gi.repository import Gio, GLib
 
 from .models import (AppRule, Device, ErgoReport, LayoutComparison, FocusedWindow, HeatmapApp, HeatmapPeriod, RuleMatch, SteamGame, KeyBinding, KeyboardModel, KeyGeometry,
-                     Layer, Layout, LayoutSync, RunningApp)
+                     Layer, Layout, LayoutSync, Navigator, PointerActivity, PointerKind,
+                     RunningApp)
 from .backend import ergo, geometries, layouts
+from .backend import pointer as pointermod
 from .service import KeyboardService
 from .ui.i18n import _
 from .ui.rules_model import OWN_APP_CLASS, is_own_app_class, target_layer
@@ -156,7 +165,7 @@ def _layer_keys(rows: list[list[object]], thumbs: list[object],
     return tuple(out)
 
 
-def voyager_layout() -> Layout:
+def voyager_layout(navigators: tuple[Navigator, ...] = ()) -> Layout:
     geometry = voyager_geometry()
     base = _layer_keys(
         [["Esc", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-"],
@@ -205,7 +214,8 @@ def voyager_layout() -> Layout:
         Layer(3, "Navigation", "#26a269", nav),
     )
     return Layout(MOCK_LAYOUT_ID, "Albert's Voyager", geometry, layers,
-                  revision_id=MOCK_REVISION_ID)
+                  revision_id=MOCK_REVISION_ID, navigators=navigators,
+                  navigators_known=True)
 
 
 def demo_rules() -> list[AppRule]:
@@ -273,6 +283,60 @@ _SEED_APPS: tuple[tuple[str, Callable[[str, int], float]], ...] = (
     (_SEED_GAME, lambda label, layer: _GAME_KEYS.get(label, 0.05) / (1 + layer) * 2.5),
 )
 
+def _lerp(a: float, b: float, f: float) -> float:
+    return a + (b - a) * max(0.0, min(1.0, f))
+
+
+def _pointer_frame(t: float) -> tuple[list[tuple[float, float]], frozenset[int]]:
+    """The mock trackpad at script time ``t`` (s): finger (x, y)s and buttons.
+
+    One loop of ``POINTER_LOOP_S``: a one-finger circle, a tap, two-finger
+    scrolls up and down, a two-finger tap, a resting finger that clicks, and a
+    move that pauses (IDLE with the finger down) and goes on."""
+    if 0.8 <= t < 2.4:                                    # circle
+        a = (t - 0.8) / 1.6 * 2 * math.pi
+        return [(0.5 + 0.22 * math.cos(a), 0.5 + 0.22 * math.sin(a))], frozenset()
+    if 3.0 <= t < 3.08:                                   # tap
+        return [(0.56, 0.42)], frozenset()
+    if 3.6 <= t < 4.6:                                    # scroll up
+        y = _lerp(0.72, 0.3, (t - 3.6) / 1.0)
+        return [(0.38, y), (0.62, y + 0.03)], frozenset()
+    if 5.0 <= t < 6.0:                                    # scroll down
+        y = _lerp(0.3, 0.72, (t - 5.0) / 1.0)
+        return [(0.38, y), (0.62, y + 0.03)], frozenset()
+    if 6.5 <= t < 6.6:                                    # two-finger tap
+        return [(0.4, 0.5), (0.6, 0.52)], frozenset()
+    if 7.2 <= t < 8.2:                                    # rest and click
+        return [(0.5, 0.62)], frozenset({1}) if 7.5 <= t < 7.7 else frozenset()
+    if 8.8 <= t < 10.8:                                   # move, pause, move
+        if t < 9.4:
+            f = (t - 8.8) / 0.6
+        elif t < 10.0:
+            f = 1.0
+        else:
+            f = 1.0 + (t - 10.0) / 0.8
+        return [(_lerp(0.25, 0.75, f / 2), 0.4 + 0.12 * math.sin(f * 2))], frozenset()
+    return [], frozenset()
+
+
+def _trackball_frame(t: float) -> tuple[int, int, int, int, frozenset[int]]:
+    """The mock trackball at script time ``t``: dx, dy, wheel, pan, buttons."""
+    if 0.8 <= t < 2.4:
+        a = (t - 0.8) / 1.6 * 2 * math.pi
+        return int(6 * math.cos(a)), int(6 * math.sin(a)), 0, 0, frozenset()
+    if 3.0 <= t < 3.1:
+        return 0, 0, 0, 0, frozenset({1})
+    if 3.6 <= t < 4.4:
+        return 0, 0, 1 if int(t * 20) % 3 == 0 else 0, 0, frozenset()
+    if 5.0 <= t < 5.15:
+        return 0, 0, 0, 0, frozenset({2})
+    return 0, 0, 0, 0, frozenset()
+
+
+POINTER_LOOP_S = 11.5
+POINTER_TICK_MS = 8        # the Voyager trackpad reports at ~125 Hz
+
+
 _FOCUS_SCRIPT: tuple[tuple[str, str], ...] = (
     ("kitty", "~/Projects/vibemapp — fish"),
     ("firefox", "GNOME Human Interface Guidelines — Mozilla Firefox"),
@@ -337,6 +401,18 @@ class MockKeyboardService(KeyboardService):
         }
         self._rng = random.Random(4)
         self._connecting = False
+        kind = (os.environ.get("VIBEMAPP_MOCK_POINTER") or "trackpad").strip().lower()
+        self._mock_pointer = {"trackpad": PointerKind.TRACKPAD,
+                              "trackball": PointerKind.TRACKBALL}.get(kind)
+        side = (os.environ.get("VIBEMAPP_MOCK_POINTER_SIDE") or "right").strip().lower()
+        self._mock_pointer_side = side if side in ("left", "right") else "right"
+        self._pointer_tick = 0
+        self._pointer_clock = 0.0          # script time (s): one report every tick
+        self._pointer_prev: list[tuple[float, float]] = []
+        self._pointer_buttons: frozenset[int] = frozenset()
+        self._touchpad = pointermod.TrackpadInterpreter(pointermod.VOYAGER_TOUCHPAD_DESCRIPTOR)
+        self._mouse = pointermod.MouseInterpreter(pointermod.VOYAGER_MOUSE_DESCRIPTOR)
+        self.connect("notify::pointer-tracking", lambda *_a: self._update_pointer_script())
         self.connect("notify::smart-layers-enabled", lambda *_a: self._evaluate())
         self.connect("notify::pair-recording", self._clear_prev_press)
         self.connect("notify::heatmap-recording", self._clear_prev_press)
@@ -437,6 +513,8 @@ class MockKeyboardService(KeyboardService):
     def _drop_connection(self) -> None:
         self._prev_press = None
         self._device = None
+        self._update_pointer_script()
+        self.emit("pointer-changed")
         self._layout = None
         self.simulate_layout_sync(LayoutSync.UNKNOWN)
         self._active_layer = 0
@@ -819,6 +897,8 @@ class MockKeyboardService(KeyboardService):
             self._active_layer = 0
             self._last_sent = None
             self.emit("connected", self._device)
+            self.emit("pointer-changed")
+            self._update_pointer_script()
             self.emit("rules-changed")
             self.emit("layer-changed", 0)
 
@@ -843,7 +923,7 @@ class MockKeyboardService(KeyboardService):
             if not self._device.oryx_available or not self._device.layout_id:
                 callback(None, _("This firmware does not report an Oryx layout"))
                 return
-            self._layout = voyager_layout()
+            self._layout = voyager_layout(self._mock_navigators())
             if self._seed_heatmap and self._layout.id not in self._counts:
                 self._seed_counts(self._layout)
             self.emit("layout-loaded", self._layout)
@@ -942,7 +1022,103 @@ class MockKeyboardService(KeyboardService):
     def get_focused_monitor(self) -> str | None:
         return self._monitor if self._focus_available else None
 
+    # --- KeyboardService: pointing device ---------------------------------
+
+    def get_pointer_kind(self) -> PointerKind | None:
+        return self._mock_pointer if self._device is not None else None
+
+    def _mock_navigators(self) -> tuple[Navigator, ...]:
+        if self._mock_pointer is None:
+            return ()
+        return (Navigator(self._mock_pointer_side, self._mock_pointer),)
+
+    def simulate_pointer_kind(self, kind: PointerKind | None) -> None:
+        """Swap the Navigator. The loaded layout lists the new one (without
+        ``layout-loaded``: re-read ``get_layout()`` on ``pointer-changed``)."""
+        if kind != self._mock_pointer:
+            self._mock_pointer = kind
+            if self._layout is not None:
+                self._layout = replace(self._layout, navigators=self._mock_navigators())
+            self._update_pointer_script()
+            if self._device is not None:
+                self.emit("pointer-changed")
+
+    def simulate_trackpad(self, fingers: list[tuple[float, float]],
+                          buttons: frozenset[int] = frozenset(),
+                          now: float | None = None) -> None:
+        """Feed one trackpad report (fingers as (x, y) in 0..1) through the
+        real interpreter. Ignored unless a trackpad is tracked."""
+        if (self._device is None or self._mock_pointer != PointerKind.TRACKPAD
+                or not self.props.pointer_tracking):
+            return
+        if not fingers and not self._pointer_prev and buttons == self._pointer_buttons:
+            return                                  # the pad is silent when untouched
+        contacts = [(k, x, y, True) for k, (x, y) in enumerate(fingers)]
+        contacts += [(k, x, y, False) for k, (x, y) in enumerate(self._pointer_prev)
+                     if k >= len(fingers)]
+        self._pointer_prev = list(fingers)
+        self._pointer_buttons = buttons
+        report = pointermod.voyager_trackpad_report(contacts[:2], buttons)
+        self._emit_pointer(self._touchpad.feed(report, self._pointer_now(now)))
+
+    def simulate_trackball(self, dx: int, dy: int, wheel: int = 0, pan: int = 0,
+                           buttons: frozenset[int] = frozenset(),
+                           now: float | None = None) -> None:
+        if (self._device is None or self._mock_pointer != PointerKind.TRACKBALL
+                or not self.props.pointer_tracking):
+            return
+        if not (dx or dy or wheel or pan) and buttons == self._pointer_buttons:
+            return                                  # nothing to report
+        self._pointer_buttons = buttons
+        report = bytes([sum(1 << (b - 1) for b in buttons)]) + bytes(
+            v & 0xFF for v in (max(-127, min(127, dx)), max(-127, min(127, dy)),
+                               wheel, pan))
+        self._emit_pointer(self._mouse.feed(report, self._pointer_now(now)))
+
+    def simulate_pointer_poll(self, now: float | None = None) -> None:
+        t = self._pointer_now(now)
+        self._emit_pointer(self._touchpad.poll(t) + self._mouse.poll(t))
+
+    def _pointer_now(self, now: float | None) -> float:
+        return self._pointer_clock if now is None else now
+
+    def _emit_pointer(self, activities: list[PointerActivity]) -> None:
+        for activity in activities:
+            self.emit("pointer-activity", activity)
+
+    def _update_pointer_script(self) -> None:
+        run = (self._device is not None and self._mock_pointer is not None
+               and bool(self.props.pointer_tracking))
+        if run and not self._pointer_tick:
+            self._pointer_tick = GLib.timeout_add(self._ms(POINTER_TICK_MS),
+                                                  self._on_pointer_tick)
+            self._timers.add(self._pointer_tick)
+        elif not run and self._pointer_tick:
+            GLib.source_remove(self._pointer_tick)
+            self._timers.discard(self._pointer_tick)
+            self._pointer_tick = 0
+        if not run:
+            self._touchpad.reset()
+            self._mouse.reset()
+            self._pointer_prev = []
+            self._pointer_buttons = frozenset()
+
+    def _on_pointer_tick(self) -> bool:
+        # Script time advances one report period per tick (the tick runs
+        # faster with VIBEMAPP_MOCK_SPEED), so the interpreter sees ~125 Hz.
+        self._pointer_clock += POINTER_TICK_MS / 1000.0
+        t = self._pointer_clock % POINTER_LOOP_S
+        if self._mock_pointer == PointerKind.TRACKPAD:
+            fingers, buttons = _pointer_frame(t)
+            self.simulate_trackpad(fingers, buttons)
+        else:
+            dx, dy, wheel, pan, buttons = _trackball_frame(t)
+            self.simulate_trackball(dx, dy, wheel, pan, buttons)
+        self.simulate_pointer_poll()
+        return GLib.SOURCE_CONTINUE
+
     def shutdown(self) -> None:
+        self._pointer_tick = 0
         for source_id in list(self._timers):
             GLib.source_remove(source_id)
         self._timers.clear()
