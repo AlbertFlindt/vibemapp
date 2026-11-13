@@ -92,6 +92,10 @@ class Layout:
     # The layout's global tapping term in ms when Oryx says it was changed, None
     # for the default. Additive (1.5).
     tapping_term_ms: int | None = None
+    # The Navigator modules Oryx says are on the board (revision
+    # ``navigators``), left half first. () when there are none, or for a
+    # cached layout fetched before 1.10. Additive (1.10).
+    navigators: tuple[Navigator, ...] = ()
 
 
 class LayoutSync(str, Enum):
@@ -115,6 +119,15 @@ class PointerKind(str, Enum):
     # The mouse interface moved while no key was held. Mouse keys use that
     # interface too, so a trackball is only known after it first moves.
     TRACKBALL = "trackball"
+
+
+@dataclass(frozen=True)
+class Navigator:
+    """A ZSA Navigator module from the layout: which half it's on and what it
+    is. Oryx revision ``navigators`` is ``{"right": {"kind": "trackpad", ...}}``.
+    Additive (1.10)."""
+    side: str                     # "left" or "right"
+    kind: PointerKind
 
 
 class PointerAction(str, Enum):
