@@ -162,22 +162,6 @@
                             <property name="subtitle" translatable="yes">Draw it beside the keys while the overlay is shown. It never makes the overlay appear on its own.</property>
                           </object>
                         </child>
-                        <child>
-                          <object class="AdwComboRow" id="side_row">
-                            <property name="title" translatable="yes">_Side</property>
-                            <property name="use-underline">True</property>
-                            <property name="subtitle" translatable="yes">Which half the trackpad or trackball is mounted on</property>
-                            <property name="sensitive" bind-source="overlay_row" bind-property="active" bind-flags="sync-create"/>
-                            <property name="model">
-                              <object class="GtkStringList">
-                                <items>
-                                  <item translatable="yes">Right</item>
-                                  <item translatable="yes">Left</item>
-                                </items>
-                              </object>
-                            </property>
-                          </object>
-                        </child>
                       </object>
                     </child>
                   </object>

@@ -7,7 +7,7 @@ import unittest
 
 from vibemapp import mock_service
 from vibemapp.mock_service import MockKeyboardService
-from vibemapp.models import PointerAction as A, PointerKind
+from vibemapp.models import Navigator, PointerAction as A, PointerKind
 
 from ._util import drain, spin
 
@@ -76,6 +76,39 @@ class MockPointerTests(unittest.TestCase):
             del os.environ["VIBEMAPP_MOCK_POINTER"]
         self.assertIsNone(svc._mock_pointer)
         self.assertGreater(mock_service.POINTER_LOOP_S, 10)
+
+
+    def load(self, svc: MockKeyboardService):
+        result: list = []
+        svc.load_layout_async(svc.get_connected_device(), None,
+                              lambda layout, err: result.append(layout))
+        self.assertTrue(spin(lambda: bool(result)))
+        return result[0]
+
+    def test_layout_lists_the_navigator(self) -> None:
+        layout = self.load(self.svc)
+        self.assertTrue(layout.navigators_known)
+        self.assertEqual(layout.navigators, (Navigator("right", PointerKind.TRACKPAD),))
+        self.svc.simulate_pointer_kind(PointerKind.TRACKBALL)
+        self.assertEqual(self.svc.get_layout().navigators,
+                         (Navigator("right", PointerKind.TRACKBALL),))
+        self.svc.simulate_pointer_kind(None)
+        self.assertEqual(self.svc.get_layout().navigators, ())
+
+    def test_env_selects_side(self) -> None:
+        os.environ["VIBEMAPP_MOCK_POINTER"] = "trackball"
+        os.environ["VIBEMAPP_MOCK_POINTER_SIDE"] = "left"
+        try:
+            svc = MockKeyboardService(speed=8, autostart=False)
+        finally:
+            del os.environ["VIBEMAPP_MOCK_POINTER"], os.environ["VIBEMAPP_MOCK_POINTER_SIDE"]
+        try:
+            svc.simulate_plug()
+            self.assertTrue(spin(lambda: svc.get_connected_device() is not None))
+            self.assertEqual(self.load(svc).navigators,
+                             (Navigator("left", PointerKind.TRACKBALL),))
+        finally:
+            svc.shutdown()
 
 
 if __name__ == "__main__":

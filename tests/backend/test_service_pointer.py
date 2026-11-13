@@ -3,21 +3,22 @@
 from __future__ import annotations
 
 import os
+import shutil
 import socket
 import tempfile
 import unittest
 
 from vibemapp.backend.oryx import OryxConnection
 from vibemapp.backend.oryx_api import LayoutCache, LayoutRepository
-from vibemapp.backend.pointer import (VOYAGER_MOUSE_DESCRIPTOR, VOYAGER_TOUCHPAD_DESCRIPTOR,
+from vibemapp.backend.pointer import (VOYAGER_MOUSE_DESCRIPTOR, KnownTrackballs, VOYAGER_TOUCHPAD_DESCRIPTOR,
                                       voyager_trackpad_report)
 from vibemapp.backend.zsa_service import ZsaKeyboardService
-from vibemapp.models import PointerAction, PointerKind
+from vibemapp.models import Navigator, PointerAction, PointerKind
 
 from ._util import FakeFirmware, drain, spin
 from .test_devices import KBD_DESC, RAW_DESC, make_node
 from .test_service import FakeWatcher
-from .test_oryx_api import SAMPLE
+from .test_oryx_api import NAVIGATORS_TRACKPAD_RIGHT, SAMPLE, with_navigators
 
 
 class FakeNodes:
@@ -49,6 +50,8 @@ class FakeNodes:
 
 class PointerServiceBase(unittest.TestCase):
     TOUCHPAD = True
+    # What Oryx sends for the layout; SAMPLE has ``navigators: null``.
+    LAYOUT = SAMPLE
 
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
@@ -71,13 +74,14 @@ class PointerServiceBase(unittest.TestCase):
             rules_path=os.path.join(root, "config", "smart-layers.json"),
             focus_watcher=FakeWatcher(),
             repository=LayoutRepository(LayoutCache(os.path.join(root, "cache")),
-                                        fetcher=lambda lid, rev, geo: SAMPLE),
+                                        fetcher=lambda lid, rev, geo: self.LAYOUT),
             connection_factory=lambda p, e, c: OryxConnection(p, e, c, opener=self.fw.opener),
             poll_interval_ms=0, heatmap_dir=os.path.join(root, "hm"),
             pointer_state_path=self.state, pointer_opener=self.nodes.opener)
         svc.connect("pointer-changed", lambda s: self.signals.append(("changed", s.get_pointer_kind())))
         svc.connect("pointer-activity", lambda s, a: self.signals.append(("activity", a)))
         svc.connect("connected", lambda s, d: self.signals.append(("connected",)))
+        svc.connect("layout-loaded", lambda s, l: self.signals.append(("layout",)))
         return svc
 
     def tearDown(self) -> None:
@@ -92,6 +96,23 @@ class PointerServiceBase(unittest.TestCase):
 
     def wait_connected(self) -> None:
         self.assertTrue(spin(lambda: ("connected",) in self.signals), self.signals)
+
+    def remake(self, layout: dict) -> None:
+        """Start again with Oryx answering ``layout`` (and nothing cached)."""
+        self.svc.shutdown()
+        shutil.rmtree(os.path.join(self.root, "cache"), ignore_errors=True)
+        self.signals.clear()
+        self.LAYOUT = layout
+        self.svc = self.make()
+
+    def wait_layout(self) -> None:
+        self.assertTrue(spin(lambda: ("layout",) in self.signals), self.signals)
+
+    def roll(self, seconds: float = 0.35) -> None:
+        steps = int(seconds / 0.02)
+        for _ in range(steps):
+            self.nodes.send("hidraw11", bytes([0, 3, 1, 0, 0]))
+            drain(0.02)
 
 
 class TrackpadServiceTests(PointerServiceBase):
@@ -138,13 +159,10 @@ class TrackpadServiceTests(PointerServiceBase):
 
 
 class TrackballServiceTests(PointerServiceBase):
+    """The motion heuristic: only while the layout doesn't name its Navigators
+    (here: an Oryx answer without the field, like a pre-1.10 cache)."""
     TOUCHPAD = False
-
-    def roll(self, seconds: float = 0.35) -> None:
-        steps = int(seconds / 0.02)
-        for _ in range(steps):
-            self.nodes.send("hidraw11", bytes([0, 3, 1, 0, 0]))
-            drain(0.02)
+    LAYOUT = with_navigators(legacy=True)
 
     def test_motion_without_keys_is_a_trackball(self) -> None:
         self.wait_connected()
@@ -176,6 +194,68 @@ class TrackballServiceTests(PointerServiceBase):
         self.assertIsNone(self.svc.get_pointer_kind())
         self.assertFalse(os.path.exists(self.state))
         self.assertEqual(self.activities(), [])
+
+
+
+class LayoutNavigatorTests(PointerServiceBase):
+    """The layout's ``navigators`` come before the hardware guesses."""
+    TOUCHPAD = False
+
+    def test_layout_trackball_needs_no_motion(self) -> None:
+        self.remake(with_navigators({"left": {"kind": "trackball"}}))
+        self.wait_layout()
+        self.assertEqual(self.svc.get_pointer_kind(), PointerKind.TRACKBALL)
+        self.assertEqual(self.svc.get_layout().navigators,
+                         (Navigator("left", PointerKind.TRACKBALL),))
+        self.assertIn(("changed", PointerKind.TRACKBALL), self.signals)
+        self.assertFalse(os.path.exists(self.state))      # nothing to remember
+        self.svc.props.pointer_tracking = True
+        self.roll(0.1)                                    # activity from the first roll
+        acts = self.activities()
+        self.assertTrue(acts and acts[0].kind == PointerKind.TRACKBALL
+                        and acts[0].action == PointerAction.MOVE, acts)
+
+    def test_layout_trackpad_without_touchpad_interface(self) -> None:
+        self.remake(with_navigators(NAVIGATORS_TRACKPAD_RIGHT))
+        self.wait_connected()
+        self.assertTrue(spin(lambda: self.svc._mouse_reader is not None))  # heuristic first
+        self.wait_layout()
+        self.assertEqual(self.svc.get_pointer_kind(), PointerKind.TRACKPAD)
+        self.assertEqual(self.signals.count(("changed", PointerKind.TRACKPAD)), 1)
+        self.assertIsNone(self.svc._mouse_reader)         # no trackball to look for
+
+    def test_layout_without_navigator_stops_the_heuristic(self) -> None:
+        self.wait_layout()                                # SAMPLE: navigators null
+        self.assertIsNone(self.svc.get_pointer_kind())
+        self.assertIsNone(self.svc._mouse_reader)
+        self.roll()
+        self.assertIsNone(self.svc.get_pointer_kind())
+        self.assertFalse(os.path.exists(self.state))
+
+    def test_layout_overrides_a_remembered_trackball(self) -> None:
+        self.wait_connected()
+        KnownTrackballs(self.state).add(self.svc._pointer_key)
+        self.remake(with_navigators(NAVIGATORS_TRACKPAD_RIGHT))
+        self.wait_connected()
+        self.assertEqual(self.svc.get_pointer_kind(), PointerKind.TRACKBALL)   # until it loads
+        self.wait_layout()
+        self.assertEqual(self.svc.get_pointer_kind(), PointerKind.TRACKPAD)
+        self.assertEqual(self.signals[-2:], [("changed", PointerKind.TRACKPAD), ("layout",)])
+
+
+class BothNavigatorsTests(PointerServiceBase):
+    """A trackpad on one half and a trackball on the other."""
+    LAYOUT = with_navigators({"left": {"kind": "trackball"}, "right": {"kind": "trackpad"}})
+
+    def test_trackpad_reported_both_read(self) -> None:
+        self.wait_layout()
+        self.assertEqual(self.svc.get_pointer_kind(), PointerKind.TRACKPAD)
+        self.assertIsNotNone(self.svc._mouse_reader)
+        self.svc.props.pointer_tracking = True
+        self.nodes.send("hidraw13", voyager_trackpad_report([(0, 0.5, 0.5, True)]))
+        self.roll(0.1)
+        kinds = {a.kind for a in self.activities()}
+        self.assertEqual(kinds, {PointerKind.TRACKPAD, PointerKind.TRACKBALL})
 
 
 if __name__ == "__main__":

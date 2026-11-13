@@ -96,8 +96,6 @@ def main() -> int:
     parser.add_argument("--real-geometry", action="store_true")
     parser.add_argument("--pointer", choices=sorted(POINTER_SCENES),
                         help="draw the trackpad or trackball frozen in this scene")
-    parser.add_argument("--pointer-side", choices=["right", "left"], default="right",
-                        help="with --overlay --pointer: the half it's mounted on")
     parser.add_argument("--pointer-pill", choices=sorted(POINTER_SCENES),
                         help="with --overlay: show the pointer pill in this scene")
     parser.add_argument("--modifiers", default="",
@@ -354,7 +352,6 @@ def overlay_shot(args) -> int:
     if args.pointer:
         from vibemapp.models import PointerKind
         settings.set_boolean("overlay-pointer", True)
-        settings.set_string("pointer-side", args.pointer_side)
         service.simulate_pointer_kind(PointerKind.TRACKBALL if args.pointer == "trackball"
                                       else PointerKind.TRACKPAD)
     fake = FakeLayerShell()
@@ -366,8 +363,10 @@ def overlay_shot(args) -> int:
         service.simulate_key(int(idx), True)
     if args.pointer:
         for surface in controller.surfaces:
-            if surface.pad.get_visible():
-                play_scene(surface.pad, args.pointer)
+            for pad in surface.pads:
+                play_scene(pad, args.pointer)
+    # Where the pills go: past the overlay (measured before its boxes move).
+    clearance = controller.edge_clearance()
 
     scene = Gtk.Window(default_width=width, default_height=height, decorated=False)
     stack = Gtk.Overlay()
@@ -393,9 +392,6 @@ def overlay_shot(args) -> int:
         from vibemapp.ui import hold_pill as pill_mod
         pill_mod.HoldPillSurface.flash = lambda self, text, unit: (
             self.set_key(text, unit), self.box.set_opacity(1.0))
-        clearance = max((fake.state(s)["margin"][vertical]
-                         + s.box.measure(Gtk.Orientation.VERTICAL, -1)[1]
-                         for s in controller.surfaces), default=0)
         pill = pill_mod.HoldPillController(service, settings, fake,
                                            monitor=lambda: (None, height),
                                            clearance=lambda: clearance,
@@ -415,9 +411,6 @@ def overlay_shot(args) -> int:
         print(f"hold pill {vertical}={margin}")
     if args.pointer_pill:
         from vibemapp.ui import hold_pill as pill_mod
-        clearance = max((fake.state(s)["margin"][vertical]
-                         + s.box.measure(Gtk.Orientation.VERTICAL, -1)[1]
-                         for s in controller.surfaces), default=0)
         surface = pill_mod.HoldPillSurface(fake)
         style = controller.pill_style()
         surface.set_style(style)

@@ -19,7 +19,9 @@ like the real backend. Behaviour can be tuned with environment variables:
 ``VIBEMAPP_MOCK_POINTER``     ``trackpad`` (default), ``trackball`` or ``none``. While
                                ``pointer-tracking`` is on, a looping script of
                                finger moves, taps, scrolls and a click (trackpad)
-                               or rolls, wheel and clicks (trackball) plays
+                               or rolls, wheel and clicks (trackball) plays. The
+                               layout lists it as its Navigator (none: no Navigator)
+``VIBEMAPP_MOCK_POINTER_SIDE`` ``right`` (default) or ``left``: the Navigator's half
 
 Tests construct it with ``autostart=False`` and drive it through the
 ``simulate_*`` methods.
@@ -39,7 +41,8 @@ from typing import Callable
 from gi.repository import Gio, GLib
 
 from .models import (AppRule, Device, ErgoReport, LayoutComparison, FocusedWindow, HeatmapApp, HeatmapPeriod, RuleMatch, SteamGame, KeyBinding, KeyboardModel, KeyGeometry,
-                     Layer, Layout, LayoutSync, PointerActivity, PointerKind, RunningApp)
+                     Layer, Layout, LayoutSync, Navigator, PointerActivity, PointerKind,
+                     RunningApp)
 from .backend import ergo, geometries, layouts
 from .backend import pointer as pointermod
 from .service import KeyboardService
@@ -162,7 +165,7 @@ def _layer_keys(rows: list[list[object]], thumbs: list[object],
     return tuple(out)
 
 
-def voyager_layout() -> Layout:
+def voyager_layout(navigators: tuple[Navigator, ...] = ()) -> Layout:
     geometry = voyager_geometry()
     base = _layer_keys(
         [["Esc", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-"],
@@ -211,7 +214,8 @@ def voyager_layout() -> Layout:
         Layer(3, "Navigation", "#26a269", nav),
     )
     return Layout(MOCK_LAYOUT_ID, "Albert's Voyager", geometry, layers,
-                  revision_id=MOCK_REVISION_ID)
+                  revision_id=MOCK_REVISION_ID, navigators=navigators,
+                  navigators_known=True)
 
 
 def demo_rules() -> list[AppRule]:
@@ -400,6 +404,8 @@ class MockKeyboardService(KeyboardService):
         kind = (os.environ.get("VIBEMAPP_MOCK_POINTER") or "trackpad").strip().lower()
         self._mock_pointer = {"trackpad": PointerKind.TRACKPAD,
                               "trackball": PointerKind.TRACKBALL}.get(kind)
+        side = (os.environ.get("VIBEMAPP_MOCK_POINTER_SIDE") or "right").strip().lower()
+        self._mock_pointer_side = side if side in ("left", "right") else "right"
         self._pointer_tick = 0
         self._pointer_clock = 0.0          # script time (s): one report every tick
         self._pointer_prev: list[tuple[float, float]] = []
@@ -917,7 +923,7 @@ class MockKeyboardService(KeyboardService):
             if not self._device.oryx_available or not self._device.layout_id:
                 callback(None, _("This firmware does not report an Oryx layout"))
                 return
-            self._layout = voyager_layout()
+            self._layout = voyager_layout(self._mock_navigators())
             if self._seed_heatmap and self._layout.id not in self._counts:
                 self._seed_counts(self._layout)
             self.emit("layout-loaded", self._layout)
@@ -1021,9 +1027,18 @@ class MockKeyboardService(KeyboardService):
     def get_pointer_kind(self) -> PointerKind | None:
         return self._mock_pointer if self._device is not None else None
 
+    def _mock_navigators(self) -> tuple[Navigator, ...]:
+        if self._mock_pointer is None:
+            return ()
+        return (Navigator(self._mock_pointer_side, self._mock_pointer),)
+
     def simulate_pointer_kind(self, kind: PointerKind | None) -> None:
+        """Swap the Navigator. The loaded layout lists the new one (without
+        ``layout-loaded``: re-read ``get_layout()`` on ``pointer-changed``)."""
         if kind != self._mock_pointer:
             self._mock_pointer = kind
+            if self._layout is not None:
+                self._layout = replace(self._layout, navigators=self._mock_navigators())
             self._update_pointer_script()
             if self._device is not None:
                 self.emit("pointer-changed")

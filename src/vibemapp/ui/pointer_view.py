@@ -8,9 +8,10 @@ ball whose surface marks roll with its motion; buttons flash it. The state is
 
 Two looks, like ``KeyboardView``: neutral theme colours (the window
 foreground at various strengths on the card, like the key outlines; the
-Trackpad page), or the overlay style (light outline with a dark halo and the
-overlay keys' pressed fill, ``set_overlay_style``), used by the pointer pill
-and the overlay. The
+Trackpad page), or the overlay style (light outline with a dark halo, the
+same light colour as a faint fill while touched and a stronger flash on a
+click, ``set_overlay_style``), used by the pointer pill and the overlay. Never
+the accent colour. The
 frame clock runs only while something fades (``PadModel.animating``); a still
 pad is never redrawn.
 """
@@ -33,7 +34,7 @@ from .i18n import _  # noqa: E402
 from .pointer_activity import (TRAIL_MS, PadModel, ball_marks,  # noqa: E402
                                device_title, live_label)
 
-_PROBES = ("fg", "card", "border", "accent-bg", "overlay-fg", "overlay-halo")
+_PROBES = ("fg", "card", "border", "overlay-fg", "overlay-halo")
 FINGER_RADIUS = 0.13      # of the pad's radius
 RIPPLE_FROM, RIPPLE_TO = 0.08, 0.42
 PRESS_SCALE = 0.94        # the pad presses in on a click
@@ -42,6 +43,9 @@ FINGER_FG = 0.8           # finger dots, trails and ripples
 OUTLINE_LIT_FG = 0.45     # the rim while touched (at rest: the border probe)
 TOUCH_FG = 0.04           # the disc while touched
 FLASH_FG = 0.1            # the disc on a click
+# Overlay look: the light overlay foreground at these strengths.
+OVERLAY_TOUCH_FG = 0.12   # the disc while touched
+OVERLAY_FLASH_FG = 0.35   # the disc on a click
 MARK_FG, MARK_LIT_FG = 0.45, 0.8   # trackball marks at rest and rolling
 LINE_PX = 1.0
 HALO_PX = 1.5
@@ -80,7 +84,7 @@ class PointerView(Gtk.Widget):
             self._probes.append(probe)
         style = Adw.StyleManager.get_default()
         self._style_handlers = [style.connect(f"notify::{prop}", self._on_style_changed)
-                                for prop in ("dark", "accent-color-rgba", "high-contrast")]
+                                for prop in ("dark", "high-contrast")]
         self._update_label(None)
 
     # --- public ----------------------------------------------------------
@@ -227,9 +231,8 @@ class PointerView(Gtk.Widget):
         if self._overlay:
             ofg = self._color("overlay-fg")
             strength = self._rest_opacity + (1 - self._rest_opacity) * lit
-            press = self._color("accent-bg")     # as the overlay's pressed keys
-            return (_alpha(ofg, strength), _alpha(press, 0.3), _alpha(press, 0.85 * 0.55),
-                    _alpha(ofg, 1.0))
+            return (_alpha(ofg, strength), _alpha(ofg, OVERLAY_TOUCH_FG),
+                    _alpha(ofg, OVERLAY_FLASH_FG), _alpha(ofg, 1.0))
         outline = self._mix(self._color("border"), _alpha(fg, OUTLINE_LIT_FG), lit)
         return outline, _alpha(fg, TOUCH_FG), _alpha(fg, FLASH_FG), _alpha(fg, FINGER_FG)
 

@@ -2,7 +2,8 @@
 
 A live drawing of the device at the top (``PointerView``), the on-screen
 pointer activity settings (``pointer-pill*``, shown by ``ui/hold_pill.py``)
-and the overlay's ``overlay-pointer`` switch and ``pointer-side``. Its title follows the device;
+and the overlay's ``overlay-pointer`` switch, whose subtitle names the half the
+layout puts the Navigator on (``Layout.navigators``). Its title follows the device;
 without one the window keeps it grayed out in the sidebar (``window.py``).
 The live view asks for ``pointer_tracking`` only while the page is mapped.
 """
@@ -29,9 +30,22 @@ from .resources import ui_file  # noqa: E402
 PILL_KEY = "pointer-pill"
 ACTIONS_KEY = "pointer-pill-actions"
 OVERLAY_KEY = "overlay-pointer"
-SIDE_KEY = "pointer-side"
-SIDES = ("right", "left")          # the Side row's items, in order
 SPIN_KEYS = ("pointer-pill-linger-ms", "pointer-pill-fade-ms")
+
+
+def overlay_subtitle(sides: set[str]) -> str:
+    """The Show on Overlay row's subtitle for the halves with a Navigator."""
+    if sides == {"left"}:
+        return _("Draw it beside the left half while the overlay is shown. "
+                 "It never makes the overlay appear on its own.")
+    if sides == {"right"}:
+        return _("Draw it beside the right half while the overlay is shown. "
+                 "It never makes the overlay appear on its own.")
+    if sides == {"left", "right"}:
+        return _("Draw them beside both halves while the overlay is shown. "
+                 "They never make the overlay appear on their own.")
+    return _("Draw it beside the keys while the overlay is shown. "
+             "It never makes the overlay appear on its own.")
 
 
 def toggle_action(actions: list[str], action: str, on: bool) -> list[str]:
@@ -65,7 +79,6 @@ class PointerPage(Adw.Bin):
     linger_row: Adw.SpinRow = Gtk.Template.Child()
     fade_row: Adw.SpinRow = Gtk.Template.Child()
     overlay_row: Adw.SwitchRow = Gtk.Template.Child()
-    side_row: Adw.ComboRow = Gtk.Template.Child()
 
     def __init__(self) -> None:
         super().__init__()
@@ -86,13 +99,13 @@ class PointerPage(Adw.Bin):
         self._add_toast = add_toast
         self._layer_shell = layer_shell_available()
         connect = self._handlers.append
-        for key in (PILL_KEY, ACTIONS_KEY, OVERLAY_KEY, SIDE_KEY, *SPIN_KEYS):
+        for key in (PILL_KEY, ACTIONS_KEY, OVERLAY_KEY, *SPIN_KEYS):
             connect((settings, settings.connect(f"changed::{key}", lambda *_a: self._sync())))
         connect((service, service.connect("pointer-changed", lambda *_a: self._sync_device())))
         connect((service, service.connect("pointer-activity", self._on_activity)))
+        connect((service, service.connect("layout-loaded", lambda *_a: self._sync_side())))
         self.pill_row.connect("notify::active", self._on_switch, PILL_KEY)
         self.overlay_row.connect("notify::active", self._on_switch, OVERLAY_KEY)
-        self.side_row.connect("notify::selected", self._on_side)
         for row, action in self._action_rows():
             row.connect("notify::active", self._on_action_active, action)
         for row, key in zip((self.linger_row, self.fade_row), SPIN_KEYS):
@@ -122,7 +135,18 @@ class PointerPage(Adw.Bin):
             self.stack.set_visible_child_name("unavailable")
         else:
             self.stack.set_visible_child_name("settings" if kind is not None else "none")
+        self._sync_side()
         self._sync_tracking()
+
+    def _sync_side(self) -> None:
+        """Name the half the overlay draws it beside: the layout says (the
+        right one for a layout cached before it did); none named without one."""
+        layout = self.service.get_layout() if self.service is not None else None
+        if layout is not None and (layout.navigators_known or layout.navigators):
+            sides = {n.side for n in layout.navigators}
+        else:
+            sides = {"right"}
+        self.overlay_row.set_subtitle(overlay_subtitle(sides))
 
     def _sync_tracking(self) -> None:
         if self.service is None:
@@ -151,8 +175,6 @@ class PointerPage(Adw.Bin):
         def apply() -> None:
             self.pill_row.set_active(settings.get_boolean(PILL_KEY))
             self.overlay_row.set_active(settings.get_boolean(OVERLAY_KEY))
-            side = settings.get_string(SIDE_KEY)
-            self.side_row.set_selected(SIDES.index(side) if side in SIDES else 0)
             for row, action in self._action_rows():
                 row.set_active(action in chosen)
             for row, key in zip((self.linger_row, self.fade_row), SPIN_KEYS):
@@ -170,11 +192,6 @@ class PointerPage(Adw.Bin):
     def _on_switch(self, row: Adw.SwitchRow, _pspec: object, key: str) -> None:
         if not self._syncing and row.get_active() != self.settings.get_boolean(key):
             self.settings.set_boolean(key, row.get_active())
-
-    def _on_side(self, row: Adw.ComboRow, _pspec: object) -> None:
-        side = SIDES[min(row.get_selected(), len(SIDES) - 1)]
-        if not self._syncing and side != self.settings.get_string(SIDE_KEY):
-            self.settings.set_string(SIDE_KEY, side)
 
     def _on_action_active(self, row: Adw.SwitchRow, _pspec: object, action: str) -> None:
         if self._syncing:
@@ -195,4 +212,4 @@ class PointerPage(Adw.Bin):
             self._add_toast(Adw.Toast(title=_("Copied to clipboard")))
 
 
-__all__ = ["PointerPage", "toggle_action"]
+__all__ = ["PointerPage", "overlay_subtitle", "toggle_action"]

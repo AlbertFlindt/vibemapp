@@ -18,6 +18,13 @@ what differs from Oryx's defaults (checked 2026-10-29: a layout with the default
 tapping term has no tapping-term entry). Each key object also has its own
 ``tappingTerm`` (null for the global one).
 
+``revision { navigators }`` is a JSON scalar naming the ZSA Navigator modules
+by half (checked 2026-11-13): ``null`` for a board without one, else e.g.
+``{"right": {"kind": "trackpad", "automouseTime": 400, "tap": true, ...}}``.
+Only the side and ``kind`` are used. ``"trackball"`` as the trackball's kind is
+an assumption (none seen yet); unknown sides and kinds are skipped. Layouts
+cached before the field was queried lack the key, and are fetched once more.
+
 ``revisionId`` may be ``"latest"``. Fetches run on a worker thread with
 urllib, and results come back on the GLib main loop.
 
@@ -39,7 +46,8 @@ import urllib.error
 import urllib.request
 from typing import Any, Callable
 
-from ..models import KeyBinding, KeyboardModel, Layer, Layout, LayoutSync
+from ..models import (KeyBinding, KeyboardModel, Layer, Layout, LayoutSync, Navigator,
+                      PointerKind)
 from . import geometries
 from ._i18n import _
 
@@ -51,7 +59,8 @@ LAYOUT_QUERY = (
     "query getLayout($hashId: String!, $revisionId: String!, $geometry: String) {"
     " layout(hashId: $hashId, geometry: $geometry, revisionId: $revisionId) {"
     " hashId title geometry"
-    " revision { hashId qmkVersion title config layers { title color position keys } }"
+    " revision { hashId qmkVersion title config navigators"
+    " layers { title color position keys } }"
     " } }"
 )
 
@@ -338,6 +347,35 @@ def _config(revision: dict[str, Any]) -> dict[str, Any]:
     return config if isinstance(config, dict) else {}
 
 
+_NAVIGATOR_SIDES = ("left", "right")
+
+
+def navigators(revision: dict[str, Any]) -> tuple[Navigator, ...] | None:
+    """The revision's Navigator modules, left half first. None when the revision
+    doesn't say (a layout cached before ``navigators`` was queried); () when
+    Oryx says there are none."""
+    if "navigators" not in revision:
+        return None
+    raw = revision.get("navigators")
+    if isinstance(raw, str):     # defensively accept a JSON-encoded scalar
+        try:
+            raw = json.loads(raw)
+        except ValueError:
+            return ()
+    if not isinstance(raw, dict):
+        return ()
+    out: list[Navigator] = []
+    for side in _NAVIGATOR_SIDES:
+        module = raw.get(side)
+        kind = module.get("kind") if isinstance(module, dict) else None
+        try:
+            out.append(Navigator(side, PointerKind(kind)))
+        except ValueError:
+            if module is not None:
+                log.info("Skipping Navigator on the %s half of unknown kind %r", side, kind)
+    return tuple(out)
+
+
 def _modifier_prefix(mods: Any) -> str:
     if not isinstance(mods, dict):
         return ""
@@ -405,6 +443,7 @@ def parse_layout(data: dict[str, Any], model: KeyboardModel | None = None) -> La
     layers_sorted = sorted(
         (l for l in layers_raw if isinstance(l, dict)),
         key=lambda l: l.get("position") if isinstance(l.get("position"), int) else 0)
+    navs = navigators(revision)
     layers: list[Layer] = []
     for i, layer in enumerate(layers_sorted):
         keys = layer.get("keys") or []
@@ -429,6 +468,8 @@ def parse_layout(data: dict[str, Any], model: KeyboardModel | None = None) -> La
         # The name of a changed global term inside ``config`` is a guess: no
         # layout with one has been seen yet.
         tapping_term_ms=tapping_term(_config(revision).get("tappingTerm")),
+        navigators=navs or (),
+        navigators_known=navs is not None,
     )
 
 
@@ -560,16 +601,23 @@ class LayoutRepository:
 
     def load_blocking(self, layout_id: str, revision_id: str | None,
                       model: KeyboardModel) -> Layout:
-        """Exact cached revision > network > newest cached revision for the layout."""
+        """Exact cached revision > network > newest cached revision for the layout.
+
+        A cached revision is immutable, except that one cached before
+        ``navigators`` was queried is fetched again (and rewritten) once; offline
+        or when that fails, the old copy is used as it is."""
         geometry = model.value if model != KeyboardModel.UNKNOWN else None
+        stale: dict[str, Any] | None = None
         if revision_id and revision_id != "latest":
             cached = self.cache.load(layout_id, revision_id)
             if cached is not None:
-                return parse_layout(cached, model)
+                if navigators(cached.get("revision") or {}) is not None:
+                    return parse_layout(cached, model)
+                stale = cached
         try:
             data = self._fetch(layout_id, revision_id, geometry)
         except LayoutFetchError as exc:
-            cached = self.cache.load(layout_id, None)
+            cached = stale if stale is not None else self.cache.load(layout_id, None)
             if cached is not None:
                 log.info("Using cached layout for %s (%s)", layout_id, exc)
                 return parse_layout(cached, model)
@@ -632,6 +680,6 @@ class LayoutRepository:
 
 __all__ = ["GRAPHQL_URL", "LAYOUT_QUERY", "keycode_label", "keycode_glyph", "hold_label",
            "hold_combo", "modifier_names", "tapping_term", "key_binding_from_json",
-           "parse_layout", "fetch_layout_json", "fetch_latest_revision_id", "layout_sync",
+           "parse_layout", "navigators", "fetch_layout_json", "fetch_latest_revision_id", "layout_sync",
            "LATEST_REVISION_QUERY", "LayoutCache",
            "LayoutRepository", "LayoutFetchError", "normalize_color", "default_cache_dir"]

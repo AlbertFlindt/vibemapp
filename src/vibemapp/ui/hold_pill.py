@@ -27,7 +27,12 @@ Surface
     NONE, exclusive zone -1, empty input region, not added to the
     Gtk.Application. It is anchored to the overlay's top or bottom edge only,
     so the compositor centres it, ``EDGE_FRACTION`` of the monitor height in
-    from that edge, or just past the overlay while that is shown there. It
+    from that edge, or just past where the overlay is or would be whenever it
+    can show (``OverlayController.edge_clearance``), so the pill doesn't jump
+    as the overlay comes and goes. A visible pill is never moved: a new
+    placement waits until it's hidden. Its height is always the pad's (a key
+    is centred on it), and with the pad shown a spacer mirrors the modifier
+    key, so the pad stays put as modifiers come and go. It
     goes on the overlay's monitor (the fixed one, else the focused one). Like the overlay
     it never unmaps once shown: hidden, it's transparent and parked on the
     BACKGROUND layer, so it never takes keyboard focus from another panel.
@@ -97,7 +102,7 @@ def fade_pair(fade_ms: int) -> tuple[int, int]:
 
 
 # (monitor, its logical height) to show on; the px to keep free at the edge
-# (the overlay's extent while it's shown there, else 0); the style.
+# (the overlay's extent whenever it can show, else 0); the style.
 MonitorFn = Callable[[], tuple[Gdk.Monitor | None, int]]
 ClearanceFn = Callable[[], int]
 StyleFn = Callable[[], PillStyle]
@@ -132,7 +137,9 @@ class HoldPillSurface(Gtk.Window):
         self._fade: Adw.TimedAnimation | None = None
         self._hide_id = 0
         self._fade_in_ms, self._fade_out_ms = PillStyle().fade_in_ms, PillStyle().fade_out_ms
-        self.box = Gtk.Box(can_target=False)
+        self._placed: tuple | None = None       # (monitor, edge, margin) applied
+        self._pending: tuple | None = None      # waiting until it's hidden
+        self.box = Gtk.Box(can_target=False, valign=Gtk.Align.CENTER)
         self.view = KeyboardView()
         self.view.set_overlay_style(True)
         self.view.set_can_target(False)
@@ -142,11 +149,14 @@ class HoldPillSurface(Gtk.Window):
         self.pointer.set_can_target(False)
         self.pointer.set_valign(Gtk.Align.CENTER)
         self.pointer.set_visible(False)
-        for widget in (self.view, self.pointer):
+        # Mirrors the key while the pad shows, so the pad stays centred.
+        self.spacer = Gtk.Box(can_target=False, visible=False)
+        for widget in (self.view, self.pointer, self.spacer):
             for side in ("top", "bottom", "start", "end"):
                 getattr(widget, f"set_margin_{side}")(HALO_PAD_PX)
         self.box.append(self.view)
         self.box.append(self.pointer)
+        self.box.append(self.spacer)
         self.box.set_opacity(0.0)
         self.set_child(self.box)
 
@@ -165,7 +175,29 @@ class HoldPillSurface(Gtk.Window):
     def showing(self) -> bool:
         return self._showing
 
+    @property
+    def on_screen(self) -> bool:
+        """Shown, or still fading out."""
+        return self._showing or self.box.get_opacity() > 0
+
     def place(self, monitor: Gdk.Monitor | None, edge: str, margin: int) -> None:
+        """Anchor ``margin`` px in from ``edge``; while it's on screen, only
+        once it's hidden (a visible pill never moves)."""
+        placement = (monitor, edge, margin)
+        if self._placed is not None and self.on_screen:
+            self._pending = placement if placement != self._placed else None
+            return
+        self._pending = None
+        self._apply_place(placement)
+
+    @property
+    def placement(self) -> tuple | None:
+        """(monitor, edge, margin) it's at now."""
+        return self._placed
+
+    def _apply_place(self, placement: tuple) -> None:
+        monitor, edge, margin = placement
+        self._placed = placement
         ls = self._ls
         bottom = edge != "top"
         ls.set_anchor(self, ls.Edge.BOTTOM, bottom)
@@ -180,6 +212,15 @@ class HoldPillSurface(Gtk.Window):
         self.pointer.set_rest_opacity(style.opacity)
         self._fade_in_ms, self._fade_out_ms = max(0, style.fade_in_ms), max(0, style.fade_out_ms)
 
+    @staticmethod
+    def pad_px(unit: float) -> int:
+        """The pad drawing's side, in px (its halo inside)."""
+        return round(unit * PAD_UNITS) + 2 * 4
+
+    def _set_height(self, unit: float) -> None:
+        """Always the pad's height, so nothing moves when the content changes."""
+        self.box.set_size_request(-1, self.pad_px(unit) + 2 * HALO_PAD_PX)
+
     def set_key(self, text: str, unit: float) -> None:
         width = key_width_units(text)
         self.view.set_geometry((KeyGeometry(0, 0.0, 0.0, w=width),))
@@ -188,16 +229,22 @@ class HoldPillSurface(Gtk.Window):
         self.view.set_fixed_size(round(width * unit), round(unit))
         self.view.set_visible(True)
         self.pointer.set_visible(False)
+        self.spacer.set_visible(False)
+        self._set_height(unit)
 
     def set_pointer(self, modifiers: str | None, unit: float) -> None:
-        """The pad drawing, after a ``modifiers`` key when there is one."""
+        """The pad drawing, after a ``modifiers`` key when there is one (and a
+        spacer as wide after it, so the pad stays in the middle)."""
         if modifiers:
             self.set_key(modifiers, unit)
+            self.spacer.set_size_request(round(key_width_units(modifiers) * unit), -1)
         else:
             self.view.set_visible(False)
+            self._set_height(unit)
         self.box.set_spacing(round(unit * 0.15))
-        self.pointer.set_diameter(round(unit * PAD_UNITS) + 2 * 4)
+        self.pointer.set_diameter(self.pad_px(unit))
         self.pointer.set_visible(True)
+        self.spacer.set_visible(bool(modifiers))
 
     def flash(self, text: str, unit: float = DEFAULT_UNIT_PX) -> None:
         """Show ``text`` until ``release()``."""
@@ -240,7 +287,14 @@ class HoldPillSurface(Gtk.Window):
         self._stop_fade()
         self._showing = False
         self.box.set_opacity(0.0)
+        self._park()
+
+    def _park(self) -> None:
+        """Hidden: below all windows, and now free to move."""
         self._ls.set_layer(self, self._ls.Layer.BACKGROUND)
+        if self._pending is not None:
+            pending, self._pending = self._pending, None
+            self._apply_place(pending)
 
     def _on_hide_timeout(self) -> bool:
         self._hide_id = 0
@@ -253,7 +307,7 @@ class HoldPillSurface(Gtk.Window):
         if duration <= 0:           # Fade Duration 0: show and hide at once
             self.box.set_opacity(target)
             if target == 0.0:
-                self._ls.set_layer(self, self._ls.Layer.BACKGROUND)
+                self._park()
             return
         anim = Adw.TimedAnimation.new(self.box, self.box.get_opacity(), target, duration,
                                       Adw.PropertyAnimationTarget.new(self.box, "opacity"))
@@ -267,7 +321,7 @@ class HoldPillSurface(Gtk.Window):
             return
         self._fade = None
         if not self._showing:
-            self._ls.set_layer(self, self._ls.Layer.BACKGROUND)
+            self._park()
 
     def _stop_fade(self) -> None:
         if self._fade is not None:

@@ -96,6 +96,9 @@ class Layout:
     # ``navigators``), left half first. () when there are none, or for a
     # cached layout fetched before 1.10. Additive (1.10).
     navigators: tuple[Navigator, ...] = ()
+    # Whether Oryx said which Navigators there are (False for a cached layout
+    # fetched before 1.10, so () means "don't know" there). Additive (1.10).
+    navigators_known: bool = False
 
 
 class LayoutSync(str, Enum):

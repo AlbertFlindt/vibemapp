@@ -16,11 +16,12 @@ Behaviour notes:
   nor used by Smart Layers, so the UI keeps showing the app the user came from.
 * Firmware keycodes TOGGLE_SMART_LAYER and TRIGGER_SMART_LAYER (Oryx events
   0x09/0x0A) toggle ``smart-layers-enabled`` and force a re-evaluation.
-* Pointing device (SPEC 3.5): a touchpad sibling interface makes
-  ``get_pointer_kind()`` TRACKPAD on connect; its reports are read (main
-  loop, non-blocking fd) only while ``pointer-tracking`` is on. Without one,
-  the mouse interface is read to spot a trackball: motion while no Oryx key
-  is held (mouse keys use that interface too), remembered per layout.
+* Pointing device (SPEC 3.5): the layout's Navigators (Oryx) name it once
+  loaded; before that a touchpad sibling interface makes
+  ``get_pointer_kind()`` TRACKPAD on connect. Touchpad reports are read (main
+  loop, non-blocking fd) only while ``pointer-tracking`` is on. When the layout
+  doesn't say, the mouse interface is read to spot a trackball: motion while
+  no Oryx key is held (mouse keys use that interface too), remembered per layout.
 """
 
 from __future__ import annotations
@@ -210,6 +211,9 @@ class ZsaKeyboardService(KeyboardService):
         self._touchpad_reader: _HidReader | None = None
         self._mouse: MouseInterpreter | None = None
         self._mouse_reader: _HidReader | None = None
+        self._mouse_iface: tuple[str, MouseInterpreter] | None = None
+        self._trackball_seen = False      # found by motion, or remembered
+        self._trackball_active = False    # mouse activity is a trackball's
         self._trackball = TrackballDetector()
         self._pointer_timer = 0
 
@@ -612,6 +616,7 @@ class ZsaKeyboardService(KeyboardService):
             current = generation == self._generation and self._device is not None
             if layout is not None and current:
                 self._layout = layout
+                self._refresh_pointer()          # the layout names its Navigators
                 self._engine.layer_count = len(layout.layers) or None
                 self._set_layout_sync(layout_sync(dev.revision_id, layout.revision_id, None))
                 self.emit("layout-loaded", layout)
@@ -747,6 +752,13 @@ class ZsaKeyboardService(KeyboardService):
     # --- pointing device -----------------------------------------------------------
 
     def get_pointer_kind(self) -> PointerKind | None:
+        """The board's pointing device. The layout's Navigators come first: a
+        trackpad there (or a touchpad interface) is TRACKPAD, else a trackball
+        there is TRACKBALL. With a trackpad on one half and a trackball on the
+        other it's TRACKPAD; ``pointer-activity`` carries each one's own kind.
+        Only when the layout doesn't say (not loaded yet, or an old cache used
+        offline) is a trackball found by motion (``TrackballDetector``) or
+        remembered (``KnownTrackballs``)."""
         return self._pointer_kind
 
     def _set_pointer_kind(self, kind: PointerKind | None) -> None:
@@ -766,27 +778,52 @@ class ZsaKeyboardService(KeyboardService):
             interp = TrackpadInterpreter(pad.descriptor)
             if interp.valid:
                 self._touchpad, self._touchpad_path = interp, pad.dev_path
-                self._set_pointer_kind(PointerKind.TRACKPAD)
-                self._update_touchpad_reader()
-                return
         mouse = next((p for p in ifaces if p.kind == InterfaceClass.MOUSE), None)
-        if mouse is None:
-            return
-        interp_m = MouseInterpreter(mouse.descriptor)
-        if not interp_m.valid:
-            return
-        known = self._pointer_key in self._known_trackballs
-        if known:
-            self._set_pointer_kind(PointerKind.TRACKBALL)
-        elif self._conn is None:
-            return          # without Oryx key events mouse keys can't be told apart
-        self._mouse = interp_m
-        self._trackball = TrackballDetector()
-        try:
-            self._mouse_reader = _HidReader(mouse.dev_path, self._pointer_opener,
-                                            self._on_mouse_report)
-        except OSError as exc:
-            log.info("Can't read the mouse interface %s: %s", mouse.dev_path, exc)
+        if mouse is not None:
+            interp_m = MouseInterpreter(mouse.descriptor)
+            if interp_m.valid:
+                self._mouse_iface = (mouse.dev_path, interp_m)
+        self._trackball_seen = self._pointer_key in self._known_trackballs
+        self._refresh_pointer()
+
+    def _refresh_pointer(self) -> None:
+        """Work out the pointer kind (see ``get_pointer_kind``) and open or close
+        the readers to match. Called on connect, on a layout load and when the
+        motion heuristic finds a trackball."""
+        layout = self._layout
+        if layout is not None and layout.navigators_known:
+            kinds = {n.kind for n in layout.navigators}
+            trackball = PointerKind.TRACKBALL in kinds
+            pad = PointerKind.TRACKPAD in kinds or self._touchpad is not None
+            detect = False
+        else:
+            pad = self._touchpad is not None
+            trackball = self._trackball_seen and not pad
+            # Without Oryx key events, mouse keys can't be told from a trackball.
+            detect = not pad and not trackball and self._conn is not None
+        self._trackball_active = trackball
+        self._update_touchpad_reader()
+        self._update_mouse_reader(trackball or detect)
+        self._set_pointer_kind(PointerKind.TRACKPAD if pad
+                               else PointerKind.TRACKBALL if trackball else None)
+
+    def _update_mouse_reader(self, want: bool) -> None:
+        want = want and self._mouse_iface is not None
+        if want and self._mouse_reader is None:
+            assert self._mouse_iface is not None
+            path, interp = self._mouse_iface
+            interp.reset()
+            self._mouse = interp
+            self._trackball = TrackballDetector()
+            try:
+                self._mouse_reader = _HidReader(path, self._pointer_opener,
+                                                self._on_mouse_report)
+            except OSError as exc:
+                log.info("Can't read the mouse interface %s: %s", path, exc)
+                self._mouse = None
+        elif not want and self._mouse_reader is not None:
+            self._mouse_reader.close()
+            self._mouse_reader = None
             self._mouse = None
 
     def _stop_pointer(self) -> None:
@@ -801,6 +838,9 @@ class ZsaKeyboardService(KeyboardService):
         self._touchpad = None
         self._touchpad_path = ""
         self._mouse = None
+        self._mouse_iface = None
+        self._trackball_seen = False
+        self._trackball_active = False
         self._set_pointer_kind(None)
 
     def _update_touchpad_reader(self) -> None:
@@ -836,13 +876,14 @@ class ZsaKeyboardService(KeyboardService):
             return
         now = self._monotonic()
         activities = self._mouse.feed(data, now)
-        if self._mouse.last_moved and self._pointer_kind != PointerKind.TRACKBALL:
+        if self._mouse.last_moved and not self._trackball_active:
             if self._trackball.motion(now):
                 self._known_trackballs.add(self._pointer_key)
-                self._set_pointer_kind(PointerKind.TRACKBALL)
+                self._trackball_seen = True
                 self._mouse.reset()       # activity starts with the next report
+                self._refresh_pointer()
             return
-        if self._pointer_kind == PointerKind.TRACKBALL and self.props.pointer_tracking:
+        if self._trackball_active and self.props.pointer_tracking:
             self._emit_pointer(activities)
         else:
             self._mouse.reset()
@@ -871,7 +912,7 @@ class ZsaKeyboardService(KeyboardService):
         out: list[PointerActivity] = []
         if self._touchpad is not None:
             out += self._touchpad.poll(now)
-        if self._mouse is not None and self._pointer_kind == PointerKind.TRACKBALL:
+        if self._mouse is not None and self._trackball_active:
             out += self._mouse.poll(now)
         self._emit_pointer(out)
         return GLib.SOURCE_REMOVE

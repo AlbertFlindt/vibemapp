@@ -25,12 +25,17 @@ class FakeService(GObject.Object):
     __gsignals__ = {
         "pointer-changed": (GObject.SignalFlags.RUN_LAST, None, ()),
         "pointer-activity": (GObject.SignalFlags.RUN_LAST, None, (object,)),
+        "layout-loaded": (GObject.SignalFlags.RUN_LAST, None, (object,)),
     }
     pointer_tracking = GObject.Property(type=bool, default=False, nick="pointer-tracking")
 
     def __init__(self) -> None:
         super().__init__()
         self.kind: PointerKind | None = None
+        self.layout = None
+
+    def get_layout(self):
+        return self.layout
 
     def get_pointer_kind(self) -> PointerKind | None:
         return self.kind
@@ -88,11 +93,19 @@ class PageTests(unittest.TestCase):
         self.assertEqual(int(page.fade_row.get_value()), 0)
         page.overlay_row.set_active(True)
         self.assertTrue(settings.get_boolean("overlay-pointer"))
-        self.assertEqual(page.side_row.get_selected(), 0)            # right
-        page.side_row.set_selected(1)
-        self.assertEqual(settings.get_string("pointer-side"), "left")
-        settings.set_string("pointer-side", "right")
-        self.assertEqual(page.side_row.get_selected(), 0)
+
+    def test_overlay_row_names_the_navigators_half(self) -> None:
+        from vibemapp.models import Layout, Navigator
+        self.assertIn("right half", self.page.overlay_row.get_subtitle())   # no layout yet
+        for navigators, text in (((Navigator("left", PointerKind.TRACKBALL),), "left half"),
+                                 ((Navigator("left", PointerKind.TRACKBALL),
+                                   Navigator("right", PointerKind.TRACKPAD)), "both halves"),
+                                 (None, "right half"),     # a layout cached before 1.10
+                                 ((), "the keys")):        # Oryx says there is none
+            self.service.layout = Layout("x", "X", (), (), navigators=navigators or (),
+                                         navigators_known=navigators is not None)
+            self.service.emit("layout-loaded", self.service.layout)
+            self.assertIn(text, self.page.overlay_row.get_subtitle())
 
     def test_live_view_only_while_shown(self) -> None:
         self.service.plug(PointerKind.TRACKPAD)

@@ -124,6 +124,43 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(surface.view._layer.keys[0].tap_label, "Ctrl+C")
         surface.destroy()
 
+    def test_visible_pill_never_moves(self) -> None:
+        from vibemapp.ui.hold_pill import HoldPillSurface
+        surface = HoldPillSurface(self.ls)
+        surface.place(None, "bottom", 100)
+        surface._showing = True                    # on screen
+        surface.box.set_opacity(1.0)
+        surface.place(None, "bottom", 300)         # e.g. the overlay's size changed
+        self.assertEqual(self.ls.state(surface)["margin"]["bottom"], 100)
+        surface.place(None, "bottom", 100)         # back: nothing waits any more
+        self.assertIsNone(surface._pending)
+        surface.place(None, "bottom", 300)
+        surface.hide_now()                         # hidden: now it moves
+        self.assertEqual(self.ls.state(surface)["margin"]["bottom"], 300)
+        surface.destroy()
+
+    def test_same_height_for_key_pad_and_both(self) -> None:
+        from gi.repository import Gtk
+        from vibemapp.ui.hold_pill import HoldPillSurface
+        surface = HoldPillSurface(self.ls)
+
+        def height() -> int:
+            return surface.box.measure(Gtk.Orientation.VERTICAL, -1)[1]
+
+        surface.set_key("Ctrl+C", 40.0)
+        key = height()
+        surface.set_pointer(None, 40.0)
+        pad = height()
+        surface.set_pointer("Ctrl", 40.0)
+        self.assertEqual({key, pad, height()}, {pad})
+        self.assertGreater(pad, 40 + 2 * self.hold_pill.HALO_PAD_PX)   # taller than a key
+        # A spacer as wide as the key keeps the pad in the middle.
+        self.assertTrue(surface.spacer.get_visible())
+        self.assertEqual(surface.spacer.get_size_request()[0], surface.view._fixed_size[0])
+        surface.set_pointer(None, 40.0)
+        self.assertFalse(surface.spacer.get_visible())
+        surface.destroy()
+
     def test_follows_overlay_appearance(self) -> None:
         self.settings.set_boolean("hold-pill", True)
         self.style = self.hold_pill.PillStyle(edge="top", unit=40.0, opacity=0.3,

@@ -9,7 +9,8 @@ There is no grim or screenshot portal; GTK renders the pages off screen from the
 - Overlay over a checkerboard/busy backdrop: `PYTHONPATH=src python3 tests/ui/screenshot.py OUT.png --overlay [--backdrop busy] [--half-spacing 40] [--size 1920x1080 --width-mm 530] [--layer 1] [--press 3,15] [--anchor top-right]`
 - Trackpad/trackball, frozen mid-gesture (scenes: one-finger, two-finger, scroll, tap, click,
   trackball): `--page pointer --pointer scroll`; on the overlay `--overlay --pointer tap
-  --pointer-pill scroll --modifiers Ctrl` (`--pointer-side left` for the left half). `VIBEMAPP_MOCK_POINTER=trackball|none` picks the device.
+  --pointer-pill scroll --modifiers Ctrl`. `VIBEMAPP_MOCK_POINTER=trackball|none` picks the device,
+  `VIBEMAPP_MOCK_POINTER_SIDE=left|right` the half the mock layout's Navigator is on.
 - The real overlay on a live compositor (for `grim`): `PYTHONPATH=src python3 tests/ui/overlay_live.py [--layer 1] [--press 3,15]`
 - Key tooltips (no pointer moves): `PYTHONPATH=src python3 tests/ui/tooltip_shot.py PREFIX [--layer N] KEY…`
 
