@@ -45,8 +45,8 @@ and update it with the change). Release history: `CHANGELOG.md` (not loaded).
   `HYPRLAND_INSTANCE_SIGNATURE` may be unset; the code globs `$XDG_RUNTIME_DIR/hypr/*/`.
 - The GSettings schema has a fixed path. `Gio.Settings.new_full(schema, None, other_path)`
   **aborts the process**. `VIBEMAPP_MEMORY_SETTINGS=1` keeps test runs out of dconf.
-- PyGObject 3.58.0 + Python 3.14.7 emit an asyncio DeprecationWarning from `gi/events.py`
-  (still true 2026-10-12). It's filtered with `-W ignore::DeprecationWarning:gi.events` where
+- PyGObject 3.58 + Python 3.14 emit an asyncio DeprecationWarning from `gi/events.py`
+  (still true 2026-11-13 on 3.58.1 / 3.14.10). It's filtered with `-W ignore::DeprecationWarning:gi.events` where
   unittest runs (check.sh, `packaging/arch/PKGBUILD`); app runs hide it by default.
 - **gtk4-layer-shell must be loaded before GTK.** `vibemapp/_preload.py` `ctypes.CDLL`s
   `libgtk4-layer-shell.so.0` and must be the first import in every entry point

@@ -54,7 +54,7 @@ The immediate ones. The milestones after them are in `ROADMAP.md`.
   Its settings sit on the Overlay page (same layer-shell requirement). Not verified on hardware.
 - **Held modifiers share the hold-action pill** (2026-10-30): one surface, so the two never
   overlap. It stays up while modifiers are held, shows the last key pressed with them, and lingers
-  `VISIBLE_MS` after release. Mod-taps count once held a tapping term (what QMK
+  for its Stay Visible time after release. Mod-taps count once held a tapping term (what QMK
   decides by default; a quick home-row Ctrl+C released within the term is missed). Shift alone is
   typing, so it never shows. Not verified on hardware.
 - **Pills: own timing, off per Smart Layers rule** (2026-10-30): each pill has its own
