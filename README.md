@@ -31,6 +31,7 @@
 | **Live Layout** | Your Oryx layout, the active layer and the keys you press, live. |
 | **Smart Layers** | Switches the keyboard's layer when the focused app changes (Hyprland). |
 | **Overlay** | A see-through, click-through view of the layer you're on. |
+| **Trackpad and Trackball** | Shows what your ZSA Navigator does: fingers, scrolls, taps and clicks, live. |
 | **Heatmap and Insights** | Opt-in key-press counts and finger load. Counts only, never what you type. |
 | **Tray Icon** | Keeps Smart Layers running with the window closed. |
 
@@ -77,6 +78,19 @@ layer. It never takes focus, and it follows the focused monitor or stays on a fi
 Needs `gtk4-layer-shell`: the overlay is a layer-shell surface (namespace `vibemapp-overlay`)
 that sits above fullscreen windows and panels. Without the package the overlay is off, its
 page says what to install, and the rest of Vibemapp works as usual.
+
+### Trackpad and Trackball
+
+For a ZSA Navigator (trackpad or trackball). A live drawing shows your fingers on the round pad,
+two-finger scrolls with a trail, taps as ripples and clicks, or the ball rolling. Turn on
+**Show Pointer Activity** and the same small drawing appears on screen where held modifiers
+show, so `Ctrl` + a scroll reads as a zoom; turn on **Show on Overlay** and it sits beside its
+half of the keyboard. Which half, and whether it's a trackpad or a trackball, comes from your
+layout in Oryx. The page is greyed out on a keyboard without a Navigator.
+
+<p align="center">
+  <img src="data/screenshots/trackpad.png" alt="Trackpad page with a live two-finger scroll on the round pad" width="600">
+</p>
 
 ### Heatmap
 
