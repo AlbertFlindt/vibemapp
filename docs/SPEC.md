@@ -26,8 +26,8 @@ Moonlander, ErgoDox EZ, Planck EZ) running Oryx firmware.
   `VIBEMAPP_MOCK=1`). Every signal is emitted on the GLib main loop.
 - Contract and rules-JSON changes are additive and backward compatible.
 - UI: libadwaita, `Adw.ApplicationWindow` → `Adw.NavigationSplitView`. The sidebar pages are
-  **Layout**, **Smart Layers**, **Heatmap** and **Overlay** (Ctrl+1–4). The window always opens
-  on Layout. The header has a device menu and the primary menu (Preferences, Keyboard
+  **Layout**, **Smart Layers**, **Heatmap**, **Overlay**, **Insights** and **Trackpad** (Ctrl+1–6;
+  4.3.3). The window always opens on Layout. The header has a device menu and the primary menu (Preferences, Keyboard
   Shortcuts, About). Errors show as `Adw.Toast`s.
 - App lifecycle, tray and actions live in `main.py`. Settings are GSettings
   (`io.github.albertflindt.Vibemapp`, fixed path).
@@ -151,11 +151,11 @@ exists but can't be opened.
   - `CLASS_PATTERN`: regex that must `re.fullmatch` the class.
   - `STEAM_GAME`: empty `app_class` means any Steam game; an app id means that game (still
     matched and editable, no longer creatable from the UI).
-- **On-screen keys per rule** (additive, 1.8): `show_hold_actions` and `show_held_modifiers`
-  (missing = true). While the focused window matches an enabled rule with one off, that pill
-  (4.3.1, 4.3.2) doesn't show, e.g. no Ctrl in games via All Steam Games. Checked at key press
-  from the focused window, also while Smart Layers itself is paused. Switches in the rule dialog's
-  On-Screen Keys group.
+- **On-screen activity per rule** (additive, 1.8; `show_pointer` 1.10): `show_hold_actions`,
+  `show_held_modifiers` and `show_pointer` (missing = true). While the focused window matches an
+  enabled rule with one off, that pill (4.3.1–4.3.3) doesn't show, e.g. no Ctrl in games via All
+  Steam Games. Checked at key press (pointer report) from the focused window, also while Smart
+  Layers itself is paused. Switches in the rule dialog's On-Screen Activity group.
 - First enabled matching rule wins; no match → fallback layer (`None` = don't change, the
   default). Set-layer is only sent when the target differs from the keyboard's layer; focus
   flips are debounced ~50 ms.
@@ -220,6 +220,12 @@ docstring for sizing and half-spacing rules), `ui/overlay_page.py`/`.ui`.
 - **Control:** a Preview switch on the page (`app.overlay-preview`), a tray checkbox,
   `app.toggle-overlay` / `vibemapp --toggle-overlay` for a Hyprland bind (the page shows the
   snippet). Toggle remembers the last non-off mode in memory.
+- **Trackpad or trackball** (`overlay-pointer`, off; switch on the Trackpad page and in
+  Appearance, grayed out without a device): the right half's surface also draws the device
+  (`PointerView`, overlay style) 1.5 key units across, 0.3 right of the thumb cluster's rotated keys
+  and level with them (a board without rotated keys: beside its bottom-right corner); the part's
+  bounds grow to fit (`overlay_state.pointer_pad_bounds`). Live while the overlay is shown; it never
+  shows the overlay by itself.
 - Additive contract: `get_pressed_keys()`, `get_focused_monitor()`, `focused-monitor-changed`.
 
 #### 4.3.1 Hold-action pill
@@ -270,6 +276,35 @@ them: `Ctrl`, `Ctrl+Shift`, `Ctrl+Shift+T`. Code: `ui/held_modifiers.py` (pure t
 - **Settings:** `modifier-pill` (off by default), Stay Visible and Fade Duration, in the Overlay
   page's Held Modifiers group, below Hold Actions. A Smart Layers rule can turn it off (4.2).
   Needs gtk4-layer-shell.
+
+#### 4.3.3 Pointer pill and the Trackpad page
+The keyboard's trackpad or trackball (3.5), drawn live on the hold pill's surface. Code:
+`ui/pointer_activity.py` (pure: `PadModel`, `PointerTracker`, labels, `want_pointer`),
+`ui/pointer_view.py` (`PointerView`, the drawing), `ui/hold_pill.py`, `ui/pointer_page.py`/`.ui`.
+- **Drawing** (`PointerView` + `PadModel`): a round trackpad with a dot per finger at its contact
+  (the pad's square 0..1 range mapped onto the disc, clamped), a fading trail behind moving fingers
+  (220 ms), a ripple where a tap was (450 ms), a press-in flash on a click (260 ms, held while a
+  button is down). A trackball is a shaded ball whose surface marks roll with `motion`, with short
+  streaks; buttons flash it. The frame clock runs only while something fades. Two looks: overlay
+  style (light outline, dark halo, overlay Opacity at rest; pill and overlay) and theme colours with
+  the accent for fingers (the page).
+- **Pill:** the pad, 1.5 key units across (overlay Size), after a key with the held modifiers when
+  `modifier-pill` shows them ("Ctrl" + the pad: Ctrl+scroll is zoom). A key typed with them replaces
+  the pad; a firing hold action shows over it, then it comes back. `pointer-pill-actions` (click,
+  tap, scroll, move = motion or touch) choose what makes it appear; once up, every report updates the
+  drawing. A click or tap isn't replaced by motion within 500 ms or while a button is down (a drag).
+  It stays until IDLE, the RELEASE of a click, or at once for a tap, then `pointer-pill-linger-ms`
+  (600) and fades with `pointer-pill-fade-ms` (200); held modifiers then come back without the last
+  key. The text ("Two-Finger Scroll ↓") is only the accessible label and the page's caption: taps
+  name the fingers, not the button libinput makes of them (a compositor setting).
+- **Tracking:** `pointer_tracking` is on while the pill setting is on, the overlay's pad is shown, or
+  the page is mapped (`want_pointer` owners).
+- **Page:** sidebar item titled Trackpad (`input-touchpad-symbolic`), Trackball
+  (`input-mouse-symbolic`) or "Trackpad & Trackball" without a device, then insensitive with a
+  tooltip; if the device goes away while the page is shown, the window goes to Layout. A live view (large
+  `PointerView` and caption), On-Screen Activity (switch, Show For expander, Stay Visible, Fade
+  Duration), Overlay (`overlay-pointer`). "Overlay Unavailable" without gtk4-layer-shell. A Smart
+  Layers rule can turn the pill off (4.2).
 
 ### 4.4 Heatmap
 Opt-in (`heatmap-recording`, default off). Stores only per-(local day, layer, key index)

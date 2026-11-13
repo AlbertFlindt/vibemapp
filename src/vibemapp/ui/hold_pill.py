@@ -15,6 +15,12 @@ Off unless ``hold-pill`` is on; single keys can be left out with
 pill up while modifiers are held, then for ``modifier-pill-linger-ms``; off
 unless ``modifier-pill`` is on.
 
+Pointer activity (``pointer-pill``) shows on the same surface as a drawing of
+the trackpad or trackball (``PointerView``), next to the held modifiers' key
+when there are any ("Ctrl" + the pad). ``PointerTracker``
+(``ui/pointer_activity.py``) decides when a gesture starts and ends; the pad
+lingers ``pointer-pill-linger-ms`` after it. A firing hold action shows over it.
+
 Surface
     One gtk4-layer-shell surface, namespace ``vibemapp-hold-pill``, made the
     same way as the overlay's (``ui/overlay.py``): OVERLAY layer, keyboard mode
@@ -42,11 +48,14 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, GLib, GObject, Gtk  # noqa: E402
 
 from ..backend.smart_layers import match_rule  # noqa: E402
-from ..models import AppRule, KeyBinding, KeyGeometry, Layer  # noqa: E402
+from ..models import (AppRule, KeyBinding, KeyGeometry, Layer, PointerAction,  # noqa: E402
+                      PointerActivity)
 from ..service import KeyboardService  # noqa: E402
 from .held_modifiers import HeldKey, ModifierTracker, held_key  # noqa: E402
 from .hold_actions import HoldAction, HoldDetector, hold_action, key_id  # noqa: E402
 from .keyboard_view import KeyboardView  # noqa: E402
+from .pointer_activity import PointerTracker, want_pointer  # noqa: E402
+from .pointer_view import PointerView  # noqa: E402
 
 log = logging.getLogger(__name__)
 
@@ -57,6 +66,11 @@ MODIFIER_KEY = "modifier-pill"
 # Per feature: (time it stays after release, fade duration) settings, in ms.
 HOLD_TIMING_KEYS = ("hold-pill-linger-ms", "hold-pill-fade-ms")
 MODIFIER_TIMING_KEYS = ("modifier-pill-linger-ms", "modifier-pill-fade-ms")
+POINTER_KEY = "pointer-pill"
+POINTER_ACTIONS_KEY = "pointer-pill-actions"
+POINTER_TIMING_KEYS = ("pointer-pill-linger-ms", "pointer-pill-fade-ms")
+# The pad drawing's diameter, in key units.
+PAD_UNITS = 1.5
 EDGE_FRACTION = 0.1
 GAP_PX = 12
 # Room around the key for the overlay's halo, which is drawn outside it.
@@ -103,7 +117,8 @@ def key_width_units(text: str) -> float:
 
 
 class HoldPillSurface(Gtk.Window):
-    """The pill. ``flash(text)`` shows it, restarting the timer if it's on."""
+    """The pill. ``flash(text)`` shows a key, ``flash_pointer(modifiers)`` the pad
+    (after a key labelled ``modifiers``, if any); both restart the timer."""
 
     __gtype_name__ = "KmlHoldPillSurface"
 
@@ -117,13 +132,23 @@ class HoldPillSurface(Gtk.Window):
         self._fade: Adw.TimedAnimation | None = None
         self._hide_id = 0
         self._fade_in_ms, self._fade_out_ms = PillStyle().fade_in_ms, PillStyle().fade_out_ms
+        self.box = Gtk.Box(can_target=False)
         self.view = KeyboardView()
         self.view.set_overlay_style(True)
         self.view.set_can_target(False)
-        for side in ("top", "bottom", "start", "end"):
-            getattr(self.view, f"set_margin_{side}")(HALO_PAD_PX)
-        self.view.set_opacity(0.0)
-        self.set_child(self.view)
+        self.view.set_valign(Gtk.Align.CENTER)
+        self.pointer = PointerView()
+        self.pointer.set_overlay_style(True)
+        self.pointer.set_can_target(False)
+        self.pointer.set_valign(Gtk.Align.CENTER)
+        self.pointer.set_visible(False)
+        for widget in (self.view, self.pointer):
+            for side in ("top", "bottom", "start", "end"):
+                getattr(widget, f"set_margin_{side}")(HALO_PAD_PX)
+        self.box.append(self.view)
+        self.box.append(self.pointer)
+        self.box.set_opacity(0.0)
+        self.set_child(self.box)
 
         ls = layer_shell
         ls.init_for_window(self)
@@ -152,6 +177,7 @@ class HoldPillSurface(Gtk.Window):
     def set_style(self, style: PillStyle) -> None:
         """Opacity at once; fade durations from the next fade."""
         self.view.set_rest_opacity(style.opacity)
+        self.pointer.set_rest_opacity(style.opacity)
         self._fade_in_ms, self._fade_out_ms = max(0, style.fade_in_ms), max(0, style.fade_out_ms)
 
     def set_key(self, text: str, unit: float) -> None:
@@ -160,10 +186,30 @@ class HoldPillSurface(Gtk.Window):
         self.view.set_layer(Layer(0, "", None, (KeyBinding(0, tap_label=text),)),
                             animate=False)
         self.view.set_fixed_size(round(width * unit), round(unit))
+        self.view.set_visible(True)
+        self.pointer.set_visible(False)
+
+    def set_pointer(self, modifiers: str | None, unit: float) -> None:
+        """The pad drawing, after a ``modifiers`` key when there is one."""
+        if modifiers:
+            self.set_key(modifiers, unit)
+        else:
+            self.view.set_visible(False)
+        self.box.set_spacing(round(unit * 0.15))
+        self.pointer.set_diameter(round(unit * PAD_UNITS) + 2 * 4)
+        self.pointer.set_visible(True)
 
     def flash(self, text: str, unit: float = DEFAULT_UNIT_PX) -> None:
         """Show ``text`` until ``release()``."""
         self.set_key(text, unit)
+        self._appear()
+
+    def flash_pointer(self, modifiers: str | None, unit: float = DEFAULT_UNIT_PX) -> None:
+        """Show the pad (and ``modifiers``) until ``release()``."""
+        self.set_pointer(modifiers, unit)
+        self._appear()
+
+    def _appear(self) -> None:
         if self._hide_id:
             GLib.source_remove(self._hide_id)
             self._hide_id = 0
@@ -193,7 +239,7 @@ class HoldPillSurface(Gtk.Window):
             self._hide_id = 0
         self._stop_fade()
         self._showing = False
-        self.view.set_opacity(0.0)
+        self.box.set_opacity(0.0)
         self._ls.set_layer(self, self._ls.Layer.BACKGROUND)
 
     def _on_hide_timeout(self) -> bool:
@@ -205,12 +251,12 @@ class HoldPillSurface(Gtk.Window):
     def _animate(self, target: float, duration: int) -> None:
         self._stop_fade()
         if duration <= 0:           # Fade Duration 0: show and hide at once
-            self.view.set_opacity(target)
+            self.box.set_opacity(target)
             if target == 0.0:
                 self._ls.set_layer(self, self._ls.Layer.BACKGROUND)
             return
-        anim = Adw.TimedAnimation.new(self.view, self.view.get_opacity(), target, duration,
-                                      Adw.PropertyAnimationTarget.new(self.view, "opacity"))
+        anim = Adw.TimedAnimation.new(self.box, self.box.get_opacity(), target, duration,
+                                      Adw.PropertyAnimationTarget.new(self.box, "opacity"))
         anim.set_easing(Adw.Easing.EASE_OUT_CUBIC)
         anim.connect("done", self._on_fade_done)
         self._fade = anim
@@ -261,6 +307,8 @@ class HoldPillController(GObject.Object):
                                      GLib.source_remove)
         self.modifiers = ModifierTracker(self._lookup_held, self._on_modifiers, self._schedule,
                                          GLib.source_remove)
+        self.pointer = PointerTracker()
+        self._pointer_end_id = 0
         self._handlers: list[tuple[object, int]] = []
         if layer_shell is None:
             return
@@ -268,9 +316,12 @@ class HoldPillController(GObject.Object):
             (service, service.connect("key-event", self._on_key_event)),
             (service, service.connect("disconnected", lambda *_a: self._reset())),
             (service, service.connect("layout-loaded", lambda *_a: self._forget_keys())),
+            (service, service.connect("pointer-activity", self._on_pointer_activity)),
             (settings, settings.connect(f"changed::{ENABLED_KEY}", lambda *_a: self._reset())),
             (settings, settings.connect(f"changed::{MODIFIER_KEY}", lambda *_a: self._reset())),
+            (settings, settings.connect(f"changed::{POINTER_KEY}", self._on_pointer_setting)),
         ]
+        self._on_pointer_setting()
 
     @property
     def available(self) -> bool:
@@ -285,6 +336,8 @@ class HoldPillController(GObject.Object):
             obj.disconnect(handler)
         self._handlers = []
         self._forget_keys()
+        if self._ls is not None:
+            want_pointer(self.service, "pill", False)
         if self._surface is not None:
             self._surface.hide_now()
             self._surface.destroy()
@@ -301,6 +354,7 @@ class HoldPillController(GObject.Object):
         self.detector.reset()
         self.modifiers.reset()
         self._hold_index = None
+        self._drop_pointer()
 
     def _reset(self) -> None:
         self._forget_keys()
@@ -348,18 +402,109 @@ class HoldPillController(GObject.Object):
         self.show(action.combo, HOLD_TIMING_KEYS)
 
     def _on_modifiers(self, text: str | None) -> None:
-        if text:
+        if text and self.pointer.text is not None and text == self.modifiers.names:
+            self._show_pointer()            # Ctrl pressed while scrolling: Ctrl + pad
+        elif text:
+            self._drop_pointer()            # a key typed: it replaces the pointer
             self.show(text, MODIFIER_TIMING_KEYS)
         elif self._hold_index is None:
             self._after_release()
 
     def _after_release(self) -> None:
-        """A shown key was let go: back to the held modifiers, else fade out."""
-        if self.modifiers.text:
+        """A shown key was let go: back to pointer activity or the held
+        modifiers, else fade out."""
+        if self.pointer.text is not None:
+            self._show_pointer()
+        elif self.modifiers.text:
             self.show(self.modifiers.text, MODIFIER_TIMING_KEYS)
         elif self._surface is not None:
             linger_key = self._shown_timing[0]
             self._surface.release(self.settings.get_int(linger_key))
+
+    # --- pointer activity ------------------------------------------------
+
+    def _on_pointer_setting(self, *_args: object) -> None:
+        on = self.settings.get_boolean(POINTER_KEY)
+        want_pointer(self.service, "pill", on)
+        if not on:
+            self._drop_pointer()
+            if self._surface is not None and self._surface.showing and self._hold_index is None \
+                    and not self.modifiers.text:
+                self._surface.hide_now()
+
+    def _pointer_allowed(self) -> bool:
+        if not self.settings.get_boolean(POINTER_KEY):
+            return False
+        rule = self._focused_rule()
+        return rule is None or rule.show_pointer
+
+    def _on_pointer_activity(self, _service: object, activity: PointerActivity) -> None:
+        if not self._pointer_allowed():
+            if self.pointer.text is not None:      # turned off mid-gesture
+                self._cancel_pointer_end()
+                self._on_pointer_end()
+            return
+        if self._surface is None:
+            self._surface = HoldPillSurface(self._ls)
+        # The drawing follows every report, also ones the filter keeps from
+        # making the pill appear; it's only seen while the pill is up.
+        self._surface.pointer.feed(activity)
+        allowed = set(self.settings.get_value(POINTER_ACTIONS_KEY).unpack())
+        before = self.pointer.text
+        changed = self.pointer.feed(activity, self._now(), allowed)
+        if self.pointer.text is None or not changed:
+            return
+        lingering = self._pointer_end_id != 0
+        self._cancel_pointer_end()
+        if (self.pointer.text != before or lingering
+                or activity.action in (PointerAction.TAP, PointerAction.CLICK)):
+            self._show_pointer()
+        if not self.pointer.active:
+            linger = self.settings.get_int(POINTER_TIMING_KEYS[0])
+            if linger <= 0:
+                self._on_pointer_end()
+            else:
+                self._pointer_end_id = GLib.timeout_add(linger, self._on_pointer_end)
+
+    def _show_pointer(self) -> None:
+        if self._hold_index is not None or self._ls is None:
+            return                          # a firing hold action wins
+        if self._surface is None:
+            self._surface = HoldPillSurface(self._ls)
+        self._shown_timing = POINTER_TIMING_KEYS
+        style = self._place(POINTER_TIMING_KEYS)
+        self._surface.flash_pointer(self.modifiers.names, style.unit)
+
+    def _on_pointer_end(self) -> bool:
+        """The gesture ended and lingered: back to the modifiers, else fade."""
+        self._pointer_end_id = 0
+        self.pointer.reset()
+        if self._hold_index is None:
+            if self.modifiers.text:
+                self.modifiers.forget_last()
+                self.show(self.modifiers.text, MODIFIER_TIMING_KEYS)
+            elif self._surface is not None:
+                self._surface.release(0)
+        return GLib.SOURCE_REMOVE
+
+    def _cancel_pointer_end(self) -> None:
+        if self._pointer_end_id:
+            GLib.source_remove(self._pointer_end_id)
+            self._pointer_end_id = 0
+
+    def _drop_pointer(self) -> None:
+        self._cancel_pointer_end()
+        self.pointer.reset()
+
+    # --- showing ---------------------------------------------------------
+
+    def _place(self, timing: tuple[str, str]) -> PillStyle:
+        monitor, height = self._monitor()
+        fade_in, fade_out = fade_pair(self.settings.get_int(timing[1]))
+        style = replace(self._style(), fade_in_ms=fade_in, fade_out_ms=fade_out)
+        self._surface.set_style(style)
+        self._surface.place(monitor, style.edge, edge_margin(height, self._clearance()))
+        return style
 
     def show(self, text: str, timing: tuple[str, str] = HOLD_TIMING_KEYS) -> None:
         """Show ``text`` until a release (also used by the screenshot tool), with
@@ -369,14 +514,11 @@ class HoldPillController(GObject.Object):
         if self._surface is None:
             self._surface = HoldPillSurface(self._ls)
         self._shown_timing = timing
-        monitor, height = self._monitor()
-        fade_in, fade_out = fade_pair(self.settings.get_int(timing[1]))
-        style = replace(self._style(), fade_in_ms=fade_in, fade_out_ms=fade_out)
-        self._surface.set_style(style)
-        self._surface.place(monitor, style.edge, edge_margin(height, self._clearance()))
+        style = self._place(timing)
         self._surface.flash(text, style.unit)
 
 
 __all__ = ["ENABLED_KEY", "EXCLUDED_KEY", "HOLD_TIMING_KEYS", "MODIFIER_KEY",
-           "MODIFIER_TIMING_KEYS", "HoldPillController", "HoldPillSurface", "NAMESPACE",
+           "MODIFIER_TIMING_KEYS", "PAD_UNITS", "POINTER_ACTIONS_KEY", "POINTER_KEY",
+           "POINTER_TIMING_KEYS", "HoldPillController", "HoldPillSurface", "NAMESPACE",
            "PillStyle", "edge_margin", "fade_pair", "key_width_units"]

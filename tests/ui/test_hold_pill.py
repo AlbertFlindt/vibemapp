@@ -50,6 +50,9 @@ class ControllerTests(unittest.TestCase):
         self._release = hold_pill.HoldPillSurface.release
         hold_pill.HoldPillSurface.flash = lambda _s, text, unit: self.flashes.append(text)
         hold_pill.HoldPillSurface.release = lambda _s, ms: self.releases.append(ms)
+        self._flash_pointer = hold_pill.HoldPillSurface.flash_pointer
+        hold_pill.HoldPillSurface.flash_pointer = (
+            lambda _s, mods, unit: self.flashes.append(f"pad:{mods or ''}"))
         self.svc = MockKeyboardService(speed=50, autostart=False)
         self.settings = MemorySettings()
         self.ls = FakeLayerShell()
@@ -69,6 +72,7 @@ class ControllerTests(unittest.TestCase):
         self.ctl.destroy()
         self.hold_pill.HoldPillSurface.flash = self._flash
         self.hold_pill.HoldPillSurface.release = self._release
+        self.hold_pill.HoldPillSurface.flash_pointer = self._flash_pointer
         self.svc.shutdown()
 
     @staticmethod
@@ -197,6 +201,87 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual((surface._hide_id, surface.showing), (0, False))
         surface.hide_now()
         surface.destroy()
+
+    # --- pointer activity ------------------------------------------------
+
+    def pointer(self, action, **kw) -> None:
+        from vibemapp.models import PointerActivity, PointerKind
+        self.svc.emit("pointer-activity", PointerActivity(PointerKind.TRACKPAD, action, **kw))
+
+    def quiet_pointer(self) -> None:
+        # Stop the mock's own pointer script; the tests send their own reports.
+        self.svc.simulate_pointer_kind(None)
+
+    def test_pointer_pill_off_by_default_and_asks_for_tracking(self) -> None:
+        from vibemapp.models import PointerAction
+        self.quiet_pointer()
+        self.assertFalse(self.svc.props.pointer_tracking)
+        self.pointer(PointerAction.SCROLL, fingers=2, direction="down")
+        self.assertEqual(self.flashes, [])
+        self.settings.set_boolean("pointer-pill", True)
+        self.assertTrue(self.svc.props.pointer_tracking)
+        self.settings.set_boolean("pointer-pill", False)
+        self.assertFalse(self.svc.props.pointer_tracking)
+
+    def test_pointer_shows_pad_then_lingers(self) -> None:
+        from vibemapp.models import PointerAction
+        self.quiet_pointer()
+        self.settings.set_boolean("pointer-pill", True)
+        self.settings.set_int("pointer-pill-linger-ms", 0)
+        self.pointer(PointerAction.SCROLL, fingers=2, direction="down",
+                     contacts=((0.4, 0.5), (0.6, 0.5)))
+        self.pointer(PointerAction.SCROLL, fingers=2, direction="down",
+                     contacts=((0.4, 0.6), (0.6, 0.6)))
+        self.assertEqual(self.flashes, ["pad:"])      # frames update the drawing only
+        pad = self.ctl.surface.pointer
+        self.assertEqual(len(pad.model.contacts), 2)
+        self.assertEqual(self.releases, [])
+        self.pointer(PointerAction.IDLE)
+        self.assertEqual(self.releases, [0])
+
+    def test_pointer_with_held_modifiers(self) -> None:
+        from vibemapp.models import PointerAction
+        self.quiet_pointer()
+        self.settings.set_boolean("pointer-pill", True)
+        self.settings.set_boolean("modifier-pill", True)
+        self.settings.set_int("pointer-pill-linger-ms", 0)
+        layer = self.svc.get_layout().layers[0]
+        a_key = next(k.index for k in layer.keys if k.hold_modifier == "Ctrl")
+        self.svc.simulate_key(a_key, True)
+        self.wait(300)
+        self.pointer(PointerAction.SCROLL, fingers=2, direction="down")
+        self.assertEqual(self.flashes, ["Ctrl", "pad:Ctrl"])
+        self.pointer(PointerAction.IDLE)
+        self.assertEqual(self.flashes, ["Ctrl", "pad:Ctrl", "Ctrl"])   # back to the modifier
+        self.svc.simulate_key(a_key, False)
+
+    def test_pointer_filter_and_rule(self) -> None:
+        from vibemapp.models import AppRule, PointerAction
+        self.quiet_pointer()
+        self.settings.set_boolean("pointer-pill", True)
+        self.settings.set_value("pointer-pill-actions", GLib.Variant("as", ["click"]))
+        self.pointer(PointerAction.MOVE, fingers=1, contacts=((0.5, 0.5),))
+        self.assertEqual(self.flashes, [])
+        self.svc.simulate_focus("steam_app_570", "Game")
+        window = self.svc.get_focused_window()
+        self.svc.set_rules([AppRule(window.app_class, "Game", 0, show_pointer=False)])
+        self.pointer(PointerAction.CLICK, button=1, buttons=frozenset({1}))
+        self.assertEqual(self.flashes, [])
+        self.svc.set_rules([])
+        self.pointer(PointerAction.CLICK, button=1, buttons=frozenset({1}))
+        self.assertEqual(self.flashes, ["pad:"])
+
+    def test_hold_action_beats_pointer(self) -> None:
+        from vibemapp.models import PointerAction
+        self.quiet_pointer()
+        self.settings.set_boolean("hold-pill", True)
+        self.settings.set_boolean("pointer-pill", True)
+        self.svc.simulate_key(self.c_key, True)
+        self.wait(300)
+        self.pointer(PointerAction.SCROLL, fingers=2, direction="up")
+        self.assertEqual(self.flashes, ["Ctrl+C"])
+        self.svc.simulate_key(self.c_key, False)
+        self.assertEqual(self.flashes, ["Ctrl+C", "pad:"])
 
     def test_no_layer_shell_does_nothing(self) -> None:
         ctl = self.hold_pill.HoldPillController(self.svc, self.settings, None,

@@ -80,6 +80,20 @@ class ModifierTracker:
     def text(self) -> str | None:
         return self._text
 
+    @property
+    def names(self) -> str | None:
+        """The held modifiers alone (``"Ctrl+Shift"``), None when ``text`` is."""
+        if self._text is None:
+            return None
+        return "+".join(combine(list(self._held.values())))
+
+    def forget_last(self) -> None:
+        """Drop the last key from ``text`` without a ``changed`` call: pointer
+        activity replaced it on screen."""
+        self._last = ""
+        if self._text is not None:
+            self._text = self.names
+
     def key(self, index: int, pressed: bool) -> None:
         if pressed:
             self._press(index)

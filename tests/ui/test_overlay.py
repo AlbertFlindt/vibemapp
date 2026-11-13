@@ -230,6 +230,50 @@ class OverlayControllerTests(unittest.TestCase):
 
 
 @unittest.skipUnless(HAVE_DISPLAY, "needs a display")
+class PointerPadTests(unittest.TestCase):
+    """The trackpad or trackball beside the right half (``overlay-pointer``)."""
+
+    setUp = OverlayControllerTests.setUp
+    tearDown = OverlayControllerTests.tearDown
+    connect_keyboard = OverlayControllerTests.connect_keyboard
+
+    def test_pad_only_with_the_setting_and_a_device(self) -> None:
+        from vibemapp.models import PointerAction, PointerActivity, PointerKind
+        self.connect_keyboard()
+        self.svc.simulate_pointer_kind(PointerKind.TRACKPAD)
+        self.settings.set_string("overlay-mode", "always")
+        self.assertTrue(self.ctl.shown)
+        self.assertFalse(any(s.pad.get_visible() for s in self.ctl.surfaces))
+        self.assertFalse(self.svc.props.pointer_tracking)
+        self.settings.set_boolean("overlay-pointer", True)
+        pads = [s.pad for s in self.ctl.surfaces if s.pad.get_visible()]
+        self.assertEqual(len(pads), 1)
+        self.assertTrue(self.svc.props.pointer_tracking)       # shown and on
+        self.assertGreater(pads[0].get_margin_start(), 0)
+        self.svc.emit("pointer-activity", PointerActivity(
+            PointerKind.TRACKPAD, PointerAction.TOUCH, fingers=1, contacts=((0.5, 0.5),)))
+        self.assertEqual(pads[0].model.contacts, ((0.0, 0.0),))
+        self.settings.set_string("overlay-mode", "off")         # never shows it by itself
+        self.assertFalse(self.ctl.shown)
+        self.assertFalse(self.svc.props.pointer_tracking)
+        self.settings.set_string("overlay-mode", "always")
+        self.svc.simulate_pointer_kind(None)
+        self.assertFalse(any(s.pad.get_visible() for s in self.ctl.surfaces))
+
+    def test_pad_on_the_right_half_when_spaced(self) -> None:
+        from vibemapp.models import PointerKind
+        self.connect_keyboard()
+        self.svc.simulate_pointer_kind(PointerKind.TRACKBALL)
+        self.settings.set_boolean("overlay-pointer", True)
+        self.settings.set_int("overlay-half-spacing", 50)
+        self.settings.set_string("overlay-mode", "always")
+        surfaces = self.ctl.surfaces
+        self.assertEqual(len(surfaces), 2)
+        self.assertEqual([s.pad.get_visible() for s in surfaces], [False, True])
+        self.assertEqual(surfaces[1].pad.model.kind, PointerKind.TRACKBALL)
+
+
+@unittest.skipUnless(HAVE_DISPLAY, "needs a display")
 class UnavailableTests(unittest.TestCase):
     def test_no_layer_shell_means_no_surfaces(self) -> None:
         from vibemapp.ui import overlay

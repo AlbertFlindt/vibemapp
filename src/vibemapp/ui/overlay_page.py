@@ -22,6 +22,7 @@ from .controller import DeviceController  # noqa: E402
 from .hold_actions import (hold_action_subtitle, key_id, layout_hold_actions,  # noqa: E402
                            toggle_excluded)
 from .i18n import _  # noqa: E402
+from .pointer_activity import device_title  # noqa: E402
 from .resources import ui_file  # noqa: E402
 from .rules_model import layer_label  # noqa: E402
 
@@ -37,6 +38,7 @@ INSTALL_COMMAND = "sudo pacman -S gtk4-layer-shell"
 HOLD_PILL_KEY = "hold-pill"
 HOLD_EXCLUDED_KEY = "hold-pill-excluded"
 MODIFIER_PILL_KEY = "modifier-pill"
+POINTER_KEY = "overlay-pointer"
 
 
 # --- pure helpers (unit tested) -------------------------------------------
@@ -169,6 +171,7 @@ class OverlayPage(Adw.Bin):
     layers_group: Adw.PreferencesGroup = Gtk.Template.Child()
     layers_list: Gtk.ListBox = Gtk.Template.Child()
     preview_row: Adw.SwitchRow = Gtk.Template.Child()
+    pointer_row: Adw.SwitchRow = Gtk.Template.Child()
     anchor_row: Adw.ComboRow = Gtk.Template.Child()
     monitor_row: Adw.ComboRow = Gtk.Template.Child()
     size_row: Adw.SpinRow = Gtk.Template.Child()
@@ -235,12 +238,14 @@ class OverlayPage(Adw.Bin):
                              ("modifier-pill-fade-ms", self._sync_spins),
                              (HOLD_PILL_KEY, self._sync_hold),
                              (HOLD_EXCLUDED_KEY, self._sync_hold),
-                             (MODIFIER_PILL_KEY, self._sync_hold)):
+                             (MODIFIER_PILL_KEY, self._sync_hold),
+                             (POINTER_KEY, self._sync_pointer)):
             connect((settings, settings.connect(f"changed::{key}",
                                                 lambda *_a, cb=refresh: cb())))
         for obj, signal in ((service, "layout-loaded"), (service, "disconnected"),
                             (controller, "notify::state")):
             connect((obj, obj.connect(signal, lambda *_a: self._sync_layout())))
+        connect((service, service.connect("pointer-changed", lambda *_a: self._sync_pointer())))
         display = Gdk.Display.get_default()
         if display is not None:
             monitors = display.get_monitors()
@@ -255,6 +260,7 @@ class OverlayPage(Adw.Bin):
         self.preview_row.connect("notify::active", self._on_preview_active)
         self.hold_pill_row.connect("notify::active", self._on_hold_pill_active)
         self.modifier_pill_row.connect("notify::active", self._on_modifier_pill_active)
+        self.pointer_row.connect("notify::active", self._on_pointer_active)
 
         self._sync_mode()
         self._sync_layers()
@@ -262,6 +268,7 @@ class OverlayPage(Adw.Bin):
         self._sync_anchor()
         self._sync_monitors()
         self._sync_spins()
+        self._sync_pointer()
         self._watch_preview_action(actions)
 
     def teardown(self) -> None:
@@ -377,6 +384,23 @@ class OverlayPage(Adw.Bin):
             row.connect("notify::active", self._on_layer_active, layer.index)
             self.layers_list.append(row)
             self._layer_rows[layer.index] = row
+
+    def _sync_pointer(self) -> None:
+        kind = self.service.get_pointer_kind() if self.service is not None else None
+        if kind is None:
+            self.pointer_row.set_title(_("Show Trackpad or Trackball"))
+            self.pointer_row.set_subtitle(_("This keyboard has none. A trackball shows up after "
+                                            "it first moves."))
+        else:
+            # Translators: "Show Trackpad" or "Show Trackball"
+            self.pointer_row.set_title(_("Show {device}").format(device=device_title(kind)))
+            self.pointer_row.set_subtitle(_("Light it up beside the keys as you use it"))
+        self.pointer_row.set_sensitive(kind is not None)
+        self._guarded(lambda: self.pointer_row.set_active(self.settings.get_boolean(POINTER_KEY)))
+
+    def _on_pointer_active(self, row: Adw.SwitchRow, _pspec: object) -> None:
+        if not self._syncing and row.get_active() != self.settings.get_boolean(POINTER_KEY):
+            self.settings.set_boolean(POINTER_KEY, row.get_active())
 
     def _sync_anchor(self) -> None:
         anchor = self.settings.get_string("overlay-anchor")

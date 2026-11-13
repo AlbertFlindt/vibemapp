@@ -76,14 +76,19 @@ class FakeService(GObject.Object):
     __gsignals__ = {
         "layout-loaded": (GObject.SignalFlags.RUN_LAST, None, (object,)),
         "disconnected": (GObject.SignalFlags.RUN_LAST, None, ()),
+        "pointer-changed": (GObject.SignalFlags.RUN_LAST, None, ()),
     }
 
     def __init__(self) -> None:
         super().__init__()
         self.layout: Layout | None = None
+        self.pointer_kind = None
 
     def get_layout(self) -> Layout | None:
         return self.layout
+
+    def get_pointer_kind(self):
+        return self.pointer_kind
 
 
 class FakeController(GObject.Object):
@@ -181,6 +186,19 @@ class PageTests(unittest.TestCase):
         self.assertTrue(self.settings.get_boolean("modifier-pill"))
         self.settings.set_boolean("modifier-pill", False)
         self.assertFalse(self.page.modifier_pill_row.get_active())
+
+    def test_pointer_row_follows_the_device(self) -> None:
+        from vibemapp.models import PointerKind
+        row = self.page.pointer_row
+        self.assertFalse(row.get_sensitive())          # no trackpad or trackball
+        self.service.pointer_kind = PointerKind.TRACKBALL
+        self.service.emit("pointer-changed")
+        self.assertTrue(row.get_sensitive())
+        self.assertEqual(row.get_title(), "Show Trackball")
+        row.set_active(True)
+        self.assertTrue(self.settings.get_boolean("overlay-pointer"))
+        self.settings.set_boolean("overlay-pointer", False)
+        self.assertFalse(row.get_active())
 
     def test_spins(self) -> None:
         self.assertEqual(int(self.page.size_row.get_value()),

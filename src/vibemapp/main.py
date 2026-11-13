@@ -290,6 +290,7 @@ class Application(Adw.Application):
                 ("win.page::heatmap", ["<Control>3"]),
                 ("win.page::overlay", ["<Control>4"]),
                 ("win.page::insights", ["<Control>5"]),
+                ("win.page::pointer", ["<Control>6"]),
                 ("win.previous-layer", ["<Control>Page_Up"]),
                 ("win.next-layer", ["<Control>Page_Down"]),
                 ("win.request-layer", ["<Control>Return"]),

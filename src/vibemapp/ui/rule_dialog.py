@@ -135,6 +135,7 @@ class RuleDialog(Adw.Dialog):
     remove_group: Adw.PreferencesGroup = Gtk.Template.Child()
     hold_actions_row: Adw.SwitchRow = Gtk.Template.Child()
     held_modifiers_row: Adw.SwitchRow = Gtk.Template.Child()
+    pointer_row: Adw.SwitchRow = Gtk.Template.Child()
 
     def __init__(self, *, layout: Layout, running: list[RunningApp],
                  existing: list[AppRule], on_done: Callable[[AppRule], None],
@@ -178,6 +179,7 @@ class RuleDialog(Adw.Dialog):
             self.pattern_row.set_text(rule.title_pattern or "")
             self.hold_actions_row.set_active(rule.show_hold_actions)
             self.held_modifiers_row.set_active(rule.show_held_modifiers)
+            self.pointer_row.set_active(rule.show_pointer)
             self.nav.replace([self.details_page])
         self._validate()
 
@@ -392,7 +394,8 @@ class RuleDialog(Adw.Dialog):
         if rule is None:
             return None
         return replace(rule, show_hold_actions=self.hold_actions_row.get_active(),
-                       show_held_modifiers=self.held_modifiers_row.get_active())
+                       show_held_modifiers=self.held_modifiers_row.get_active(),
+                       show_pointer=self.pointer_row.get_active())
 
     def _build_target(self) -> AppRule | None:
         if not self._validate():

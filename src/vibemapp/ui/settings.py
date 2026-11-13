@@ -58,7 +58,7 @@ _DEFAULTS: dict[str, object] = {
 }
 
 # List keys of type "as"; every other list is "ai".
-_STRING_LISTS = frozenset({"hold-pill-excluded"})
+_STRING_LISTS = frozenset({"hold-pill-excluded", "pointer-pill-actions"})
 
 OLD_PATH = "/io/github/albertflindt/KeyMappForLinux/"
 MIGRATION_KEY = "migrated-from-keymappforlinux"
