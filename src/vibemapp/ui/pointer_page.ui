@@ -39,16 +39,35 @@
                               </object>
                             </child>
                             <child>
-                              <object class="GtkLabel" id="live_label">
-                                <property name="label" translatable="yes">Touch the trackpad to try it</property>
+                              <!-- Always as tall as its tallest text: the hidden probe holds
+                                   the arrows, which come from a taller fallback font, so the
+                                   card never changes height with the gesture. -->
+                              <object class="GtkStack" id="live_caption">
+                                <property name="vhomogeneous">True</property>
+                                <property name="hhomogeneous">False</property>
                                 <property name="margin-bottom">20</property>
                                 <property name="margin-start">12</property>
                                 <property name="margin-end">12</property>
-                                <property name="wrap">True</property>
-                                <property name="justify">center</property>
-                                <style>
-                                  <class name="dim-label"/>
-                                </style>
+                                <child>
+                                  <object class="GtkLabel" id="live_label">
+                                    <property name="label" translatable="yes">Touch the trackpad to try it</property>
+                                    <property name="single-line-mode">True</property>
+                                    <property name="ellipsize">end</property>
+                                    <style>
+                                      <class name="dim-label"/>
+                                    </style>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkLabel" id="live_probe">
+                                    <property name="label">Ag ↑↓←→ …</property>
+                                    <property name="single-line-mode">True</property>
+                                    <property name="ellipsize">end</property>
+                                    <style>
+                                      <class name="dim-label"/>
+                                    </style>
+                                  </object>
+                                </child>
                               </object>
                             </child>
                           </object>
@@ -141,6 +160,22 @@
                             <property name="title" translatable="yes">Show on _Overlay</property>
                             <property name="use-underline">True</property>
                             <property name="subtitle" translatable="yes">Draw it beside the keys while the overlay is shown. It never makes the overlay appear on its own.</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwComboRow" id="side_row">
+                            <property name="title" translatable="yes">_Side</property>
+                            <property name="use-underline">True</property>
+                            <property name="subtitle" translatable="yes">Which half the trackpad or trackball is mounted on</property>
+                            <property name="sensitive" bind-source="overlay_row" bind-property="active" bind-flags="sync-create"/>
+                            <property name="model">
+                              <object class="GtkStringList">
+                                <items>
+                                  <item translatable="yes">Right</item>
+                                  <item translatable="yes">Left</item>
+                                </items>
+                              </object>
+                            </property>
                           </object>
                         </child>
                       </object>

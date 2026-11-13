@@ -221,11 +221,13 @@ docstring for sizing and half-spacing rules), `ui/overlay_page.py`/`.ui`.
   `app.toggle-overlay` / `vibemapp --toggle-overlay` for a Hyprland bind (the page shows the
   snippet). Toggle remembers the last non-off mode in memory.
 - **Trackpad or trackball** (`overlay-pointer`, off; switch on the Trackpad page and in
-  Appearance, grayed out without a device): the right half's surface also draws the device
-  (`PointerView`, overlay style) 1.5 key units across, 0.3 right of the thumb cluster's rotated keys
-  and level with them (a board without rotated keys: beside its bottom-right corner); the part's
-  bounds grow to fit (`overlay_state.pointer_pad_bounds`). Live while the overlay is shown; it never
-  shows the overlay by itself.
+  Appearance, grayed out without a device): the surface of the half it's mounted on (`pointer-side`,
+  `right` default or `left`; the Navigator sits on a half's outer side) also draws the device
+  (`PointerView`, overlay style) 1.5 key units across, 0.3 outside that half's outer key column,
+  vertically centred on its main rows (unrotated keys, not the thumb cluster); a board without
+  halves gets it beside that side's edge. The part's and board's bounds grow to fit
+  (`overlay_state.pointer_pad_bounds`); the layer pill stays aligned with the keys. Live while the
+  overlay is shown; it never shows the overlay by itself.
 - Additive contract: `get_pressed_keys()`, `get_focused_monitor()`, `focused-monitor-changed`.
 
 #### 4.3.1 Hold-action pill
@@ -286,8 +288,9 @@ The keyboard's trackpad or trackball (3.5), drawn live on the hold pill's surfac
   (220 ms), a ripple where a tap was (450 ms), a press-in flash on a click (260 ms, held while a
   button is down). A trackball is a shaded ball whose surface marks roll with `motion`, with short
   streaks; buttons flash it. The frame clock runs only while something fades. Two looks: overlay
-  style (light outline, dark halo, overlay Opacity at rest; pill and overlay) and theme colours with
-  the accent for fingers (the page).
+  style (light outline, dark halo, overlay Opacity at rest, the overlay keys' accent press fill;
+  pill and overlay) and neutral theme colours on the page (window foreground at set strengths on
+  the card, like the key outlines; no accent).
 - **Pill:** the pad, 1.5 key units across (overlay Size), after a key with the held modifiers when
   `modifier-pill` shows them ("Ctrl" + the pad: Ctrl+scroll is zoom). A key typed with them replaces
   the pad; a firing hold action shows over it, then it comes back. `pointer-pill-actions` (click,
@@ -302,8 +305,10 @@ The keyboard's trackpad or trackball (3.5), drawn live on the hold pill's surfac
 - **Page:** sidebar item titled Trackpad (`input-touchpad-symbolic`), Trackball
   (`input-mouse-symbolic`) or "Trackpad & Trackball" without a device, then insensitive with a
   tooltip; if the device goes away while the page is shown, the window goes to Layout. A live view (large
-  `PointerView` and caption), On-Screen Activity (switch, Show For expander, Stay Visible, Fade
-  Duration), Overlay (`overlay-pointer`). "Overlay Unavailable" without gtk4-layer-shell. A Smart
+  `PointerView` and a one-line, ellipsized caption whose height never changes: a homogeneous stack
+  with a hidden probe holding the arrows, which come from a taller fallback font), On-Screen
+  Activity (switch, Show For expander, Stay Visible, Fade Duration), Overlay (`overlay-pointer`,
+  Side = `pointer-side`). "Overlay Unavailable" without gtk4-layer-shell. A Smart
   Layers rule can turn the pill off (4.2).
 
 ### 4.4 Heatmap

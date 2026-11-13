@@ -30,11 +30,14 @@ Half spacing (``overlay-half-spacing``, 0–100 %)
     and the board keeps MARGIN_PX from the anchored edge. Boards without
     halves (Planck EZ) ignore the spacing.
 
-Pointing device (``overlay-pointer``)
-    The trackpad or trackball is drawn PAD_UNITS across, PAD_GAP right of the
-    right half's thumb cluster (its rotated keys) and level with its middle;
-    a board without rotated keys gets it beside its bottom-right corner. The
-    part's and board's bounds grow to include it (``pointer_pad_bounds``).
+Pointing device (``overlay-pointer``, ``pointer-side``)
+    The ZSA Navigator mounts on the outer side of a half, beside its outer
+    key column. So the trackpad or trackball is drawn PAD_UNITS across,
+    PAD_GAP outside the outer edge of the right half (or the left one, with
+    ``pointer-side`` "left"), vertically centred on that half's main rows (its
+    unrotated keys, not the thumb cluster). A board without halves gets it
+    beside that side's edge, centred on all its keys. The part's and board's
+    bounds grow to include it (``pointer_pad_bounds``).
 """
 
 from __future__ import annotations
@@ -58,7 +61,8 @@ MAX_PX_PER_MM = 24.0          # ~610 DPI
 
 
 PAD_UNITS = 1.5               # trackpad/trackball diameter, key units
-PAD_GAP = 0.3                 # between the thumb cluster and the pad
+PAD_GAP = 0.3                 # between the outer key column and the pad
+POINTER_SIDES = ("right", "left")
 DEFAULT_FADE_MS = 200          # the overlay-fade-ms schema default
 MAX_FADE_MS = 1000
 
@@ -76,6 +80,14 @@ def _get_bool(settings, key: str, default: bool) -> bool:
         return bool(settings.get_boolean(key))
     except KeyError:
         return default
+
+
+def _get_side(settings) -> str:
+    try:
+        side = settings.get_string("pointer-side")
+    except KeyError:
+        return "right"
+    return side if side in POINTER_SIDES else "right"
 
 
 def fade_durations(config: "OverlayConfig") -> tuple[int, int]:
@@ -98,6 +110,7 @@ class OverlayConfig:
     idle_seconds: int = 0      # 0 never hides
     fade_ms: int = DEFAULT_FADE_MS   # fade-in duration; 0 shows/hides at once
     pointer: bool = False      # draw the trackpad or trackball (overlay-pointer)
+    pointer_side: str = "right"   # the half it's mounted on (pointer-side)
 
     @classmethod
     def from_settings(cls, settings) -> "OverlayConfig":
@@ -113,7 +126,8 @@ class OverlayConfig:
                    monitor=settings.get_string("overlay-monitor"),
                    idle_seconds=int(settings.get_int("overlay-idle-seconds")),
                    fade_ms=_get_int(settings, "overlay-fade-ms", DEFAULT_FADE_MS),
-                   pointer=_get_bool(settings, "overlay-pointer", False))
+                   pointer=_get_bool(settings, "overlay-pointer", False),
+                   pointer_side=_get_side(settings))
 
 
 def should_show(config: OverlayConfig, active_layer: int, *, has_layout: bool,
@@ -218,16 +232,18 @@ def geometry_bounds(geometry: tuple[KeyGeometry, ...]) -> Bounds:
     return min(xs), min(ys), max(xs), max(ys)
 
 
-def pointer_pad_bounds(part: tuple[KeyGeometry, ...]) -> Bounds:
-    """Where the trackpad or trackball goes beside ``part`` (the right half, or
-    the whole board), in key units; see the module docstring."""
-    thumbs = tuple(k for k in part if k.rotation)
-    if thumbs:
-        tb = geometry_bounds(thumbs)
-        x0, cy = tb[2] + PAD_GAP, (tb[1] + tb[3]) / 2
-    else:
-        b = geometry_bounds(part)
-        x0, cy = b[2] + PAD_GAP, b[3] - PAD_UNITS / 2
+def pointer_pad_bounds(part: tuple[KeyGeometry, ...], side: str = "right") -> Bounds:
+    """Where the trackpad or trackball goes beside ``part`` (the half it's
+    mounted on, or the whole board) on its ``side`` ("right" or "left"), in
+    key units; see the module docstring."""
+    outer = geometry_bounds(part)
+    main = tuple(k for k in part if not k.rotation) or part
+    mb = geometry_bounds(main)
+    cy = (mb[1] + mb[3]) / 2
+    if side == "left":
+        x1 = outer[0] - PAD_GAP
+        return x1 - PAD_UNITS, cy - PAD_UNITS / 2, x1, cy + PAD_UNITS / 2
+    x0 = outer[2] + PAD_GAP
     return x0, cy - PAD_UNITS / 2, x0 + PAD_UNITS, cy + PAD_UNITS / 2
 
 
@@ -299,7 +315,7 @@ def place_parts(monitor: MonitorInfo, anchor: str, unit: float, board: Bounds,
     return out
 
 
-__all__ = ["PAD_GAP", "PAD_UNITS", "pointer_pad_bounds", "union_bounds", "ANCHORS", "DEFAULT_FADE_MS", "DEFAULT_MODE", "fade_durations", "KEY_PITCH_MM", "MARGIN_PX", "MODES", "MonitorInfo",
+__all__ = ["PAD_GAP", "PAD_UNITS", "POINTER_SIDES", "pointer_pad_bounds", "union_bounds", "ANCHORS", "DEFAULT_FADE_MS", "DEFAULT_MODE", "fade_durations", "KEY_PITCH_MM", "MARGIN_PX", "MODES", "MonitorInfo",
            "OverlayConfig", "PartPlacement", "anchor_edges", "geometry_bounds",
            "place_parts", "px_per_mm", "should_show", "split_geometry", "toggled_mode",
            "unit_px"]

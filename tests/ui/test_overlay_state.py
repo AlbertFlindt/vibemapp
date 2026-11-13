@@ -76,8 +76,16 @@ class ConfigTests(unittest.TestCase):
         settings = MemorySettings()
         settings.set_string("overlay-mode", "sometimes")
         settings.set_string("overlay-anchor", "middle")
+        settings.set_string("pointer-side", "middle")
         config = OverlayConfig.from_settings(settings)
-        self.assertEqual((config.mode, config.anchor), ("selected", "bottom"))
+        self.assertEqual((config.mode, config.anchor, config.pointer_side),
+                         ("selected", "bottom", "right"))
+
+    def test_pointer_side(self) -> None:
+        settings = MemorySettings()
+        self.assertEqual(OverlayConfig.from_settings(settings).pointer_side, "right")
+        settings.set_string("pointer-side", "left")
+        self.assertEqual(OverlayConfig.from_settings(settings).pointer_side, "left")
 
 
 class FadeTests(unittest.TestCase):

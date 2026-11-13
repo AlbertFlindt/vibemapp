@@ -96,6 +96,8 @@ def main() -> int:
     parser.add_argument("--real-geometry", action="store_true")
     parser.add_argument("--pointer", choices=sorted(POINTER_SCENES),
                         help="draw the trackpad or trackball frozen in this scene")
+    parser.add_argument("--pointer-side", choices=["right", "left"], default="right",
+                        help="with --overlay --pointer: the half it's mounted on")
     parser.add_argument("--pointer-pill", choices=sorted(POINTER_SCENES),
                         help="with --overlay: show the pointer pill in this scene")
     parser.add_argument("--modifiers", default="",
@@ -352,6 +354,7 @@ def overlay_shot(args) -> int:
     if args.pointer:
         from vibemapp.models import PointerKind
         settings.set_boolean("overlay-pointer", True)
+        settings.set_string("pointer-side", args.pointer_side)
         service.simulate_pointer_kind(PointerKind.TRACKBALL if args.pointer == "trackball"
                                       else PointerKind.TRACKPAD)
     fake = FakeLayerShell()

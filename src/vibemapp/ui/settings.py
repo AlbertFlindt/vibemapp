@@ -55,6 +55,7 @@ _DEFAULTS: dict[str, object] = {
     "pointer-pill-linger-ms": 600,
     "pointer-pill-fade-ms": 200,
     "overlay-pointer": False,
+    "pointer-side": "right",
 }
 
 # List keys of type "as"; every other list is "ai".

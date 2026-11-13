@@ -9,7 +9,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gdk, GLib, GObject  # noqa: E402
+from gi.repository import Adw, Gdk, GLib, GObject, Gtk  # noqa: E402
 
 from vibemapp.models import PointerAction, PointerActivity, PointerKind  # noqa: E402
 from vibemapp.ui.settings import MemorySettings  # noqa: E402
@@ -88,6 +88,11 @@ class PageTests(unittest.TestCase):
         self.assertEqual(int(page.fade_row.get_value()), 0)
         page.overlay_row.set_active(True)
         self.assertTrue(settings.get_boolean("overlay-pointer"))
+        self.assertEqual(page.side_row.get_selected(), 0)            # right
+        page.side_row.set_selected(1)
+        self.assertEqual(settings.get_string("pointer-side"), "left")
+        settings.set_string("pointer-side", "right")
+        self.assertEqual(page.side_row.get_selected(), 0)
 
     def test_live_view_only_while_shown(self) -> None:
         self.service.plug(PointerKind.TRACKPAD)
@@ -105,6 +110,36 @@ class PageTests(unittest.TestCase):
         self.assertEqual(self.page.live_label.get_label(), "Touch the trackpad to try it")
         self.service.plug(None)
         self.assertFalse(self.service.props.pointer_tracking)
+
+    def test_live_card_height_never_changes(self) -> None:
+        """Arrows come from a taller fallback font and long texts could wrap;
+        the card below the drawing must not move with the gesture."""
+        from vibemapp.ui.pointer_activity import idle_hint, live_label
+        P, K = PointerAction, PointerKind
+        texts = {idle_hint(K.TRACKPAD), idle_hint(K.TRACKBALL)}
+        for fingers in range(5):
+            for action in (P.TOUCH, P.MOVE, P.TAP):
+                texts.add(live_label(PointerActivity(K.TRACKPAD, action, fingers=fingers)))
+            for direction in ("", "up", "down", "left", "right"):
+                for kind in K:
+                    texts.add(live_label(PointerActivity(kind, P.SCROLL, fingers=fingers,
+                                                         direction=direction)))
+        for button in (1, 2, 3):
+            texts.add(live_label(PointerActivity(K.TRACKPAD, P.CLICK, button=button)))
+        texts.add(live_label(PointerActivity(K.TRACKBALL, P.MOVE)))
+        texts.discard(None)
+        self.assertIn("Two-Finger Scroll ↓", texts)
+        self.service.plug(K.TRACKPAD)
+        card = self.page.live_caption.get_parent()
+        for width in (400, 260, 200):
+            heights = {}
+            for text in sorted(texts):
+                self.page.live_label.set_label(text)
+                heights[text] = (self.page.live_caption.measure(
+                    Gtk.Orientation.VERTICAL, width - 24)[1],
+                    card.measure(Gtk.Orientation.VERTICAL, width)[1])
+            with self.subTest(width=width):
+                self.assertEqual(len(set(heights.values())), 1, heights)
 
     def test_unavailable_without_layer_shell(self) -> None:
         self.mod.layer_shell_available = lambda: False

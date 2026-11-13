@@ -271,6 +271,49 @@ class PointerPadTests(unittest.TestCase):
         self.assertEqual(len(surfaces), 2)
         self.assertEqual([s.pad.get_visible() for s in surfaces], [False, True])
         self.assertEqual(surfaces[1].pad.model.kind, PointerKind.TRACKBALL)
+        self.assert_pad_outside(surfaces[1], "right")
+        self.settings.set_string("pointer-side", "left")
+        surfaces = self.ctl.surfaces
+        self.assertEqual([s.pad.get_visible() for s in surfaces], [True, False])
+        self.assert_pad_outside(surfaces[0], "left")
+
+    def assert_pad_outside(self, surface, side: str) -> None:
+        """The pad sits beside the keys' outer edge, level with the main rows
+        (not under the thumb cluster), and inside the surface."""
+        view, pad = surface.view, surface.pad
+        size = pad._size
+        board_w, board_h = view._fixed_size
+        surface_w = view.get_margin_start() + board_w + view.get_margin_end()
+        surface_h = view.get_margin_top() + board_h + view.get_margin_bottom()
+        self.assertLessEqual(pad.get_margin_start() + size, surface_w)
+        self.assertLessEqual(pad.get_margin_top() + size, surface_h)
+        self.assertGreaterEqual(pad.get_margin_top(), 0)
+        if side == "right":
+            self.assertGreaterEqual(pad.get_margin_start(),
+                                    view.get_margin_start() + board_w)
+            self.assertEqual(view.get_margin_start(), 0)
+        else:
+            self.assertEqual(pad.get_margin_start(), 0)
+            self.assertGreaterEqual(view.get_margin_start(), size)
+            # The layer pill lines up with the keys, not the pad.
+            self.assertEqual(surface.pill.get_margin_start(), view.get_margin_start())
+        # Level with the main rows: the pad's middle in the board's upper part,
+        # above where the thumb cluster starts.
+        middle = pad.get_margin_top() + size / 2 - view.get_margin_top()
+        self.assertLess(middle, board_h * 0.6)
+
+    def test_pad_beside_the_joined_board(self) -> None:
+        from vibemapp.models import PointerKind
+        self.connect_keyboard()
+        self.svc.simulate_pointer_kind(PointerKind.TRACKPAD)
+        self.settings.set_boolean("overlay-pointer", True)
+        self.settings.set_string("overlay-mode", "always")
+        surfaces = self.ctl.surfaces
+        self.assertEqual(len(surfaces), 1)
+        self.assert_pad_outside(surfaces[0], "right")
+        self.settings.set_string("pointer-side", "left")
+        self.assertEqual(len(self.ctl.surfaces), 1)
+        self.assert_pad_outside(self.ctl.surfaces[0], "left")
 
 
 @unittest.skipUnless(HAVE_DISPLAY, "needs a display")

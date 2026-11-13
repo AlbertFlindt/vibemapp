@@ -6,9 +6,11 @@ happened and a flash (the pad presses in) on a click. A trackball is a shaded
 ball whose surface marks roll with its motion; buttons flash it. The state is
 ``PadModel`` (``ui/pointer_activity.py``, pure); this widget only draws it.
 
-Two looks, like ``KeyboardView``: the theme's colours with the accent colour
-for fingers (the Trackpad page), or the overlay style (light outline with a dark
-halo, ``set_overlay_style``), used by the pointer pill and the overlay. The
+Two looks, like ``KeyboardView``: neutral theme colours (the window
+foreground at various strengths on the card, like the key outlines; the
+Trackpad page), or the overlay style (light outline with a dark halo and the
+overlay keys' pressed fill, ``set_overlay_style``), used by the pointer pill
+and the overlay. The
 frame clock runs only while something fades (``PadModel.animating``); a still
 pad is never redrawn.
 """
@@ -31,11 +33,16 @@ from .i18n import _  # noqa: E402
 from .pointer_activity import (TRAIL_MS, PadModel, ball_marks,  # noqa: E402
                                device_title, live_label)
 
-_PROBES = ("fg", "card", "border", "shade", "accent-bg", "accent",
-           "overlay-fg", "overlay-halo")
+_PROBES = ("fg", "card", "border", "accent-bg", "overlay-fg", "overlay-halo")
 FINGER_RADIUS = 0.13      # of the pad's radius
 RIPPLE_FROM, RIPPLE_TO = 0.08, 0.42
 PRESS_SCALE = 0.94        # the pad presses in on a click
+# Theme look: window-foreground strengths on the card.
+FINGER_FG = 0.8           # finger dots, trails and ripples
+OUTLINE_LIT_FG = 0.45     # the rim while touched (at rest: the border probe)
+TOUCH_FG = 0.04           # the disc while touched
+FLASH_FG = 0.1            # the disc on a click
+MARK_FG, MARK_LIT_FG = 0.45, 0.8   # trackball marks at rest and rolling
 LINE_PX = 1.0
 HALO_PX = 1.5
 
@@ -213,23 +220,25 @@ class PointerView(Gtk.Widget):
             shadows.append(shadow)
         snapshot.push_shadow(shadows)
 
-    def _palette(self, lit: float) -> tuple[Gdk.RGBA, Gdk.RGBA, Gdk.RGBA]:
-        """(outline, fill, finger) colours for a lit level 0..1."""
+    def _palette(self, lit: float) -> tuple[Gdk.RGBA, Gdk.RGBA, Gdk.RGBA, Gdk.RGBA]:
+        """(outline, touch tint, click flash, finger) colours for a lit level
+        0..1; the tint and flash at full strength (scaled by lit and flash)."""
+        fg = self._color("fg")
         if self._overlay:
-            fg = self._color("overlay-fg")
+            ofg = self._color("overlay-fg")
             strength = self._rest_opacity + (1 - self._rest_opacity) * lit
-            return (_alpha(fg, strength), _alpha(self._color("accent-bg"), 0.85),
-                    _alpha(fg, 1.0))
-        accent = self._color("accent")
-        return (_alpha(self._color("border"), 1.0), _alpha(self._color("accent-bg"), 1.0),
-                accent)
+            press = self._color("accent-bg")     # as the overlay's pressed keys
+            return (_alpha(ofg, strength), _alpha(press, 0.3), _alpha(press, 0.85 * 0.55),
+                    _alpha(ofg, 1.0))
+        outline = self._mix(self._color("border"), _alpha(fg, OUTLINE_LIT_FG), lit)
+        return outline, _alpha(fg, TOUCH_FG), _alpha(fg, FLASH_FG), _alpha(fg, FINGER_FG)
 
     def _draw_pad(self, snapshot: Gtk.Snapshot, cx: float, cy: float, radius: float,
                   now: float) -> None:
         model = self.model
         lit = model.lit(now)
         flash = model.flash(now)
-        outline, fill, finger = self._palette(lit)
+        outline, tint, flash_color, finger = self._palette(lit)
         snapshot.save()
         snapshot.translate(Graphene.Point().init(cx, cy))
         scale = 1.0 - (1.0 - PRESS_SCALE) * flash
@@ -237,18 +246,12 @@ class PointerView(Gtk.Widget):
         disc = _circle(0, 0, radius)
         if not self._overlay:
             snapshot.append_fill(disc, Gsk.FillRule.WINDING, self._color("card"))
-        if lit > 0:                 # touched: a faint accent fill
-            tint = self._color("accent-bg") if self._overlay else self._color("accent")
-            snapshot.append_fill(disc, Gsk.FillRule.WINDING,
-                                 _alpha(tint, (0.3 if self._overlay else 0.08) * lit))
+        if lit > 0:                 # touched: a faint fill
+            snapshot.append_fill(disc, Gsk.FillRule.WINDING, _alpha(tint, lit))
         if flash > 0:
-            snapshot.append_fill(disc, Gsk.FillRule.WINDING,
-                                 _alpha(fill, (0.55 if self._overlay else 0.35) * flash))
+            snapshot.append_fill(disc, Gsk.FillRule.WINDING, _alpha(flash_color, flash))
         line = LINE_PX if self._overlay else 1.5
-        stroke_color = outline if self._overlay else _alpha(
-            self._mix(self._color("border"), self._color("accent"), lit), 1.0)
-        snapshot.append_stroke(_circle(0, 0, radius - line / 2), Gsk.Stroke.new(line),
-                               stroke_color)
+        snapshot.append_stroke(_circle(0, 0, radius - line / 2), Gsk.Stroke.new(line), outline)
 
         dot = radius * FINGER_RADIUS
         for trail in model.trails:
@@ -290,7 +293,7 @@ class PointerView(Gtk.Widget):
         model = self.model
         flash = model.flash(now)
         lit = max(model.lit(now), flash)
-        outline, fill, mark = self._palette(lit)
+        outline, tint, flash_color, mark = self._palette(lit)
         snapshot.save()
         snapshot.translate(Graphene.Point().init(cx, cy))
         disc = _circle(0, 0, radius)
@@ -314,17 +317,11 @@ class PointerView(Gtk.Widget):
             snapshot.pop()
             snapshot.pop()
         if lit > 0:
-            tint = self._color("accent-bg") if self._overlay else self._color("accent")
-            snapshot.append_fill(disc, Gsk.FillRule.WINDING,
-                                 _alpha(tint, (0.3 if self._overlay else 0.08) * lit))
+            snapshot.append_fill(disc, Gsk.FillRule.WINDING, _alpha(tint, lit))
         if flash > 0:
-            snapshot.append_fill(disc, Gsk.FillRule.WINDING,
-                                 _alpha(fill, (0.55 if self._overlay else 0.35) * flash))
+            snapshot.append_fill(disc, Gsk.FillRule.WINDING, _alpha(flash_color, flash))
         line = LINE_PX if self._overlay else 1.5
-        stroke_color = outline if self._overlay else self._mix(
-            self._color("border"), self._color("accent"), lit)
-        snapshot.append_stroke(_circle(0, 0, radius - line / 2), Gsk.Stroke.new(line),
-                               stroke_color)
+        snapshot.append_stroke(_circle(0, 0, radius - line / 2), Gsk.Stroke.new(line), outline)
         rolling = model.rolling(now)
         step_x, step_y = model.last_roll
         before = ball_marks(model.rot_x - 4 * step_x, model.rot_y - 4 * step_y)
@@ -332,8 +329,8 @@ class PointerView(Gtk.Widget):
             if z <= 0.05:
                 continue
             color = mark if self._overlay else self._mix(
-                self._mix(self._color("card"), self._color("fg"), 0.45),
-                self._color("accent"), rolling)
+                self._color("card"), self._color("fg"),
+                MARK_FG + (MARK_LIT_FG - MARK_FG) * rolling)
             r = radius * 0.09 * (0.45 + 0.55 * z)
             if rolling > 0 and bz > 0:      # a streak behind each mark while it rolls
                 builder = Gsk.PathBuilder.new()

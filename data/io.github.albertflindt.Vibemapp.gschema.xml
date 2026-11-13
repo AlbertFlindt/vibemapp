@@ -180,6 +180,15 @@
       <summary>Show the trackpad on the overlay</summary>
       <description>Draw the keyboard's trackpad or trackball next to the overlay's keys, lit up while it is touched, clicked or scrolled. Only while the overlay is shown; it never makes the overlay appear.</description>
     </key>
+    <key name="pointer-side" type="s">
+      <choices>
+        <choice value="right"/>
+        <choice value="left"/>
+      </choices>
+      <default>"right"</default>
+      <summary>Trackpad side</summary>
+      <description>Which keyboard half the trackpad or trackball is mounted on. The overlay draws it outside that half's outer key column.</description>
+    </key>
     <key name="window-width" type="i">
       <default>960</default>
       <summary>Window width</summary>

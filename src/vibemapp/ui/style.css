@@ -44,13 +44,13 @@ keyboardview.overlay > .probe-overlay-halo { color: color-mix(in srgb, var(--dar
 keyboardview > .probe-overlay-fg   { color: var(--window-fg-color); }
 keyboardview > .probe-overlay-halo { color: transparent; }
 
-/* Colour probes read by PointerView (ui/pointer_view.py). */
+/* Colour probes read by PointerView (ui/pointer_view.py). The page look is
+   neutral (window fg on the card); accent-bg is only the overlay style's
+   press fill, as on the overlay's keys. */
 pointerview > .probe-fg        { color: var(--window-fg-color); }
 pointerview > .probe-card      { color: var(--card-bg-color); }
 pointerview > .probe-border    { color: color-mix(in srgb, var(--window-fg-color) 15%, transparent); }
-pointerview > .probe-shade     { color: var(--card-shade-color); }
 pointerview > .probe-accent-bg { color: var(--accent-bg-color); }
-pointerview > .probe-accent    { color: var(--accent-color); }
 pointerview.overlay > .probe-overlay-fg   { color: var(--light-1); }
 pointerview.overlay > .probe-overlay-halo { color: color-mix(in srgb, var(--dark-5) 85%, transparent); }
 pointerview > .probe-overlay-fg   { color: var(--window-fg-color); }

@@ -12,8 +12,9 @@ Surfaces
     Every surface gets an empty input region, so clicks go through it.
     With a half spacing above 0 each keyboard half gets its own surface, so the
     space between them stays free (placement rule: ``overlay_state``).
-    With ``overlay-pointer`` on and a trackpad or trackball known, the right
-    half's surface also draws it (``PointerView``), live, beside the thumb keys.
+    With ``overlay-pointer`` on and a trackpad or trackball known, the surface
+    of the half it's mounted on (``pointer-side``, right by default) also draws
+    it (``PointerView``), live, outside that half's outer key column.
 
     gtk4-layer-shell is an optional package but required for the overlay, and
     it must be loaded before GTK (``vibemapp._preload``). Without it the
@@ -58,7 +59,8 @@ NO_LAYER_SHELL_ENV = "VIBEMAPP_NO_LAYER_SHELL"
 
 _SETTING_KEYS = ("overlay-mode", "overlay-layers", "overlay-anchor", "overlay-size",
                  "overlay-opacity", "overlay-half-spacing", "overlay-monitor",
-                 "overlay-idle-seconds", "overlay-fade-ms", "overlay-pointer")
+                 "overlay-idle-seconds", "overlay-fade-ms", "overlay-pointer",
+                 "pointer-side")
 
 _layer_shell = None
 _layer_shell_checked = False
@@ -146,7 +148,7 @@ class OverlaySurface(Gtk.Window):
         self.view.set_can_target(False)
         self.view.set_hexpand(False)
         self.view.set_vexpand(False)
-        # The board and, on the right half, the trackpad or trackball.
+        # The board and, on the half it's mounted on, the trackpad or trackball.
         self.stage = Gtk.Overlay(can_target=False, halign=Gtk.Align.START)
         self.stage.set_child(self.view)
         self.pad = PointerView()
@@ -212,6 +214,9 @@ class OverlaySurface(Gtk.Window):
                                  max(placement.height - round(top) - round(bottom), 1))
         for side, value in (("start", start), ("top", top), ("end", end), ("bottom", bottom)):
             getattr(self.view, f"set_margin_{side}")(round(value))
+        # The layer pill lines up with the keys, not the pad beside them.
+        self.pill.set_margin_start(round(start))
+        self.pill.set_margin_end(round(end))
         self.pad.set_visible(pad is not None)
         if pad is not None:
             self.pad.set_kind(kind)
@@ -506,7 +511,7 @@ class OverlayController(GObject.Object):
         monitor, info = self.resolve_monitor()
         geometry = layout.geometry if layout is not None else ()
         key = (self.config.anchor, self.config.size, self.config.half_spacing, info, geometry,
-               self.pad_kind())
+               self.pad_kind(), self.config.pointer_side)
         if key != self._placement_key:
             was_shown = any(s.showing for s in self._surfaces)
             self._destroy_surfaces()
@@ -531,19 +536,24 @@ class OverlayController(GObject.Object):
                                      Bounds | None]]:
         """The board parts (whole board, or left and right half), where they go
         on ``info``'s monitor, their bounds and, with ``with_pad``, the
-        trackpad's bounds on the last part (the right half)."""
+        trackpad's bounds on the part of its ``pointer-side`` half (the whole
+        board when it isn't split)."""
         halves = split_geometry(geometry) if self.config.half_spacing > 0 else None
         parts = list(halves) if halves is not None else [geometry]
         bounds = [geometry_bounds(p) for p in parts]
         pads: list[Bounds | None] = [None] * len(parts)
+        pad: Bounds | None = None
         if with_pad and geometry:
+            side = self.config.pointer_side
             whole = split_geometry(geometry)
-            pad = pointer_pad_bounds(whole[1] if whole is not None else geometry)
-            pads[-1] = pad
-            bounds[-1] = union_bounds(bounds[-1], pad)
+            half = geometry if whole is None else whole[0 if side == "left" else 1]
+            pad = pointer_pad_bounds(half, side)
+            n = 0 if side == "left" else len(parts) - 1
+            pads[n] = pad
+            bounds[n] = union_bounds(bounds[n], pad)
         board = geometry_bounds(geometry)
-        if pads[-1] is not None:
-            board = union_bounds(board, pads[-1])
+        if pad is not None:
+            board = union_bounds(board, pad)
         unit = unit_px(info, self.config.size, board[2] - board[0])
         placements = place_parts(info, self.config.anchor, unit, board, bounds,
                                  self.config.half_spacing)

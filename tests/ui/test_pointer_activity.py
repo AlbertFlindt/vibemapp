@@ -128,19 +128,49 @@ class PadModelTests(unittest.TestCase):
 
 
 class PadPlacementTests(unittest.TestCase):
-    def test_beside_the_thumb_cluster(self) -> None:
-        right = (KeyGeometry(0, 10, 0), KeyGeometry(1, 14, 3),
-                 KeyGeometry(2, 10, 4.5, rotation=-15.0), KeyGeometry(3, 11, 4.5, rotation=-15.0))
-        x0, y0, x1, y1 = pointer_pad_bounds(right)
-        self.assertGreater(x0, 12.0)
-        self.assertAlmostEqual(x1 - x0, PAD_UNITS)
-        self.assertAlmostEqual((y0 + y1) / 2, 5.0, places=1)
+    # A right half: main rows y 0..3 (outer column at x 15), thumbs below and inside.
+    RIGHT = (KeyGeometry(0, 10, 0), KeyGeometry(1, 14, 3),
+             KeyGeometry(2, 10, 4.5, rotation=-15.0), KeyGeometry(3, 11, 4.5, rotation=-15.0))
 
-    def test_no_thumb_keys_goes_beside_the_corner(self) -> None:
+    def test_outside_the_outer_column_level_with_the_main_rows(self) -> None:
+        x0, y0, x1, y1 = pointer_pad_bounds(self.RIGHT)
+        self.assertAlmostEqual(x0, 15 + PAD_GAP)
+        self.assertAlmostEqual(x1 - x0, PAD_UNITS)
+        self.assertAlmostEqual((y0 + y1) / 2, 2.0)        # rows 0..4, not the thumbs
+
+    def test_left_side_mirrors(self) -> None:
+        left = (KeyGeometry(0, 0, 0), KeyGeometry(1, 4, 3),
+                KeyGeometry(2, 4, 4.5, rotation=15.0))
+        x0, y0, x1, y1 = pointer_pad_bounds(left, "left")
+        self.assertAlmostEqual(x1, -PAD_GAP)
+        self.assertAlmostEqual(x1 - x0, PAD_UNITS)
+        self.assertAlmostEqual((y0 + y1) / 2, 2.0)
+
+    def test_board_without_thumb_keys_is_centred_on_its_side(self) -> None:
         board = tuple(KeyGeometry(i, float(i % 12), float(i // 12)) for i in range(48))
         self.assertEqual(pointer_pad_bounds(board),
-                         (12 + PAD_GAP, 4 - PAD_UNITS, 12 + PAD_GAP + PAD_UNITS, 4.0))
+                         (12 + PAD_GAP, 2 - PAD_UNITS / 2, 12 + PAD_GAP + PAD_UNITS,
+                          2 + PAD_UNITS / 2))
+        self.assertEqual(pointer_pad_bounds(board, "left")[2], -PAD_GAP)
         self.assertEqual(union_bounds((0, 0, 1, 1), (2, -1, 3, 0.5)), (0, -1, 3, 1))
+
+    def test_voyager_beside_the_outer_column_not_under_the_keys(self) -> None:
+        from vibemapp.backend.geometries import GEOMETRIES
+        from vibemapp.models import KeyboardModel
+        from vibemapp.ui.overlay_state import geometry_bounds, split_geometry
+        left, right = split_geometry(GEOMETRIES[KeyboardModel.VOYAGER])
+        for side, half in (("right", right), ("left", left)):
+            with self.subTest(side=side):
+                hb = geometry_bounds(half)
+                main = geometry_bounds(tuple(k for k in half if not k.rotation))
+                x0, y0, x1, y1 = pointer_pad_bounds(half, side)
+                if side == "right":
+                    self.assertAlmostEqual(x0, hb[2] + PAD_GAP)
+                else:
+                    self.assertAlmostEqual(x1, hb[0] - PAD_GAP)
+                self.assertAlmostEqual((y0 + y1) / 2, (main[1] + main[3]) / 2)
+                self.assertGreaterEqual(y0, main[1])        # within the main rows' height
+                self.assertLessEqual(y1, main[3])
 
 
 class FakeService(GObject.Object):
